@@ -148,6 +148,7 @@ export default function Profile() {
                     disabled={!isEditing}
                     className="pl-10"
                     required
+                    minLength={2}
                     data-testid="input-firstName"
                   />
                 </div>
@@ -164,6 +165,7 @@ export default function Profile() {
                     disabled={!isEditing}
                     className="pl-10"
                     required
+                    minLength={2}
                     data-testid="input-lastName"
                   />
                 </div>
@@ -199,7 +201,9 @@ export default function Profile() {
                   disabled={!isEditing}
                   className="pl-10"
                   placeholder="(123) 456-7890"
+                  pattern="[\d\s\(\)\-\+]+"
                   required
+                  minLength={10}
                   data-testid="input-phoneNumber"
                 />
               </div>
@@ -218,6 +222,7 @@ export default function Profile() {
                   rows={3}
                   placeholder="123 Main St, City, State ZIP"
                   required
+                  minLength={10}
                   data-testid="input-address"
                 />
               </div>

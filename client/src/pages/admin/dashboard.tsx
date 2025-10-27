@@ -7,16 +7,38 @@ import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 
+interface AdminStats {
+  activeVehicles: number;
+  activeDrivers: number;
+  totalRoutes: number;
+  activeStudents: number;
+}
+
+interface ActiveDriver {
+  id: string;
+  firstName: string;
+  lastName: string;
+  routeName?: string;
+}
+
+interface Incident {
+  id: string;
+  title: string;
+  description: string;
+  severity: string;
+  createdAt: string;
+}
+
 export default function AdminDashboard() {
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
   });
 
-  const { data: recentIncidents, isLoading: incidentsLoading } = useQuery({
+  const { data: recentIncidents, isLoading: incidentsLoading } = useQuery<Incident[]>({
     queryKey: ["/api/admin/recent-incidents"],
   });
 
-  const { data: activeDrivers, isLoading: driversLoading } = useQuery({
+  const { data: activeDrivers, isLoading: driversLoading } = useQuery<ActiveDriver[]>({
     queryKey: ["/api/admin/active-drivers"],
   });
 

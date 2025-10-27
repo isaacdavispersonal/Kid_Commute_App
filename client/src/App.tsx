@@ -31,6 +31,7 @@ import AdminUsers from "@/pages/admin/users";
 import AdminStudents from "@/pages/admin/students";
 
 import DriverDashboard from "@/pages/driver/dashboard";
+import DriverRoutes from "@/pages/driver/routes";
 import DriverInspection from "@/pages/driver/inspection";
 import DriverIncident from "@/pages/driver/incident";
 
@@ -126,6 +127,7 @@ function Router() {
                 <>
                   <Route path="/" component={DriverDashboard} />
                   <Route path="/driver" component={DriverDashboard} />
+                  <Route path="/driver/routes" component={DriverRoutes} />
                   <Route path="/driver/inspection" component={DriverInspection} />
                   <Route path="/driver/incident" component={DriverIncident} />
                   <Route
