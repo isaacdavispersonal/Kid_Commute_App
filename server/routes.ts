@@ -626,6 +626,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // ============ Driver Assignment routes (Admin) ============
+
+  // Get all driver assignments
+  app.get(
+    "/api/admin/driver-assignments",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const assignments = await storage.getAllDriverAssignments();
+        // Enrich with driver, route, and vehicle information
+        const enrichedAssignments = await Promise.all(
+          assignments.map(async (assignment) => {
+            const driver = await storage.getUser(assignment.driverId);
+            const route = await storage.getRoute(assignment.routeId);
+            const vehicle = await storage.getVehicle(assignment.vehicleId);
+            
+            return {
+              ...assignment,
+              driverName: driver ? `${driver.firstName} ${driver.lastName}` : "Unknown",
+              driverEmail: driver?.email || "",
+              routeName: route?.name || "Unknown",
+              vehicleName: vehicle?.name || "Unknown",
+              vehiclePlate: vehicle?.plateNumber || "Unknown",
+            };
+          })
+        );
+
+        res.json(enrichedAssignments);
+      } catch (error) {
+        console.error("Error fetching driver assignments:", error);
+        res.status(500).json({ message: "Failed to fetch driver assignments" });
+      }
+    }
+  );
+
+  // Create new driver assignment
+  app.post(
+    "/api/admin/driver-assignments",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const validatedData = insertDriverAssignmentSchema.parse(req.body);
+        
+        // Validate driver exists and has driver role
+        const driver = await storage.getUser(validatedData.driverId);
+        if (!driver) {
+          return res.status(404).json({ message: "Driver not found" });
+        }
+        if (driver.role !== "driver") {
+          return res.status(400).json({ message: "User is not a driver" });
+        }
+
+        // Validate route exists
+        const route = await storage.getRoute(validatedData.routeId);
+        if (!route) {
+          return res.status(404).json({ message: "Route not found" });
+        }
+
+        // Validate vehicle exists
+        const vehicle = await storage.getVehicle(validatedData.vehicleId);
+        if (!vehicle) {
+          return res.status(404).json({ message: "Vehicle not found" });
+        }
+
+        const assignment = await storage.createDriverAssignment(validatedData);
+        res.json(assignment);
+      } catch (error: any) {
+        console.error("Error creating driver assignment:", error);
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to create driver assignment" });
+      }
+    }
+  );
+
+  // Update driver assignment
+  app.patch(
+    "/api/admin/driver-assignments/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const assignmentId = req.params.id;
+        const updates = req.body;
+
+        // Validate updates if provided
+        if (updates.driverId) {
+          const driver = await storage.getUser(updates.driverId);
+          if (!driver) {
+            return res.status(404).json({ message: "Driver not found" });
+          }
+          if (driver.role !== "driver") {
+            return res.status(400).json({ message: "User is not a driver" });
+          }
+        }
+
+        if (updates.routeId) {
+          const route = await storage.getRoute(updates.routeId);
+          if (!route) {
+            return res.status(404).json({ message: "Route not found" });
+          }
+        }
+
+        if (updates.vehicleId) {
+          const vehicle = await storage.getVehicle(updates.vehicleId);
+          if (!vehicle) {
+            return res.status(404).json({ message: "Vehicle not found" });
+          }
+        }
+
+        const updated = await storage.updateDriverAssignment(assignmentId, updates);
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error updating driver assignment:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update driver assignment" });
+      }
+    }
+  );
+
+  // Delete driver assignment
+  app.delete(
+    "/api/admin/driver-assignments/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const assignmentId = req.params.id;
+        await storage.deleteDriverAssignment(assignmentId);
+        res.json({ message: "Driver assignment deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting driver assignment:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to delete driver assignment" });
+      }
+    }
+  );
+
   // ============ Driver routes ============
 
   // Get current time entry
