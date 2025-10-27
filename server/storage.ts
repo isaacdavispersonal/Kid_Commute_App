@@ -32,12 +32,15 @@ import {
   type InsertVehicleInspection,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, or } from "drizzle-orm";
+import { eq, and, desc, or, sql } from "drizzle-orm";
+import { NotFoundError, ValidationError } from "./errors";
 
 export interface IStorage {
   // User operations (Required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
+  updateUserRole(userId: string, newRole: "admin" | "driver" | "parent"): Promise<User>;
 
   // Vehicle operations
   getAllVehicles(): Promise<Vehicle[]>;
@@ -107,6 +110,60 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async updateUserRole(userId: string, newRole: "admin" | "driver" | "parent"): Promise<User> {
+    // Use a transaction with consistent locking order to prevent deadlocks
+    return await db.transaction(async (tx) => {
+      // ALWAYS lock all admin rows FIRST to ensure consistent lock order across transactions
+      // This prevents deadlocks when multiple admins are being demoted concurrently
+      const allAdmins = await tx
+        .select()
+        .from(users)
+        .where(eq(users.role, "admin"))
+        .for("update");
+
+      // Find the target user in the locked admin set, or fetch it separately if not an admin
+      let targetUser = allAdmins.find(u => u.id === userId);
+      
+      if (!targetUser) {
+        // Target is not an admin, fetch and lock it separately
+        const [user] = await tx
+          .select()
+          .from(users)
+          .where(eq(users.id, userId))
+          .for("update");
+        
+        if (!user) {
+          throw new NotFoundError(`User with id ${userId} not found`);
+        }
+        targetUser = user;
+      }
+
+      // If demoting an admin, validate that at least one other admin will remain
+      if (targetUser.role === "admin" && newRole !== "admin") {
+        const otherAdminCount = allAdmins.filter(u => u.id !== userId).length;
+
+        if (otherAdminCount < 1) {
+          throw new ValidationError(
+            "Cannot demote the last administrator. Promote another user to admin first."
+          );
+        }
+      }
+
+      // Perform the update
+      const [updatedUser] = await tx
+        .update(users)
+        .set({ role: newRole, updatedAt: new Date() })
+        .where(eq(users.id, userId))
+        .returning();
+
+      return updatedUser;
+    });
   }
 
   // ============ Vehicle operations ============

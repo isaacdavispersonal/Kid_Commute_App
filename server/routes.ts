@@ -4,6 +4,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
+import { NotFoundError, ValidationError } from "./errors";
 import express from "express";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -74,6 +75,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error fetching incidents:", error);
         res.status(500).json({ message: "Failed to fetch incidents" });
+      }
+    }
+  );
+
+  // Get all users
+  app.get(
+    "/api/admin/users",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const users = await storage.getAllUsers();
+        res.json(users);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).json({ message: "Failed to fetch users" });
+      }
+    }
+  );
+
+  // Update user role
+  app.patch(
+    "/api/admin/users/:userId/role",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { userId } = req.params;
+        const { role } = req.body;
+        const currentUserId = req.user.claims.sub;
+
+        if (!role || !["admin", "driver", "parent"].includes(role)) {
+          return res.status(400).json({ message: "Invalid role specified" });
+        }
+
+        // Prevent admins from demoting themselves
+        if (userId === currentUserId && role !== "admin") {
+          return res.status(403).json({ 
+            message: "You cannot change your own role. Please ask another administrator." 
+          });
+        }
+
+        // Note: Last admin check is now handled atomically in storage.updateUserRole()
+        const updatedUser = await storage.updateUserRole(userId, role);
+        res.json(updatedUser);
+      } catch (error: any) {
+        console.error("Error updating user role:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update user role" });
       }
     }
   );

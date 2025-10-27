@@ -1,6 +1,7 @@
 // Landing page for unauthenticated users
 import { Button } from "@/components/ui/button";
-import { Car, Users, MapPin, MessageSquare, Shield, Clock } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Car, Users, MapPin, MessageSquare, Shield, Clock, UserPlus, Mail } from "lucide-react";
 
 export default function Landing() {
   return (
@@ -14,21 +15,62 @@ export default function Landing() {
 
           <div className="text-center max-w-2xl">
             <h2 className="text-3xl font-semibold mb-4">
-              Transportation Service Management
+              Safe, Reliable Transportation
             </h2>
             <p className="text-lg text-muted-foreground mb-8">
-              Comprehensive fleet management platform connecting administrators,
-              drivers, and parents with real-time tracking, route scheduling, and
-              seamless communication.
+              Connecting administrators, drivers, and parents with real-time tracking,
+              route scheduling, and seamless communication.
             </p>
-            <Button
-              size="lg"
-              onClick={() => (window.location.href = "/api/login")}
-              className="text-lg px-8"
-              data-testid="button-login"
-            >
-              Sign In to Continue
-            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
+            <Card className="hover-elevate">
+              <CardHeader>
+                <UserPlus className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Parents: Sign Up Now</CardTitle>
+                <CardDescription>
+                  Create your account instantly to start tracking your child's bus and
+                  communicate with drivers
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  size="lg"
+                  className="w-full"
+                  onClick={() => (window.location.href = "/api/login")}
+                  data-testid="button-parent-signup"
+                >
+                  Get Started Free
+                </Button>
+                <p className="text-xs text-muted-foreground mt-3 text-center">
+                  Sign up with email, Google, GitHub, or Apple
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate">
+              <CardHeader>
+                <Mail className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Staff Access</CardTitle>
+                <CardDescription>
+                  Drivers and administrators need to be approved before accessing the system
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => (window.location.href = "/api/login")}
+                  data-testid="button-staff-login"
+                >
+                  Staff Sign In
+                </Button>
+                <p className="text-xs text-muted-foreground mt-3 text-center">
+                  Contact your administrator to request driver/admin access
+                </p>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl mt-8">

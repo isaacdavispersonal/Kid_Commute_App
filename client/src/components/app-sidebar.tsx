@@ -9,7 +9,8 @@ import {
   AlertTriangle, 
   MessageSquare,
   Clock,
-  ClipboardCheck
+  ClipboardCheck,
+  Shield
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
@@ -28,6 +29,11 @@ const adminMenuItems = [
     title: "Dashboard",
     url: "/admin",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Users",
+    url: "/admin/users",
+    icon: Shield,
   },
   {
     title: "Routes",
