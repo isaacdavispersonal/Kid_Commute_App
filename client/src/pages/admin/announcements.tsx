@@ -17,12 +17,6 @@ export default function AdminAnnouncements() {
   const params = new URLSearchParams(window.location.search);
   const targetRole = params.get("to") || "drivers"; // default to drivers
 
-  // Get all users of the target role
-  const { data: users = [] } = useQuery<any[]>({
-    queryKey: ["/api/admin/users"],
-  });
-
-  const targetUsers = users.filter((user: any) => user.role === targetRole.slice(0, -1)); // Remove 's' from role
   const targetLabel = targetRole.charAt(0).toUpperCase() + targetRole.slice(1);
 
   const handleSendAnnouncement = async () => {
@@ -35,39 +29,35 @@ export default function AdminAnnouncements() {
       return;
     }
 
-    if (targetUsers.length === 0) {
-      toast({
-        title: "Error",
-        description: `No ${targetLabel.toLowerCase()} found`,
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsSending(true);
 
     try {
-      // Send message to all users in the target role
-      const sendPromises = targetUsers.map(async (user: any) => {
-        return fetch("/api/admin/send-message", {
-          method: "POST",
-          body: JSON.stringify({ 
-            content: `[ANNOUNCEMENT] ${message.trim()}`,
-            recipientId: user.id 
-          }),
-          headers: { "Content-Type": "application/json" },
-        });
+      // Create announcement using new announcements system
+      const response = await fetch("/api/admin/create-announcement", {
+        method: "POST",
+        body: JSON.stringify({ 
+          title: `Announcement to ${targetLabel}`,
+          content: message.trim(),
+          targetRole: targetRole.slice(0, -1) // Remove 's' from role (drivers -> driver)
+        }),
+        headers: { "Content-Type": "application/json" },
       });
 
-      await Promise.all(sendPromises);
+      if (!response.ok) {
+        throw new Error("Failed to create announcement");
+      }
 
       toast({
         title: "Announcement sent",
-        description: `Your message has been sent to ${targetUsers.length} ${targetLabel.toLowerCase()}`,
+        description: `Your announcement has been broadcast to all ${targetLabel.toLowerCase()}`,
       });
 
       setMessage("");
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/all-conversations"] });
+      
+      // Navigate back to messages
+      setTimeout(() => {
+        window.location.href = "/admin/messages";
+      }, 1000);
     } catch (error) {
       toast({
         title: "Failed to send announcement",
@@ -104,8 +94,8 @@ export default function AdminAnnouncements() {
                   Announcement Mode
                 </h4>
                 <p className="text-sm text-muted-foreground">
-                  This message will be sent to all {targetUsers.length} active {targetLabel.toLowerCase()}.
-                  Recipients will see this as a one-way announcement.
+                  This message will be broadcast to all {targetLabel.toLowerCase()}.
+                  Recipients can view this in their announcements section.
                 </p>
               </div>
             </div>
@@ -136,7 +126,7 @@ export default function AdminAnnouncements() {
               data-testid="button-send-announcement"
             >
               <Send className="h-4 w-4 mr-2" />
-              {isSending ? "Sending..." : `Send to ${targetUsers.length} ${targetLabel}`}
+              {isSending ? "Sending..." : `Send to All ${targetLabel}`}
             </Button>
           </div>
         </CardContent>

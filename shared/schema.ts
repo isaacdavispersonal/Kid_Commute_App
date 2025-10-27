@@ -281,6 +281,26 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
 
+// Announcements table - broadcast messages from admins
+export const announcements = pgTable("announcements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminId: varchar("admin_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  targetRole: userRoleEnum("target_role").notNull(), // 'driver' or 'parent'
+  title: varchar("title").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAnnouncementSchema = createInsertSchema(announcements).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
+export type Announcement = typeof announcements.$inferSelect;
+
 // ============ Incident Management Tables ============
 
 // Incident severity enum

@@ -1066,6 +1066,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // ============ Announcement routes ============
+
+  // Create announcement
+  app.post(
+    "/api/admin/create-announcement",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const adminId = req.user.claims.sub;
+        const { title, content, targetRole } = req.body;
+
+        if (!title || !content || !targetRole) {
+          return res.status(400).json({ message: "Title, content, and target role are required" });
+        }
+
+        if (targetRole !== "driver" && targetRole !== "parent") {
+          return res.status(400).json({ message: "Target role must be 'driver' or 'parent'" });
+        }
+
+        const announcement = await storage.createAnnouncement({
+          adminId,
+          title,
+          content,
+          targetRole,
+        });
+
+        // Broadcast via WebSocket
+        if (wss) {
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(
+                JSON.stringify({
+                  type: "new_announcement",
+                  announcement,
+                })
+              );
+            }
+          });
+        }
+
+        res.json(announcement);
+      } catch (error) {
+        console.error("Error creating announcement:", error);
+        res.status(500).json({ message: "Failed to create announcement" });
+      }
+    }
+  );
+
+  // Get announcements for drivers
+  app.get(
+    "/api/driver/announcements",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const announcements = await storage.getAnnouncementsByRole("driver");
+        
+        // Add admin details to each announcement
+        const announcementsWithDetails = await Promise.all(
+          announcements.map(async (announcement) => {
+            const admin = await storage.getUser(announcement.adminId);
+            return {
+              ...announcement,
+              adminName: admin ? `${admin.firstName} ${admin.lastName}` : "Admin",
+            };
+          })
+        );
+
+        res.json(announcementsWithDetails);
+      } catch (error) {
+        console.error("Error fetching announcements:", error);
+        res.status(500).json({ message: "Failed to fetch announcements" });
+      }
+    }
+  );
+
+  // Get announcements for parents
+  app.get(
+    "/api/parent/announcements",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const announcements = await storage.getAnnouncementsByRole("parent");
+        
+        // Add admin details to each announcement
+        const announcementsWithDetails = await Promise.all(
+          announcements.map(async (announcement) => {
+            const admin = await storage.getUser(announcement.adminId);
+            return {
+              ...announcement,
+              adminName: admin ? `${admin.firstName} ${admin.lastName}` : "Admin",
+            };
+          })
+        );
+
+        res.json(announcementsWithDetails);
+      } catch (error) {
+        console.error("Error fetching announcements:", error);
+        res.status(500).json({ message: "Failed to fetch announcements" });
+      }
+    }
+  );
+
   // Create HTTP server
   const httpServer = createServer(app);
 

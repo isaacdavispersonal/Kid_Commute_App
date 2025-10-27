@@ -8,6 +8,7 @@ import {
   driverAssignments,
   timeEntries,
   messages,
+  announcements,
   incidents,
   vehicleInspections,
   type User,
@@ -27,6 +28,8 @@ import {
   type InsertTimeEntry,
   type Message,
   type InsertMessage,
+  type Announcement,
+  type InsertAnnouncement,
   type Incident,
   type InsertIncident,
   type VehicleInspection,
@@ -82,6 +85,11 @@ export interface IStorage {
   getConversations(userId: string): Promise<User[]>;
   getMessagesBetweenUsers(userId1: string, userId2: string): Promise<Message[]>;
   getAllConversations(): Promise<any[]>;
+
+  // Announcement operations
+  createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement>;
+  getAnnouncementsByRole(role: "driver" | "parent"): Promise<Announcement[]>;
+  getAllAnnouncements(): Promise<Announcement[]>;
 
   // Incident operations
   getAllIncidents(): Promise<Incident[]>;
@@ -412,52 +420,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMessagesBetweenUsers(userId1: string, userId2: string): Promise<Message[]> {
-    // Get all messages between these two users, INCLUDING admin interventions
-    // This includes:
-    // 1. Direct messages between userId1 and userId2
-    // 2. Messages from admins to either userId1 or userId2
-    const allMessages = await db
+    // Simple approach: Get messages directly between the two users only
+    // Admin interventions are shown separately in the admin view
+    return await db
       .select()
       .from(messages)
       .where(
         or(
-          // Direct messages between the two users
           and(eq(messages.senderId, userId1), eq(messages.recipientId, userId2)),
-          and(eq(messages.senderId, userId2), eq(messages.recipientId, userId1)),
-          // Admin messages to userId1 (where sender is admin)
-          and(eq(messages.recipientId, userId1)),
-          // Admin messages to userId2 (where sender is admin)
-          and(eq(messages.recipientId, userId2))
+          and(eq(messages.senderId, userId2), eq(messages.recipientId, userId1))
         )
       )
       .orderBy(messages.createdAt);
-
-    // Filter and deduplicate messages
-    const conversationMessages = [];
-    const seenAdminMessages = new Set<string>();
-    
-    for (const msg of allMessages) {
-      const sender = await this.getUser(msg.senderId);
-      const isDirectMessage = 
-        (msg.senderId === userId1 && msg.recipientId === userId2) ||
-        (msg.senderId === userId2 && msg.recipientId === userId1);
-      const isAdminIntervention = 
-        sender?.role === 'admin' && 
-        (msg.recipientId === userId1 || msg.recipientId === userId2);
-      
-      if (isDirectMessage) {
-        conversationMessages.push(msg);
-      } else if (isAdminIntervention) {
-        // Deduplicate admin messages (same content, same sender, within 1 second)
-        const messageKey = `${msg.senderId}_${msg.content}_${Math.floor(new Date(msg.createdAt).getTime() / 1000)}`;
-        if (!seenAdminMessages.has(messageKey)) {
-          seenAdminMessages.add(messageKey);
-          conversationMessages.push(msg);
-        }
-      }
-    }
-
-    return conversationMessages;
   }
 
   async getAllConversations(): Promise<any[]> {
@@ -577,6 +551,31 @@ export class DatabaseStorage implements IStorage {
         lastName: d.lastName,
         email: d.email,
       }));
+  }
+
+  // ============ Announcement operations ============
+
+  async createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement> {
+    const [newAnnouncement] = await db
+      .insert(announcements)
+      .values(announcement)
+      .returning();
+    return newAnnouncement;
+  }
+
+  async getAnnouncementsByRole(role: "driver" | "parent"): Promise<Announcement[]> {
+    return await db
+      .select()
+      .from(announcements)
+      .where(eq(announcements.targetRole, role))
+      .orderBy(desc(announcements.createdAt));
+  }
+
+  async getAllAnnouncements(): Promise<Announcement[]> {
+    return await db
+      .select()
+      .from(announcements)
+      .orderBy(desc(announcements.createdAt));
   }
 }
 
