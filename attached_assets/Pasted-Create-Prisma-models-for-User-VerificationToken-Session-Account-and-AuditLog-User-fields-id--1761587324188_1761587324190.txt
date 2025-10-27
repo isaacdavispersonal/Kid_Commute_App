@@ -1,0 +1,119 @@
+Create Prisma models for User, VerificationToken, Session, Account, and AuditLog.
+
+User fields: id (cuid), email (unique, lowercase), hashedPwd (nullable), role (enum: ADMIN, DRIVER, PARENT), firstName, lastName, phone (nullable), isActive (bool, default true), lastLoginAt (DateTime, nullable), createdAt, updatedAt.
+AuditLog fields: id, userId (nullable), action (string), ip (string, nullable), ua (string, nullable), ts default now.
+Run migration and generate client.
+Implement NextAuth with:
+
+Credentials provider (email + password) using bcrypt.
+
+Email provider for magic links (use a dev SMTP or console mailer now; expose a sendVerificationRequest that logs URL in dev).
+
+Session includes user.id, user.role, user.firstName.
+
+Callbacks: jwt and session to pass role/id; signIn must check user.isActive.
+Create helper: logAudit(userId | null, action, req) to store IP/UA.
+
+Prompt 2 — Login UI + flows
+
+Build /login/page.tsx with two tabs: “Email link” and “Password”. Default to Email link.
+
+Email link tab: form with email; POST to NextAuth signIn("email"). Show success state: “Check your email for a sign-in link.” Disable button while sending. Rate-limit UI: prevent rapid re-clicks.
+
+Password tab: email + password; POST to signIn("credentials"). On success, redirect by role:
+
+ADMIN → /admin
+
+DRIVER → /driver
+
+PARENT → /parent
+If login fails, show a minimal error toast. Add “Forgot password?” link.
+Add legal text under forms: “By continuing you agree to the Terms & Privacy Policy.”
+Use Tailwind + simple card layout; mobile-friendly.
+
+Prompt 3 — Role redirect & guards
+
+Create rolePaths map and RoleGate server component.
+Add a server getSessionOrRedirect() util that:
+
+gets session; if none → redirect /login
+
+if has session, returns session.
+In /admin/layout.tsx, /driver/layout.tsx, /parent/layout.tsx: fetch session and redirect if role mismatch (e.g., a Driver hitting /admin goes to /driver).
+On the global / route, if logged in, redirect to role home automatically.
+
+Prompt 4 — Invite users (Admin only)
+
+Create Admin page /admin/users with a simple table and “Invite User” dialog.
+Invite form: firstName, lastName, email, role (DRIVER or PARENT), optional phone.
+On submit:
+
+Create user with isActive=true, no password.
+
+Generate a VerificationToken row with purpose invite (reuse NextAuth’s token table or add a new type field).
+
+Send email with invite link /accept-invite?token=....
+Create app/accept-invite/page.tsx:
+
+Validates token (not expired; 48h).
+
+If valid: lets user either Set a password OR choose Sign in with a one-time link immediately.
+
+After completion, sign them in and redirect by role.
+
+Mark token as used.
+
+Prompt 5 — Forgot password
+
+Create /forgot-password/page.tsx with email field.
+When submitted:
+
+If user exists and isActive, create VerificationToken with purpose reset (expires in 30 min) and email link /reset-password?token=....
+/reset-password/page.tsx:
+
+Validate token; show New password + Confirm password with Zod rules (min 12 chars).
+
+Save bcrypt hash to user, invalidate token(s), force logout of existing sessions, log audit “password_reset”.
+
+Prompt 6 — Magic link provider details
+
+Implement a NextAuth Email provider sendVerificationRequest that:
+
+For dev: prints the magic link to console and shows it in the server logs.
+
+For prod: use SMTP creds from env and send a styled HTML email with a single button.
+Tokens expire in 10 minutes. One-time use. Add per-email rate limit middleware (max 5/hour) via a small KV map (in-memory for dev).
+
+Prompt 7 — 2FA (optional, admin-first)
+
+Add optional Email OTP 2FA:
+
+Add User.twoFactorEnabled boolean (default false).
+
+If enabled and login is password-based, after credentials success show /verify-otp where an email code is sent (6 digits, expires 5 minutes).
+
+Store code in VerificationToken with purpose otp.
+
+On success, finish session creation and redirect.
+Admin settings page can toggle 2FA.
+
+Prompt 8 — Session & “remember device”
+
+Set session maxAge to 30 days.
+Add “Remember this device” checkbox on Password tab; if checked, use long-lived refreshable session (NextAuth JWT with rotation and sliding expiration).
+Add “Log out everywhere” button in profile to revoke all sessions (JWT rotation secret change or DB session flush).
+
+Prompt 9 — Middleware & RBAC on APIs
+
+Add middleware.ts that:
+
+Allows public routes: /login, /forgot-password, /reset-password, /accept-invite, static assets.
+
+For /admin/*, ensure role=ADMIN; /driver/*, role=DRIVER; /parent/*, role=PARENT. If mismatch, redirect to correct home.
+For /app/api/* handlers, add a server util requireRole(role) that throws 401/403 if missing or mismatched.
+
+Prompt 10 — Small UI polish
+
+On /login, add organization logo up top, short description text, and an “Admin? Use password or add 2FA” hint.
+On Driver & Parent topbars, add a profile dropdown with “Profile”, “Help”, “Log out”.
+Ensure all toasts are consistent and accessible.

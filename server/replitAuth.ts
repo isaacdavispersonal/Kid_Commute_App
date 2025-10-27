@@ -56,14 +56,25 @@ function updateUserSession(
 }
 
 async function upsertUser(claims: any) {
-  await storage.upsertUser({
+  // Check if user exists to preserve their role
+  const existingUser = await storage.getUser(claims["sub"]);
+  
+  // For existing users, don't include role in update to preserve it
+  // For new users, set default role to parent
+  const userData: any = {
     id: claims["sub"],
     email: claims["email"],
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
-    role: claims["role"] || "parent",
-  });
+  };
+  
+  // Only set role for new users
+  if (!existingUser) {
+    userData.role = "parent";
+  }
+  
+  await storage.upsertUser(userData);
 }
 
 export async function setupAuth(app: Express) {
