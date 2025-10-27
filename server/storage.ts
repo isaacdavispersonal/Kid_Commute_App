@@ -57,9 +57,13 @@ export interface IStorage {
   getAllRoutes(): Promise<Route[]>;
   getRoute(id: string): Promise<Route | undefined>;
   createRoute(route: InsertRoute): Promise<Route>;
+  updateRoute(id: string, updates: Partial<InsertRoute>): Promise<Route>;
+  deleteRoute(id: string): Promise<void>;
   getRouteStops(routeId: string): Promise<Stop[]>;
   getAllStops(): Promise<Stop[]>;
   createStop(stop: InsertStop): Promise<Stop>;
+  updateStop(id: string, updates: Partial<InsertStop>): Promise<Stop>;
+  deleteStop(id: string): Promise<void>;
 
   // Student operations
   getAllStudents(): Promise<Student[]>;
@@ -258,6 +262,34 @@ export class DatabaseStorage implements IStorage {
     return newRoute;
   }
 
+  async updateRoute(id: string, updates: Partial<InsertRoute>): Promise<Route> {
+    const [updatedRoute] = await db
+      .update(routes)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(routes.id, id))
+      .returning();
+    
+    if (!updatedRoute) {
+      throw new NotFoundError("Route not found");
+    }
+    
+    return updatedRoute;
+  }
+
+  async deleteRoute(id: string): Promise<void> {
+    // First check if route exists
+    const route = await this.getRoute(id);
+    if (!route) {
+      throw new NotFoundError("Route not found");
+    }
+    
+    // Delete all stops associated with this route first
+    await db.delete(stops).where(eq(stops.routeId, id));
+    
+    // Delete the route
+    await db.delete(routes).where(eq(routes.id, id));
+  }
+
   async getRouteStops(routeId: string): Promise<Stop[]> {
     return await db
       .select()
@@ -276,6 +308,28 @@ export class DatabaseStorage implements IStorage {
   async createStop(stop: InsertStop): Promise<Stop> {
     const [newStop] = await db.insert(stops).values(stop).returning();
     return newStop;
+  }
+
+  async updateStop(id: string, updates: Partial<InsertStop>): Promise<Stop> {
+    const [updatedStop] = await db
+      .update(stops)
+      .set(updates)
+      .where(eq(stops.id, id))
+      .returning();
+    
+    if (!updatedStop) {
+      throw new NotFoundError("Stop not found");
+    }
+    
+    return updatedStop;
+  }
+
+  async deleteStop(id: string): Promise<void> {
+    const result = await db.delete(stops).where(eq(stops.id, id)).returning();
+    
+    if (result.length === 0) {
+      throw new NotFoundError("Stop not found");
+    }
   }
 
   // ============ Student operations ============

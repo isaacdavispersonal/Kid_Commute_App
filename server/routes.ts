@@ -240,6 +240,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Update a route
+  app.patch(
+    "/api/admin/routes/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { insertRouteSchema } = await import("@shared/schema");
+        
+        // Validate request body (partial update)
+        const result = insertRouteSchema.partial().safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid route data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const updatedRoute = await storage.updateRoute(id, result.data);
+        res.json(updatedRoute);
+      } catch (error: any) {
+        console.error("Error updating route:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update route" });
+      }
+    }
+  );
+
+  // Delete a route
+  app.delete(
+    "/api/admin/routes/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        await storage.deleteRoute(id);
+        res.json({ message: "Route deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting route:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to delete route" });
+      }
+    }
+  );
+
   // Get stops for a specific route
   app.get(
     "/api/admin/routes/:routeId/stops",
@@ -325,6 +384,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         res.status(500).json({ message: "Failed to create stop" });
+      }
+    }
+  );
+
+  // Update a stop
+  app.patch(
+    "/api/admin/stops/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { insertStopSchema } = await import("@shared/schema");
+        
+        // Validate request body (partial update)
+        const result = insertStopSchema.partial().safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid stop data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        // If routeId is being updated, verify the route exists
+        if (result.data.routeId) {
+          const route = await storage.getRoute(result.data.routeId);
+          if (!route) {
+            return res.status(404).json({ message: "Route not found" });
+          }
+        }
+        
+        const updatedStop = await storage.updateStop(id, result.data);
+        res.json(updatedStop);
+      } catch (error: any) {
+        console.error("Error updating stop:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update stop" });
+      }
+    }
+  );
+
+  // Delete a stop
+  app.delete(
+    "/api/admin/stops/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        await storage.deleteStop(id);
+        res.json({ message: "Stop deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting stop:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to delete stop" });
       }
     }
   );
