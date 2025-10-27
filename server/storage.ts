@@ -78,6 +78,8 @@ export interface IStorage {
   getDriverAssignmentsByDriver(driverId: string): Promise<DriverAssignment[]>;
   getDriverAssignmentForToday(driverId: string): Promise<DriverAssignment | undefined>;
   createDriverAssignment(assignment: InsertDriverAssignment): Promise<DriverAssignment>;
+  updateDriverAssignment(id: string, updates: Partial<InsertDriverAssignment>): Promise<DriverAssignment>;
+  deleteDriverAssignment(id: string): Promise<void>;
 
   // Time entry operations
   getCurrentTimeEntry(driverId: string): Promise<TimeEntry | undefined>;
@@ -409,6 +411,38 @@ export class DatabaseStorage implements IStorage {
       .values(assignment)
       .returning();
     return newAssignment;
+  }
+
+  async updateDriverAssignment(id: string, updates: Partial<InsertDriverAssignment>): Promise<DriverAssignment> {
+    const [existing] = await db
+      .select()
+      .from(driverAssignments)
+      .where(eq(driverAssignments.id, id));
+    
+    if (!existing) {
+      throw new NotFoundError("Driver assignment not found");
+    }
+
+    const [updated] = await db
+      .update(driverAssignments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(driverAssignments.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async deleteDriverAssignment(id: string): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(driverAssignments)
+      .where(eq(driverAssignments.id, id));
+    
+    if (!existing) {
+      throw new NotFoundError("Driver assignment not found");
+    }
+
+    await db.delete(driverAssignments).where(eq(driverAssignments.id, id));
   }
 
   // ============ Time entry operations ============
