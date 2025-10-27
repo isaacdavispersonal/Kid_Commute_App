@@ -26,9 +26,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Edit, Trash2, UserCircle } from "lucide-react";
+import { Plus, Edit, Trash2, UserCircle, Route as RouteIcon, MapPin } from "lucide-react";
 import type { Student } from "@shared/schema";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 interface StudentFormData {
   firstName: string;
@@ -44,6 +45,20 @@ interface StudentFormData {
   emergencyContactPhone: string;
   emergencyContactRelation: string;
   notes: string;
+}
+
+interface EnrichedStudent extends Student {
+  routeName?: string | null;
+  pickupStop?: {
+    id: string;
+    name: string;
+    scheduledTime: string;
+  } | null;
+  dropoffStop?: {
+    id: string;
+    name: string;
+    scheduledTime: string;
+  } | null;
 }
 
 const emptyFormData: StudentFormData = {
@@ -69,7 +84,7 @@ export default function ChildrenPage() {
   const [deleteStudent, setDeleteStudent] = useState<Student | null>(null);
   const [formData, setFormData] = useState<StudentFormData>(emptyFormData);
 
-  const { data: students, isLoading } = useQuery<Student[]>({
+  const { data: students, isLoading } = useQuery<EnrichedStudent[]>({
     queryKey: ["/api/parent/students"],
   });
 
@@ -446,6 +461,60 @@ export default function ChildrenPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
+                {/* Route Assignment Section */}
+                {student.assignedRouteId ? (
+                  <>
+                    <div className="flex items-start gap-3 p-3 rounded-md bg-primary/5 border border-primary/20">
+                      <RouteIcon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">Assigned Route</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {student.routeName || "Unknown Route"}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {student.pickupStop && (
+                      <div className="flex items-start gap-3 p-3 rounded-md bg-success/5 border border-success/20">
+                        <MapPin className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">Pickup Location</p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {student.pickupStop.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {student.pickupStop.scheduledTime}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {student.dropoffStop && (
+                      <div className="flex items-start gap-3 p-3 rounded-md bg-destructive/5 border border-destructive/20">
+                        <MapPin className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">Dropoff Location</p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {student.dropoffStop.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {student.dropoffStop.scheduledTime}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="border-t pt-3" />
+                  </>
+                ) : (
+                  <div className="p-3 rounded-md bg-warning/5 border border-warning/20">
+                    <p className="text-sm text-warning flex items-center gap-2">
+                      <RouteIcon className="h-4 w-4" />
+                      Not yet assigned to a route
+                    </p>
+                  </div>
+                )}
+
                 {student.dateOfBirth && (
                   <div>
                     <p className="text-xs text-muted-foreground">Date of Birth</p>
