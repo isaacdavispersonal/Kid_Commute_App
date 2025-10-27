@@ -28,11 +28,19 @@ import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
 import { Plus, MapPin } from "lucide-react";
 
+interface RouteWithStopCount {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  stopCount: number;
+}
+
 export default function AdminRoutes() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const { data: routes, isLoading } = useQuery({
+  const { data: routes, isLoading } = useQuery<RouteWithStopCount[]>({
     queryKey: ["/api/admin/routes"],
   });
 
@@ -154,6 +162,7 @@ export default function AdminRoutes() {
                           placeholder="Describe this route's purpose and coverage area"
                           data-testid="input-route-description"
                           {...field}
+                          value={field.value || ""}
                         />
                       </FormControl>
                       <FormMessage />
