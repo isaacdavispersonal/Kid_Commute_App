@@ -412,16 +412,52 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMessagesBetweenUsers(userId1: string, userId2: string): Promise<Message[]> {
-    return await db
+    // Get all messages between these two users, INCLUDING admin interventions
+    // This includes:
+    // 1. Direct messages between userId1 and userId2
+    // 2. Messages from admins to either userId1 or userId2
+    const allMessages = await db
       .select()
       .from(messages)
       .where(
         or(
+          // Direct messages between the two users
           and(eq(messages.senderId, userId1), eq(messages.recipientId, userId2)),
-          and(eq(messages.senderId, userId2), eq(messages.recipientId, userId1))
+          and(eq(messages.senderId, userId2), eq(messages.recipientId, userId1)),
+          // Admin messages to userId1 (where sender is admin)
+          and(eq(messages.recipientId, userId1)),
+          // Admin messages to userId2 (where sender is admin)
+          and(eq(messages.recipientId, userId2))
         )
       )
       .orderBy(messages.createdAt);
+
+    // Filter and deduplicate messages
+    const conversationMessages = [];
+    const seenAdminMessages = new Set<string>();
+    
+    for (const msg of allMessages) {
+      const sender = await this.getUser(msg.senderId);
+      const isDirectMessage = 
+        (msg.senderId === userId1 && msg.recipientId === userId2) ||
+        (msg.senderId === userId2 && msg.recipientId === userId1);
+      const isAdminIntervention = 
+        sender?.role === 'admin' && 
+        (msg.recipientId === userId1 || msg.recipientId === userId2);
+      
+      if (isDirectMessage) {
+        conversationMessages.push(msg);
+      } else if (isAdminIntervention) {
+        // Deduplicate admin messages (same content, same sender, within 1 second)
+        const messageKey = `${msg.senderId}_${msg.content}_${Math.floor(new Date(msg.createdAt).getTime() / 1000)}`;
+        if (!seenAdminMessages.has(messageKey)) {
+          seenAdminMessages.add(messageKey);
+          conversationMessages.push(msg);
+        }
+      }
+    }
+
+    return conversationMessages;
   }
 
   async getAllConversations(): Promise<any[]> {

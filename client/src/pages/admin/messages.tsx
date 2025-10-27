@@ -1,7 +1,7 @@
 // Admin messaging - view and manage all conversations
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageSquare, Users, User, AlertCircle, Send } from "lucide-react";
+import { MessageSquare, Users, User, AlertCircle, Send, Plus, Filter } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, useRef } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,10 +9,27 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function AdminMessagesPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [messageContent, setMessageContent] = useState("");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [roleFilter, setRoleFilter] = useState<string>("all");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -31,6 +48,18 @@ export default function AdminMessagesPage() {
 
   // Send message state
   const [isSending, setIsSending] = useState(false);
+
+  // Get all users for creating chats
+  const { data: allUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/users"],
+    enabled: showCreateDialog,
+  });
+
+  // Filter users by role
+  const filteredUsers = allUsers.filter((user: any) => {
+    if (roleFilter === "all") return true;
+    return user.role === roleFilter;
+  });
 
   // Auto-select first conversation
   useEffect(() => {
@@ -88,6 +117,36 @@ export default function AdminMessagesPage() {
     }
   };
 
+  const handleStartChat = async (userId: string) => {
+    try {
+      // Send initial message to create the conversation
+      await fetch("/api/admin/send-message", {
+        method: "POST",
+        body: JSON.stringify({ 
+          content: "Chat started by admin",
+          recipientId: userId 
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      // Refresh conversations to show the new chat
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/all-conversations"] });
+      
+      toast({
+        title: "Chat started",
+        description: "You can now send messages to this user",
+      });
+      
+      setShowCreateDialog(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to start chat",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (conversationsLoading) {
     return <MessagesSkeleton />;
   }
@@ -119,11 +178,107 @@ export default function AdminMessagesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1">Messages</h1>
-        <p className="text-sm text-muted-foreground">
-          View and manage all conversations
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Messages</h1>
+          <p className="text-sm text-muted-foreground">
+            View and manage all conversations
+          </p>
+        </div>
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-create-chat">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Chat
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Start New Conversation</DialogTitle>
+              <DialogDescription>
+                Select a user to start messaging or create an announcement
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium mb-2">Send Announcement</h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Broadcast a message to all users of a specific role
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => window.location.href = "/admin/announcements?to=drivers"}
+                    data-testid="button-announce-drivers"
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    All Drivers
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => window.location.href = "/admin/announcements?to=parents"}
+                    data-testid="button-announce-parents"
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    All Parents
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or message individual users
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <SelectTrigger data-testid="select-role-filter">
+                    <SelectValue placeholder="Filter by role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Users</SelectItem>
+                    <SelectItem value="driver">Drivers Only</SelectItem>
+                    <SelectItem value="parent">Parents Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {filteredUsers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No users found
+                  </p>
+                ) : (
+                  filteredUsers.map((user: any) => (
+                    <Button
+                      key={user.id}
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => handleStartChat(user.id)}
+                      data-testid={`user-${user.id}`}
+                    >
+                      <User className="h-4 w-4 mr-2" />
+                      <div className="flex flex-col items-start">
+                        <span className="text-sm font-medium">
+                          {user.firstName} {user.lastName}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {user.role.charAt(0).toUpperCase() + user.role.slice(1)} • {user.email}
+                        </span>
+                      </div>
+                    </Button>
+                  ))
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
