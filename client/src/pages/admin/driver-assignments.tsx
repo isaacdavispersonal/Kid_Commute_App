@@ -1,0 +1,627 @@
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { insertDriverAssignmentSchema } from "@shared/schema";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Pencil, Trash2, CalendarDays, Clock, User, Route, Car } from "lucide-react";
+
+interface EnrichedDriverAssignment {
+  id: string;
+  driverId: string;
+  routeId: string;
+  vehicleId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+  driverName: string;
+  driverEmail: string;
+  routeName: string;
+  vehicleName: string;
+  vehiclePlate: string;
+}
+
+interface Driver {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+}
+
+interface RouteType {
+  id: string;
+  name: string;
+}
+
+interface Vehicle {
+  id: string;
+  name: string;
+  plateNumber: string;
+}
+
+const DAYS_OF_WEEK = [
+  { value: 0, label: "Sunday" },
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+];
+
+const formSchema = insertDriverAssignmentSchema.extend({
+  dayOfWeek: z.number().min(0).max(6),
+  startTime: z.string().min(1, "Start time is required"),
+  endTime: z.string().min(1, "End time is required"),
+});
+
+type FormData = z.infer<typeof formSchema>;
+
+export default function AdminDriverAssignments() {
+  const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<EnrichedDriverAssignment | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<EnrichedDriverAssignment | null>(null);
+
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      driverId: "",
+      routeId: "",
+      vehicleId: "",
+      dayOfWeek: 1,
+      startTime: "07:00",
+      endTime: "15:00",
+      isActive: true,
+    },
+  });
+
+  const { data: assignments, isLoading: assignmentsLoading } = useQuery<EnrichedDriverAssignment[]>({
+    queryKey: ["/api/admin/driver-assignments"],
+  });
+
+  const { data: allUsers } = useQuery<Driver[]>({
+    queryKey: ["/api/admin/users"],
+  });
+
+  const drivers = allUsers?.filter((user) => user.role === "driver") || [];
+
+  const { data: routes } = useQuery<RouteType[]>({
+    queryKey: ["/api/admin/routes"],
+  });
+
+  const { data: vehicles } = useQuery<Vehicle[]>({
+    queryKey: ["/api/admin/vehicles"],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: FormData) => {
+      return await apiRequest("POST", "/api/admin/driver-assignments", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
+      handleCloseDialog();
+      toast({
+        title: "Success",
+        description: "Driver assignment created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create driver assignment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<FormData> }) => {
+      return await apiRequest("PATCH", `/api/admin/driver-assignments/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
+      handleCloseDialog();
+      toast({
+        title: "Success",
+        description: "Driver assignment updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update driver assignment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/admin/driver-assignments/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
+      setDeleteDialog(null);
+      toast({
+        title: "Success",
+        description: "Driver assignment deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete driver assignment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleOpenDialog = (assignment?: EnrichedDriverAssignment) => {
+    if (assignment) {
+      setEditingAssignment(assignment);
+      form.reset({
+        driverId: assignment.driverId,
+        routeId: assignment.routeId,
+        vehicleId: assignment.vehicleId,
+        dayOfWeek: assignment.dayOfWeek,
+        startTime: assignment.startTime,
+        endTime: assignment.endTime,
+        isActive: assignment.isActive,
+      });
+    } else {
+      setEditingAssignment(null);
+      form.reset({
+        driverId: "",
+        routeId: "",
+        vehicleId: "",
+        dayOfWeek: 1,
+        startTime: "07:00",
+        endTime: "15:00",
+        isActive: true,
+      });
+    }
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setEditingAssignment(null);
+    form.reset();
+  };
+
+  const onSubmit = (data: FormData) => {
+    if (editingAssignment) {
+      updateMutation.mutate({ id: editingAssignment.id, data });
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
+  const handleDelete = (assignment: EnrichedDriverAssignment) => {
+    setDeleteDialog(assignment);
+  };
+
+  const confirmDelete = () => {
+    if (deleteDialog) {
+      deleteMutation.mutate(deleteDialog.id);
+    }
+  };
+
+  const getDayName = (day: number) => {
+    return DAYS_OF_WEEK.find((d) => d.value === day)?.label || "Unknown";
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Driver Assignments</h1>
+          <p className="text-muted-foreground mt-1">
+            Assign drivers to routes with vehicles and schedules
+          </p>
+        </div>
+        <Button onClick={() => handleOpenDialog()} data-testid="button-create-assignment">
+          <Plus className="h-4 w-4 mr-2" />
+          New Assignment
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>All Assignments</CardTitle>
+          <CardDescription>
+            View and manage driver route assignments
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {assignmentsLoading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Loading assignments...
+            </div>
+          ) : !assignments || assignments.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No driver assignments found. Create one to get started.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Driver</TableHead>
+                  <TableHead>Route</TableHead>
+                  <TableHead>Vehicle</TableHead>
+                  <TableHead>Day</TableHead>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {assignments.map((assignment) => (
+                  <TableRow key={assignment.id} data-testid={`row-assignment-${assignment.id}`}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <div className="font-medium">{assignment.driverName}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {assignment.driverEmail}
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Route className="h-4 w-4 text-muted-foreground" />
+                        <span>{assignment.routeName}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Car className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <div>{assignment.vehicleName}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {assignment.vehiclePlate}
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                        <span>{getDayName(assignment.dayOfWeek)}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          {assignment.startTime} - {assignment.endTime}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={assignment.isActive ? "default" : "secondary"}
+                        data-testid={`badge-status-${assignment.id}`}
+                      >
+                        {assignment.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenDialog(assignment)}
+                          data-testid={`button-edit-${assignment.id}`}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(assignment)}
+                          data-testid={`button-delete-${assignment.id}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editingAssignment ? "Edit Driver Assignment" : "New Driver Assignment"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingAssignment
+                ? "Update the driver assignment details"
+                : "Assign a driver to a route with a vehicle and schedule"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="driverId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Driver</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={!!editingAssignment}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-driver">
+                          <SelectValue placeholder="Select a driver" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {drivers?.map((driver) => (
+                          <SelectItem key={driver.id} value={driver.id}>
+                            {driver.firstName} {driver.lastName} ({driver.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="routeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Route</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-route">
+                          <SelectValue placeholder="Select a route" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {routes?.map((route) => (
+                          <SelectItem key={route.id} value={route.id}>
+                            {route.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="vehicleId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vehicle</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-vehicle">
+                          <SelectValue placeholder="Select a vehicle" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {vehicles?.map((vehicle) => (
+                          <SelectItem key={vehicle.id} value={vehicle.id}>
+                            {vehicle.name} - {vehicle.plateNumber}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="dayOfWeek"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Day of Week</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(parseInt(value))}
+                      value={field.value.toString()}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-day">
+                          <SelectValue placeholder="Select a day" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {DAYS_OF_WEEK.map((day) => (
+                          <SelectItem key={day.value} value={day.value.toString()}>
+                            {day.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="startTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Time</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="time"
+                          {...field}
+                          data-testid="input-start-time"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="endTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Time</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="time"
+                          {...field}
+                          data-testid="input-end-time"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="isActive"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "true")}
+                      value={field.value.toString()}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-status">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="true">Active</SelectItem>
+                        <SelectItem value="false">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCloseDialog}
+                  data-testid="button-cancel"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                  data-testid="button-submit"
+                >
+                  {editingAssignment ? "Update Assignment" : "Create Assignment"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Driver Assignment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the assignment for{" "}
+              <span className="font-semibold">{deleteDialog?.driverName}</span> on{" "}
+              <span className="font-semibold">{deleteDialog && getDayName(deleteDialog.dayOfWeek)}</span>?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              data-testid="button-confirm-delete"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
