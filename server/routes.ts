@@ -204,6 +204,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Create a new route
+  app.post(
+    "/api/admin/routes",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { insertRouteSchema } = await import("@shared/schema");
+        
+        // Validate request body
+        const result = insertRouteSchema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid route data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const newRoute = await storage.createRoute(result.data);
+        res.json(newRoute);
+      } catch (error: any) {
+        console.error("Error creating route:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to create route" });
+      }
+    }
+  );
+
   // Get stops for a specific route
   app.get(
     "/api/admin/routes/:routeId/stops",
