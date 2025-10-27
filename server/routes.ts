@@ -204,6 +204,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get stops for a specific route
+  app.get(
+    "/api/admin/routes/:routeId/stops",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { routeId } = req.params;
+        
+        // Verify route exists
+        const route = await storage.getRoute(routeId);
+        if (!route) {
+          return res.status(404).json({ message: "Route not found" });
+        }
+        
+        const stops = await storage.getRouteStops(routeId);
+        res.json(stops);
+      } catch (error) {
+        console.error("Error fetching route stops:", error);
+        res.status(500).json({ message: "Failed to fetch route stops" });
+      }
+    }
+  );
+
   // Get all schedules
   app.get(
     "/api/admin/schedules",
@@ -230,6 +254,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error fetching schedules:", error);
         res.status(500).json({ message: "Failed to fetch schedules" });
+      }
+    }
+  );
+
+  // Get all students for route assignment
+  app.get(
+    "/api/admin/students",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const students = await storage.getAllStudents();
+        // Enrich with parent and route information
+        const enrichedStudents = await Promise.all(
+          students.map(async (student) => {
+            const parent = await storage.getUser(student.parentId);
+            let routeName = null;
+            let pickupStop = null;
+            let dropoffStop = null;
+
+            if (student.assignedRouteId) {
+              const route = await storage.getRoute(student.assignedRouteId);
+              routeName = route?.name || null;
+              
+              const stops = await storage.getRouteStops(student.assignedRouteId);
+              if (student.pickupStopId) {
+                pickupStop = stops.find(s => s.id === student.pickupStopId);
+              }
+              if (student.dropoffStopId) {
+                dropoffStop = stops.find(s => s.id === student.dropoffStopId);
+              }
+            }
+
+            return {
+              ...student,
+              parentName: parent ? `${parent.firstName} ${parent.lastName}` : "Unknown",
+              parentEmail: parent?.email || null,
+              routeName,
+              pickupStop,
+              dropoffStop,
+            };
+          })
+        );
+        res.json(enrichedStudents);
+      } catch (error) {
+        console.error("Error fetching students:", error);
+        res.status(500).json({ message: "Failed to fetch students" });
+      }
+    }
+  );
+
+  // Assign student to route
+  app.patch(
+    "/api/admin/students/:id/assign-route",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const studentId = req.params.id;
+        const { assignedRouteId, pickupStopId, dropoffStopId } = req.body;
+
+        // Validate required fields
+        if (!assignedRouteId) {
+          return res.status(400).json({ 
+            message: "Route ID is required. Use the unassign endpoint to remove route assignments." 
+          });
+        }
+
+        // Verify student exists
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+
+        // Verify route exists
+        const route = await storage.getRoute(assignedRouteId);
+        if (!route) {
+          return res.status(404).json({ message: "Route not found" });
+        }
+
+        // Validate that stops belong to the route if provided
+        if (pickupStopId || dropoffStopId) {
+          const stops = await storage.getRouteStops(assignedRouteId);
+          const stopIds = stops.map(s => s.id);
+          
+          if (pickupStopId && !stopIds.includes(pickupStopId)) {
+            return res.status(400).json({ 
+              message: "Pickup stop does not belong to the selected route" 
+            });
+          }
+          
+          if (dropoffStopId && !stopIds.includes(dropoffStopId)) {
+            return res.status(400).json({ 
+              message: "Dropoff stop does not belong to the selected route" 
+            });
+          }
+        }
+
+        const updatedStudent = await storage.updateStudent(studentId, {
+          assignedRouteId,
+          pickupStopId: pickupStopId || null,
+          dropoffStopId: dropoffStopId || null,
+        });
+
+        res.json(updatedStudent);
+      } catch (error: any) {
+        console.error("Error assigning student to route:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to assign student to route" });
+      }
+    }
+  );
+
+  // Unassign student from route
+  app.delete(
+    "/api/admin/students/:id/unassign-route",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const studentId = req.params.id;
+        
+        const updatedStudent = await storage.updateStudent(studentId, {
+          assignedRouteId: null,
+          pickupStopId: null,
+          dropoffStopId: null,
+        });
+
+        res.json(updatedStudent);
+      } catch (error: any) {
+        console.error("Error unassigning student from route:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to unassign student from route" });
       }
     }
   );

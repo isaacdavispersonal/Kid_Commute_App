@@ -28,6 +28,7 @@ import AdminVehicles from "@/pages/admin/vehicles";
 import AdminRoutes from "@/pages/admin/routes";
 import AdminSchedule from "@/pages/admin/schedule";
 import AdminUsers from "@/pages/admin/users";
+import AdminStudents from "@/pages/admin/students";
 
 import DriverDashboard from "@/pages/driver/dashboard";
 import DriverInspection from "@/pages/driver/inspection";
@@ -114,6 +115,7 @@ function Router() {
                   <Route path="/admin/routes" component={AdminRoutes} />
                   <Route path="/admin/schedule" component={AdminSchedule} />
                   <Route path="/admin/users" component={AdminUsers} />
+                  <Route path="/admin/students" component={AdminStudents} />
                   <Route
                     path="/admin/messages"
                     component={() => <MessagesPage userRole="driver" />}

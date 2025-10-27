@@ -189,8 +189,15 @@ export const updateStudentSchema = createInsertSchema(students).omit({
   dropoffStopId: true,
 });
 
+export const adminUpdateStudentSchema = createInsertSchema(students).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertStudent = z.infer<typeof insertStudentSchema>;
 export type UpdateStudent = z.infer<typeof updateStudentSchema>;
+export type AdminUpdateStudent = z.infer<typeof adminUpdateStudentSchema>;
 export type Student = typeof students.$inferSelect;
 
 // ============ Schedule Management Tables ============
