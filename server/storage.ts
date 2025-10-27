@@ -80,6 +80,8 @@ export interface IStorage {
   getMessages(userId: string): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   getConversations(userId: string): Promise<User[]>;
+  getMessagesBetweenUsers(userId1: string, userId2: string): Promise<Message[]>;
+  getAllConversations(): Promise<any[]>;
 
   // Incident operations
   getAllIncidents(): Promise<Incident[]>;
@@ -389,6 +391,68 @@ export class DatabaseStorage implements IStorage {
       .where(
         or(...userIds.map((id) => eq(users.id, id)))
       );
+  }
+
+  async getMessagesBetweenUsers(userId1: string, userId2: string): Promise<Message[]> {
+    return await db
+      .select()
+      .from(messages)
+      .where(
+        or(
+          and(eq(messages.senderId, userId1), eq(messages.recipientId, userId2)),
+          and(eq(messages.senderId, userId2), eq(messages.recipientId, userId1))
+        )
+      )
+      .orderBy(messages.createdAt);
+  }
+
+  async getAllConversations(): Promise<any[]> {
+    // Get all messages and group by unique sender-recipient pairs
+    const allMessages = await db
+      .select({
+        senderId: messages.senderId,
+        recipientId: messages.recipientId,
+        content: messages.content,
+        createdAt: messages.createdAt,
+      })
+      .from(messages)
+      .orderBy(desc(messages.createdAt));
+
+    // Create unique conversation keys
+    const conversationMap = new Map<string, any>();
+
+    for (const msg of allMessages) {
+      // Create a consistent key for the conversation
+      const key = [msg.senderId, msg.recipientId].sort().join("_");
+      
+      if (!conversationMap.has(key)) {
+        const [user1, user2] = await Promise.all([
+          this.getUser(msg.senderId),
+          this.getUser(msg.recipientId),
+        ]);
+
+        const isUser1Driver = user1?.role === "driver";
+        const driver = isUser1Driver ? user1 : user2;
+        const parent = isUser1Driver ? user2 : user1;
+
+        conversationMap.set(key, {
+          conversationKey: key,
+          driverName: driver ? `${driver.firstName || ""} ${driver.lastName || ""}`.trim() || driver.email : "Unknown",
+          parentName: parent ? `${parent.firstName || ""} ${parent.lastName || ""}`.trim() || parent.email : "Unknown",
+          lastMessagePreview: msg.content.substring(0, 50) + (msg.content.length > 50 ? "..." : ""),
+          lastMessageAt: msg.createdAt,
+          messageCount: 0,
+        });
+      }
+
+      // Increment message count
+      const conv = conversationMap.get(key);
+      if (conv) {
+        conv.messageCount += 1;
+      }
+    }
+
+    return Array.from(conversationMap.values());
   }
 
   // ============ Incident operations ============

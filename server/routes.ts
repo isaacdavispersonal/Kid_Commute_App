@@ -760,74 +760,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // ============ Messaging routes (shared between driver and parent) ============
+  // ============ Parent Messaging routes ============
 
-  // Get conversations
+  // Get driver info for parent
   app.get(
-    "/api/:role/conversations",
+    "/api/parent/driver-info/:driverId",
     isAuthenticated,
+    requireRole("parent"),
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
-        const conversations = await storage.getConversations(userId);
-        res.json(conversations);
+        const driverId = req.params.driverId;
+        const driver = await storage.getUser(driverId);
+        if (!driver) {
+          return res.status(404).json({ message: "Driver not found" });
+        }
+        res.json(driver);
       } catch (error) {
-        console.error("Error fetching conversations:", error);
-        res.status(500).json({ message: "Failed to fetch conversations" });
+        console.error("Error fetching driver info:", error);
+        res.status(500).json({ message: "Failed to fetch driver info" });
       }
     }
   );
 
-  // Get messages
-  app.get("/api/:role/messages", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const messages = await storage.getMessages(userId);
-      const messagesWithCurrentUser = messages.map((msg) => ({
-        ...msg,
-        currentUserId: userId,
-      }));
-      res.json(messagesWithCurrentUser);
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-      res.status(500).json({ message: "Failed to fetch messages" });
-    }
-  });
-
-  // Send message
-  app.post(
-    "/api/:role/send-message",
+  // Get messages between parent and specific driver
+  app.get(
+    "/api/parent/messages/:driverId",
     isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        const driverId = req.params.driverId;
+        
+        // Verify driver is assigned to at least one of parent's children
+        const parentStudents = await storage.getStudentsByParent(parentId);
+        const hasAssignedDriver = parentStudents.some((student: any) => student.driverId === driverId);
+        
+        if (!hasAssignedDriver) {
+          return res.status(403).json({ message: "You can only message drivers assigned to your children" });
+        }
+        
+        const messages = await storage.getMessagesBetweenUsers(parentId, driverId);
+        const messagesWithOwnership = messages.map((msg) => ({
+          ...msg,
+          isOwn: msg.senderId === parentId,
+        }));
+        res.json(messagesWithOwnership);
+      } catch (error) {
+        console.error("Error fetching messages:", error);
+        res.status(500).json({ message: "Failed to fetch messages" });
+      }
+    }
+  );
+
+  // Send message from parent to driver
+  app.post(
+    "/api/parent/send-message",
+    isAuthenticated,
+    requireRole("parent"),
     async (req: any, res) => {
       try {
         const senderId = req.user.claims.sub;
-        const { content } = req.body;
-
-        // Simplified: Find first user of opposite role to message
-        const sender = await storage.getUser(senderId);
-        if (!sender) {
-          return res.status(404).json({ message: "Sender not found" });
-        }
-
-        // Get a recipient (simplified logic)
-        let recipientId = "";
-        if (sender.role === "driver") {
-          // Find a parent
-          const students = await storage.getAllStudents();
-          if (students.length > 0) {
-            recipientId = students[0].parentId;
-          }
-        } else if (sender.role === "parent") {
-          // Find a driver (simplified)
-          const vehicles = await storage.getAllVehicles();
-          const assignments = await storage.getAllDriverAssignments();
-          if (assignments.length > 0) {
-            recipientId = assignments[0].driverId;
-          }
-        }
+        const { content, recipientId } = req.body;
 
         if (!recipientId) {
-          return res.status(400).json({ message: "No recipient available" });
+          return res.status(400).json({ message: "Recipient ID required" });
+        }
+
+        // Verify driver is assigned to at least one of parent's children
+        const parentStudents = await storage.getStudentsByParent(senderId);
+        const hasAssignedDriver = parentStudents.some((student: any) => student.driverId === recipientId);
+        
+        if (!hasAssignedDriver) {
+          return res.status(403).json({ message: "You can only message drivers assigned to your children" });
         }
 
         const message = await storage.createMessage({
@@ -854,6 +859,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error sending message:", error);
         res.status(500).json({ message: "Failed to send message" });
+      }
+    }
+  );
+
+  // ============ Driver Messaging routes ============
+
+  // Get conversations (parents who have messaged this driver)
+  app.get(
+    "/api/driver/conversations",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const conversations = await storage.getConversations(driverId);
+        res.json(conversations);
+      } catch (error) {
+        console.error("Error fetching conversations:", error);
+        res.status(500).json({ message: "Failed to fetch conversations" });
+      }
+    }
+  );
+
+  // Get messages between driver and specific parent
+  app.get(
+    "/api/driver/messages/:parentId",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const parentId = req.params.parentId;
+        const messages = await storage.getMessagesBetweenUsers(driverId, parentId);
+        const messagesWithOwnership = messages.map((msg) => ({
+          ...msg,
+          isOwn: msg.senderId === driverId,
+        }));
+        res.json(messagesWithOwnership);
+      } catch (error) {
+        console.error("Error fetching messages:", error);
+        res.status(500).json({ message: "Failed to fetch messages" });
+      }
+    }
+  );
+
+  // Send message from driver to parent
+  app.post(
+    "/api/driver/send-message",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const senderId = req.user.claims.sub;
+        const { content, recipientId } = req.body;
+
+        if (!recipientId) {
+          return res.status(400).json({ message: "Recipient ID required" });
+        }
+
+        // Verify this is a response-only conversation (parent must have messaged driver first)
+        const existingMessages = await storage.getMessagesBetweenUsers(senderId, recipientId);
+        const parentInitiated = existingMessages.some((msg: any) => msg.senderId === recipientId);
+        
+        if (!parentInitiated) {
+          return res.status(403).json({ message: "You can only respond to messages from parents. Parents must initiate conversations." });
+        }
+
+        const message = await storage.createMessage({
+          senderId,
+          recipientId,
+          content,
+        });
+
+        // Broadcast via WebSocket if available
+        if (wss) {
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(
+                JSON.stringify({
+                  type: "new_message",
+                  message,
+                })
+              );
+            }
+          });
+        }
+
+        res.json(message);
+      } catch (error) {
+        console.error("Error sending message:", error);
+        res.status(500).json({ message: "Failed to send message" });
+      }
+    }
+  );
+
+  // ============ Admin Messaging routes ============
+
+  // Get all conversations between drivers and parents
+  app.get(
+    "/api/admin/all-conversations",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const conversations = await storage.getAllConversations();
+        res.json(conversations);
+      } catch (error) {
+        console.error("Error fetching all conversations:", error);
+        res.status(500).json({ message: "Failed to fetch conversations" });
+      }
+    }
+  );
+
+  // Get messages for a specific conversation
+  app.get(
+    "/api/admin/conversation-messages/:conversationKey",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const conversationKey = req.params.conversationKey;
+        const [userId1, userId2] = conversationKey.split("_");
+        const messages = await storage.getMessagesBetweenUsers(userId1, userId2);
+        
+        // Add sender details to each message
+        const messagesWithDetails = await Promise.all(
+          messages.map(async (msg) => {
+            const sender = await storage.getUser(msg.senderId);
+            return {
+              ...msg,
+              senderName: sender ? `${sender.firstName} ${sender.lastName}` : "Unknown",
+              senderRole: sender?.role || "unknown",
+            };
+          })
+        );
+        
+        res.json(messagesWithDetails);
+      } catch (error) {
+        console.error("Error fetching conversation messages:", error);
+        res.status(500).json({ message: "Failed to fetch messages" });
       }
     }
   );

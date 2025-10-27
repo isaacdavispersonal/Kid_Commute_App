@@ -38,8 +38,10 @@ import DriverIncident from "@/pages/driver/incident";
 import ParentDashboard from "@/pages/parent/dashboard";
 import ParentTracking from "@/pages/parent/tracking";
 import ParentChildren from "@/pages/parent/children";
+import ParentMessages from "@/pages/parent/messages";
 
-import MessagesPage from "@/pages/messages";
+import DriverMessages from "@/pages/driver/messages";
+import AdminMessages from "@/pages/admin/messages";
 
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -117,10 +119,7 @@ function Router() {
                   <Route path="/admin/schedule" component={AdminSchedule} />
                   <Route path="/admin/users" component={AdminUsers} />
                   <Route path="/admin/students" component={AdminStudents} />
-                  <Route
-                    path="/admin/messages"
-                    component={() => <MessagesPage userRole="driver" />}
-                  />
+                  <Route path="/admin/messages" component={AdminMessages} />
                 </>
               )}
               {userRole === "driver" && (
@@ -130,10 +129,7 @@ function Router() {
                   <Route path="/driver/routes" component={DriverRoutes} />
                   <Route path="/driver/inspection" component={DriverInspection} />
                   <Route path="/driver/incident" component={DriverIncident} />
-                  <Route
-                    path="/driver/messages"
-                    component={() => <MessagesPage userRole="driver" />}
-                  />
+                  <Route path="/driver/messages" component={DriverMessages} />
                 </>
               )}
               {userRole === "parent" && (
@@ -142,10 +138,7 @@ function Router() {
                   <Route path="/parent" component={ParentDashboard} />
                   <Route path="/parent/children" component={ParentChildren} />
                   <Route path="/parent/tracking" component={ParentTracking} />
-                  <Route
-                    path="/parent/messages"
-                    component={() => <MessagesPage userRole="parent" />}
-                  />
+                  <Route path="/parent/messages" component={ParentMessages} />
                 </>
               )}
               <Route component={NotFound} />
