@@ -1,18 +1,15 @@
 // Admin messaging - view and manage all conversations
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageSquare, Users, AlertCircle, Send, Megaphone } from "lucide-react";
+import { MessageSquare, Users, AlertCircle, Megaphone, User } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, useRef } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
 
 export default function AdminMessagesPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
-  const [messageContent, setMessageContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -29,9 +26,6 @@ export default function AdminMessagesPage() {
     refetchInterval: 3000,
   });
 
-  // Send message state
-  const [isSending, setIsSending] = useState(false);
-
   // Auto-select first conversation
   useEffect(() => {
     if (conversations && conversations.length > 0 && !selectedConversation) {
@@ -43,50 +37,6 @@ export default function AdminMessagesPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  const handleSendMessage = async () => {
-    if (!messageContent.trim() || !selectedConversation || isSending) return;
-
-    setIsSending(true);
-    
-    // Send message to BOTH participants in the conversation
-    const [userId1, userId2] = selectedConversation.split("_");
-    const content = messageContent.trim();
-
-    try {
-      // Send to first user
-      await fetch("/api/admin/send-message", {
-        method: "POST",
-        body: JSON.stringify({ content, recipientId: userId1 }),
-        headers: { "Content-Type": "application/json" },
-      });
-      
-      // Send to second user
-      await fetch("/api/admin/send-message", {
-        method: "POST",
-        body: JSON.stringify({ content, recipientId: userId2 }),
-        headers: { "Content-Type": "application/json" },
-      });
-
-      // Clear input and refresh
-      setMessageContent("");
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/conversation-messages", selectedConversation] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/all-conversations"] });
-      
-      toast({
-        title: "Message sent",
-        description: "Your message has been sent to both participants",
-      });
-    } catch (error) {
-      toast({
-        title: "Failed to send message",
-        description: "Please try again",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSending(false);
-    }
-  };
 
 
   if (conversationsLoading) {
@@ -211,37 +161,11 @@ export default function AdminMessagesPage() {
                   )}
                 </div>
 
-                <div className="p-3 bg-warning/10 rounded-md border border-warning/20">
+                <div className="p-3 bg-info/10 rounded-md border border-info/20">
                   <p className="text-xs text-muted-foreground text-center">
                     <AlertCircle className="h-3 w-3 inline mr-2" />
-                    Admin intervention mode - Use this to support drivers and parents
+                    View-only mode. Use announcement buttons above to broadcast messages to drivers or parents.
                   </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <Textarea
-                    placeholder="Type your message... (Admin support message)"
-                    value={messageContent}
-                    onChange={(e) => setMessageContent(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    className="resize-none"
-                    rows={3}
-                    data-testid="input-admin-message"
-                  />
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={!messageContent.trim() || isSending}
-                    size="icon"
-                    className="h-auto"
-                    data-testid="button-send-message"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
             ) : (
