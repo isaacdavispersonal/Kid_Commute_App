@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, MessageSquare, User, AlertCircle } from "lucide-react";
+import { Send, MessageSquare, User, AlertCircle, Megaphone } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -11,6 +11,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { formatDistanceToNow } from "date-fns";
 
 const quickReplies = [
   "Running 5 minutes late",
@@ -26,6 +27,12 @@ export default function DriverMessagesPage() {
   const [newMessage, setNewMessage] = useState("");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
   const { socket } = useWebSocket();
+
+  // Get announcements from admin
+  const { data: announcements = [] } = useQuery<any[]>({
+    queryKey: ["/api/driver/announcements"],
+    refetchInterval: 10000,
+  });
 
   // Get list of parents who have messaged the driver
   const { data: conversations, isLoading: conversationsLoading } = useQuery({
@@ -151,6 +158,43 @@ export default function DriverMessagesPage() {
           Respond to parent messages
         </p>
       </div>
+
+      {/* Announcements Section */}
+      {announcements.length > 0 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Megaphone className="h-5 w-5" />
+              Announcements
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {announcements.map((announcement: any) => (
+              <div
+                key={announcement.id}
+                className="bg-background/60 rounded-md p-4 space-y-2"
+                data-testid={`announcement-${announcement.id}`}
+              >
+                <div className="flex items-start justify-between">
+                  <h3 className="font-semibold text-sm" data-testid="announcement-title">
+                    {announcement.title}
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDistanceToNow(new Date(announcement.createdAt), { addSuffix: true })}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground" data-testid="announcement-content">
+                  {announcement.content}
+                </p>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <User className="h-3 w-3" />
+                  <span>From: {announcement.adminName}</span>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
