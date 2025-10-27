@@ -136,7 +136,7 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-sm font-semibold px-2 py-4">
-            FleetTrack
+            Kid Connect
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

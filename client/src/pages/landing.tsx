@@ -9,7 +9,7 @@ export default function Landing() {
         <div className="flex flex-col items-center justify-center gap-12">
           <div className="flex items-center gap-3">
             <Car className="h-12 w-12 text-primary" />
-            <h1 className="text-4xl font-bold">FleetTrack</h1>
+            <h1 className="text-4xl font-bold">Kid Connect</h1>
           </div>
 
           <div className="text-center max-w-2xl">
