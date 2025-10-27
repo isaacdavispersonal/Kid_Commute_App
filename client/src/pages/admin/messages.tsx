@@ -46,11 +46,31 @@ export default function AdminMessagesPage() {
   if (!conversations || conversations.length === 0) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1">Messages</h1>
-          <p className="text-sm text-muted-foreground">
-            View and manage all conversations
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold mb-1">Messages</h1>
+            <p className="text-sm text-muted-foreground">
+              View and manage all conversations
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => window.location.href = "/admin/announcements?to=drivers"}
+              data-testid="button-announce-drivers"
+            >
+              <Megaphone className="h-4 w-4 mr-2" />
+              Announce to Drivers
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => window.location.href = "/admin/announcements?to=parents"}
+              data-testid="button-announce-parents"
+            >
+              <Megaphone className="h-4 w-4 mr-2" />
+              Announce to Parents
+            </Button>
+          </div>
         </div>
         <Card>
           <CardContent className="py-16">
@@ -59,7 +79,7 @@ export default function AdminMessagesPage() {
               <h3 className="text-lg font-semibold mb-2">No Conversations Yet</h3>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
                 When parents and drivers start messaging, you'll be able to view and
-                participate in their conversations here for support purposes.
+                monitor their conversations here. Use the announcement buttons above to broadcast messages.
               </p>
             </div>
           </CardContent>
