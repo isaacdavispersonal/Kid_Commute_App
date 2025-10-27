@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
+import Profile from "@/pages/profile";
 
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminVehicles from "@/pages/admin/vehicles";
@@ -101,6 +102,9 @@ function Router() {
           </header>
           <main className="flex-1 overflow-y-auto p-6">
             <Switch>
+              {/* Common routes for all roles */}
+              <Route path="/profile" component={Profile} />
+              
               {userRole === "admin" && (
                 <>
                   <Route path="/" component={AdminDashboard} />

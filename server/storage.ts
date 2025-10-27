@@ -12,6 +12,7 @@ import {
   vehicleInspections,
   type User,
   type UpsertUser,
+  type UpdateProfile,
   type Vehicle,
   type InsertVehicle,
   type Route,
@@ -41,6 +42,7 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
   updateUserRole(userId: string, newRole: "admin" | "driver" | "parent"): Promise<User>;
+  updateUserProfile(userId: string, profile: UpdateProfile): Promise<User>;
 
   // Vehicle operations
   getAllVehicles(): Promise<Vehicle[]>;
@@ -164,6 +166,20 @@ export class DatabaseStorage implements IStorage {
 
       return updatedUser;
     });
+  }
+
+  async updateUserProfile(userId: string, profile: UpdateProfile): Promise<User> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ ...profile, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!updatedUser) {
+      throw new NotFoundError(`User with id ${userId} not found`);
+    }
+    
+    return updatedUser;
   }
 
   // ============ Vehicle operations ============

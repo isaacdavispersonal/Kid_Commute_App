@@ -29,6 +29,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user profile
+  app.patch("/api/profile", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { updateProfileSchema } = await import("@shared/schema");
+      
+      // Validate request body
+      const result = updateProfileSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid profile data", 
+          errors: result.error.errors 
+        });
+      }
+      
+      const updatedUser = await storage.updateUserProfile(userId, result.data);
+      
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      
+      if (error instanceof NotFoundError) {
+        return res.status(404).json({ message: error.message });
+      }
+      
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
   // ============ Admin routes ============
 
   // Get dashboard statistics

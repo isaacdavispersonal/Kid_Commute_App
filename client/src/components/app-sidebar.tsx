@@ -10,7 +10,8 @@ import {
   MessageSquare,
   Clock,
   ClipboardCheck,
-  Shield
+  Shield,
+  User
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
@@ -70,6 +71,11 @@ const adminMenuItems = [
     url: "/admin/messages",
     icon: MessageSquare,
   },
+  {
+    title: "Profile",
+    url: "/profile",
+    icon: User,
+  },
 ];
 
 const driverMenuItems = [
@@ -103,6 +109,11 @@ const driverMenuItems = [
     url: "/driver/incident",
     icon: AlertTriangle,
   },
+  {
+    title: "Profile",
+    url: "/profile",
+    icon: User,
+  },
 ];
 
 const parentMenuItems = [
@@ -120,6 +131,11 @@ const parentMenuItems = [
     title: "Messages",
     url: "/parent/messages",
     icon: MessageSquare,
+  },
+  {
+    title: "Profile",
+    url: "/profile",
+    icon: User,
   },
 ];
 

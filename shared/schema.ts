@@ -43,12 +43,24 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").notNull().default("parent"),
   phoneNumber: varchar("phone_number"),
+  address: text("address"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+// Profile update schema - for user profile updates
+export const updateProfileSchema = createInsertSchema(users).pick({
+  firstName: true,
+  lastName: true,
+  email: true,
+  phoneNumber: true,
+  address: true,
+});
+
+export type UpdateProfile = z.infer<typeof updateProfileSchema>;
 
 // ============ Fleet Management Tables ============
 
