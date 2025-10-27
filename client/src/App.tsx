@@ -30,6 +30,7 @@ import AdminStops from "@/pages/admin/stops";
 import AdminSchedule from "@/pages/admin/schedule";
 import AdminUsers from "@/pages/admin/users";
 import AdminStudents from "@/pages/admin/students";
+import AdminDriverAssignments from "@/pages/admin/driver-assignments";
 import AdminAnnouncements from "@/pages/admin/announcements";
 
 import DriverDashboard from "@/pages/driver/dashboard";
@@ -123,6 +124,7 @@ function Router() {
                   <Route path="/admin/schedule" component={AdminSchedule} />
                   <Route path="/admin/users" component={AdminUsers} />
                   <Route path="/admin/students" component={AdminStudents} />
+                  <Route path="/admin/driver-assignments" component={AdminDriverAssignments} />
                   <Route path="/admin/messages" component={AdminMessages} />
                   <Route path="/admin/announcements" component={AdminAnnouncements} />
                 </>

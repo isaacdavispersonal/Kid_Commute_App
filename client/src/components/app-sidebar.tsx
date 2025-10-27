@@ -48,8 +48,8 @@ const adminMenuItems = [
     icon: MapPin,
   },
   {
-    title: "Drivers",
-    url: "/admin/drivers",
+    title: "Driver Assignments",
+    url: "/admin/driver-assignments",
     icon: Users,
   },
   {

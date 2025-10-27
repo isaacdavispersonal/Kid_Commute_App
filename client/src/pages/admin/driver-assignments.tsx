@@ -559,7 +559,7 @@ export default function AdminDriverAssignments() {
                     <FormLabel>Status</FormLabel>
                     <Select
                       onValueChange={(value) => field.onChange(value === "true")}
-                      value={field.value.toString()}
+                      value={field.value !== undefined ? field.value.toString() : "true"}
                     >
                       <FormControl>
                         <SelectTrigger data-testid="select-status">
