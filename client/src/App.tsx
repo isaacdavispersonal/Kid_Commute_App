@@ -114,6 +114,7 @@ function Router() {
                 <>
                   <Route path="/" component={AdminDashboard} />
                   <Route path="/admin" component={AdminDashboard} />
+                  <Route path="/admin/dashboard" component={AdminDashboard} />
                   <Route path="/admin/vehicles" component={AdminVehicles} />
                   <Route path="/admin/routes" component={AdminRoutes} />
                   <Route path="/admin/schedule" component={AdminSchedule} />
@@ -126,6 +127,7 @@ function Router() {
                 <>
                   <Route path="/" component={DriverDashboard} />
                   <Route path="/driver" component={DriverDashboard} />
+                  <Route path="/driver/dashboard" component={DriverDashboard} />
                   <Route path="/driver/routes" component={DriverRoutes} />
                   <Route path="/driver/inspection" component={DriverInspection} />
                   <Route path="/driver/incident" component={DriverIncident} />
@@ -136,6 +138,7 @@ function Router() {
                 <>
                   <Route path="/" component={ParentDashboard} />
                   <Route path="/parent" component={ParentDashboard} />
+                  <Route path="/parent/dashboard" component={ParentDashboard} />
                   <Route path="/parent/children" component={ParentChildren} />
                   <Route path="/parent/tracking" component={ParentTracking} />
                   <Route path="/parent/messages" component={ParentMessages} />

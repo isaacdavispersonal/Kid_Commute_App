@@ -801,11 +801,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         const messages = await storage.getMessagesBetweenUsers(parentId, driverId);
-        const messagesWithOwnership = messages.map((msg) => ({
-          ...msg,
-          isOwn: msg.senderId === parentId,
-        }));
-        res.json(messagesWithOwnership);
+        
+        // Add sender details to each message
+        const messagesWithDetails = await Promise.all(
+          messages.map(async (msg) => {
+            const sender = await storage.getUser(msg.senderId);
+            return {
+              ...msg,
+              isOwn: msg.senderId === parentId,
+              senderRole: sender?.role || "unknown",
+              senderName: sender ? `${sender.firstName} ${sender.lastName}` : "Unknown",
+            };
+          })
+        );
+        
+        res.json(messagesWithDetails);
       } catch (error) {
         console.error("Error fetching messages:", error);
         res.status(500).json({ message: "Failed to fetch messages" });
@@ -892,11 +902,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const driverId = req.user.claims.sub;
         const parentId = req.params.parentId;
         const messages = await storage.getMessagesBetweenUsers(driverId, parentId);
-        const messagesWithOwnership = messages.map((msg) => ({
-          ...msg,
-          isOwn: msg.senderId === driverId,
-        }));
-        res.json(messagesWithOwnership);
+        
+        // Add sender details to each message
+        const messagesWithDetails = await Promise.all(
+          messages.map(async (msg) => {
+            const sender = await storage.getUser(msg.senderId);
+            return {
+              ...msg,
+              isOwn: msg.senderId === driverId,
+              senderRole: sender?.role || "unknown",
+              senderName: sender ? `${sender.firstName} ${sender.lastName}` : "Unknown",
+            };
+          })
+        );
+        
+        res.json(messagesWithDetails);
       } catch (error) {
         console.error("Error fetching messages:", error);
         res.status(500).json({ message: "Failed to fetch messages" });
@@ -999,6 +1019,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error fetching conversation messages:", error);
         res.status(500).json({ message: "Failed to fetch messages" });
+      }
+    }
+  );
+
+  // Send message from admin to anyone
+  app.post(
+    "/api/admin/send-message",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const senderId = req.user.claims.sub;
+        const { content, recipientId } = req.body;
+
+        if (!recipientId) {
+          return res.status(400).json({ message: "Recipient ID required" });
+        }
+
+        // Admins can message anyone without restrictions
+        const message = await storage.createMessage({
+          senderId,
+          recipientId,
+          content,
+        });
+
+        // Broadcast via WebSocket if available
+        if (wss) {
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(
+                JSON.stringify({
+                  type: "new_message",
+                  message,
+                })
+              );
+            }
+          });
+        }
+
+        res.json(message);
+      } catch (error) {
+        console.error("Error sending admin message:", error);
+        res.status(500).json({ message: "Failed to send message" });
       }
     }
   );

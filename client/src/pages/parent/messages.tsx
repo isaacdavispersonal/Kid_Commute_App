@@ -165,19 +165,29 @@ export default function ParentMessagesPage() {
                 ) : messages && messages.length > 0 ? (
                   messages.map((message: any) => {
                     const isOwn = message.isOwn;
+                    const isAdmin = message.senderRole === "admin";
+                    const isDriver = message.senderRole === "driver";
+                    
                     return (
                       <div
                         key={message.id}
-                        className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
+                        className={`flex ${(isOwn || isAdmin || isDriver) ? "justify-end" : "justify-start"}`}
                         data-testid={`message-${message.id}`}
                       >
                         <div
                           className={`max-w-[70%] rounded-md p-3 ${
-                            isOwn
+                            isAdmin
+                              ? "bg-warning/20 border border-warning/50"
+                              : isOwn
                               ? "bg-primary text-primary-foreground"
                               : "bg-card border"
                           }`}
                         >
+                          {isAdmin && (
+                            <p className="text-xs font-medium text-warning-foreground mb-1">
+                              Admin Support
+                            </p>
+                          )}
                           <p className="text-sm">{message.content}</p>
                           <p
                             className={`text-xs mt-1 ${

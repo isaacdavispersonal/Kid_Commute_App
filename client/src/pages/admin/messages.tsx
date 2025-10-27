@@ -1,27 +1,36 @@
-// Admin messaging - view all driver-parent conversations (read-only)
-import { useQuery } from "@tanstack/react-query";
+// Admin messaging - view and manage all conversations
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageSquare, Users, User, AlertCircle } from "lucide-react";
+import { MessageSquare, Users, User, AlertCircle, Send } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function AdminMessagesPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [messageContent, setMessageContent] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   // Get all conversations between drivers and parents
-  const { data: conversations, isLoading: conversationsLoading } = useQuery({
+  const { data: conversations = [], isLoading: conversationsLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/all-conversations"],
     refetchInterval: 5000,
   });
 
   // Get messages for selected conversation
-  const { data: messages, isLoading: messagesLoading } = useQuery({
+  const { data: messages = [], isLoading: messagesLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/conversation-messages", selectedConversation],
     enabled: !!selectedConversation,
     refetchInterval: 3000,
   });
+
+  // Send message state
+  const [isSending, setIsSending] = useState(false);
 
   // Auto-select first conversation
   useEffect(() => {
@@ -29,6 +38,55 @@ export default function AdminMessagesPage() {
       setSelectedConversation(conversations[0].conversationKey);
     }
   }, [conversations, selectedConversation]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSendMessage = async () => {
+    if (!messageContent.trim() || !selectedConversation || isSending) return;
+
+    setIsSending(true);
+    
+    // Send message to BOTH participants in the conversation
+    const [userId1, userId2] = selectedConversation.split("_");
+    const content = messageContent.trim();
+
+    try {
+      // Send to first user
+      await fetch("/api/admin/send-message", {
+        method: "POST",
+        body: JSON.stringify({ content, recipientId: userId1 }),
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      // Send to second user
+      await fetch("/api/admin/send-message", {
+        method: "POST",
+        body: JSON.stringify({ content, recipientId: userId2 }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      // Clear input and refresh
+      setMessageContent("");
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/conversation-messages", selectedConversation] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/all-conversations"] });
+      
+      toast({
+        title: "Message sent",
+        description: "Your message has been sent to both participants",
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to send message",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   if (conversationsLoading) {
     return <MessagesSkeleton />;
@@ -40,7 +98,7 @@ export default function AdminMessagesPage() {
         <div>
           <h1 className="text-2xl font-semibold mb-1">Messages</h1>
           <p className="text-sm text-muted-foreground">
-            View all driver-parent conversations
+            View and manage all conversations
           </p>
         </div>
         <Card>
@@ -49,8 +107,8 @@ export default function AdminMessagesPage() {
               <AlertCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Conversations Yet</h3>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                When parents and drivers start messaging, you'll be able to view their
-                conversations here for monitoring and support purposes.
+                When parents and drivers start messaging, you'll be able to view and
+                participate in their conversations here for support purposes.
               </p>
             </div>
           </CardContent>
@@ -64,7 +122,7 @@ export default function AdminMessagesPage() {
       <div>
         <h1 className="text-2xl font-semibold mb-1">Messages</h1>
         <p className="text-sm text-muted-foreground">
-          View all driver-parent conversations
+          View and manage all conversations
         </p>
       </div>
 
@@ -79,38 +137,50 @@ export default function AdminMessagesPage() {
           <CardContent>
             {selectedConversation ? (
               <div className="space-y-4">
-                <div className="h-[500px] overflow-y-auto space-y-3 p-4 bg-accent/30 rounded-md">
+                <div className="h-[400px] overflow-y-auto space-y-3 p-4 bg-accent/30 rounded-md">
                   {messagesLoading ? (
                     <div className="flex items-center justify-center h-full">
                       <Skeleton className="h-20 w-full" />
                     </div>
                   ) : messages && messages.length > 0 ? (
-                    messages.map((message: any) => {
-                      const isDriver = message.senderRole === "driver";
-                      return (
-                        <div
-                          key={message.id}
-                          className={`flex ${isDriver ? "justify-end" : "justify-start"}`}
-                          data-testid={`message-${message.id}`}
-                        >
+                    <>
+                      {messages.map((message: any) => {
+                        const isDriver = message.senderRole === "driver";
+                        const isAdmin = message.senderRole === "admin";
+                        const isParent = message.senderRole === "parent";
+                        
+                        return (
                           <div
-                            className={`max-w-[70%] rounded-md p-3 ${
-                              isDriver
-                                ? "bg-primary/20 border border-primary/30"
-                                : "bg-card border"
-                            }`}
+                            key={message.id}
+                            className={`flex ${isDriver || isAdmin ? "justify-end" : "justify-start"}`}
+                            data-testid={`message-${message.id}`}
                           >
-                            <p className="text-xs font-medium text-muted-foreground mb-1">
-                              {message.senderName} ({message.senderRole})
-                            </p>
-                            <p className="text-sm">{message.content}</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {new Date(message.createdAt).toLocaleString()}
-                            </p>
+                            <div
+                              className={`max-w-[70%] rounded-md p-3 ${
+                                isAdmin
+                                  ? "bg-warning/20 border border-warning/50"
+                                  : isDriver
+                                  ? "bg-primary/20 border border-primary/30"
+                                  : "bg-card border"
+                              }`}
+                            >
+                              <p className={`text-xs font-medium mb-1 ${
+                                isAdmin ? "text-warning-foreground" : "text-muted-foreground"
+                              }`}>
+                                {message.senderName} {isAdmin && "(Admin)"}
+                                {isDriver && "(Driver)"}
+                                {isParent && "(Parent)"}
+                              </p>
+                              <p className="text-sm">{message.content}</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {new Date(message.createdAt).toLocaleString()}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })}
+                      <div ref={messagesEndRef} />
+                    </>
                   ) : (
                     <div className="flex items-center justify-center h-full">
                       <p className="text-sm text-muted-foreground">
@@ -120,11 +190,37 @@ export default function AdminMessagesPage() {
                   )}
                 </div>
 
-                <div className="p-4 bg-accent/30 rounded-md border border-warning/20">
-                  <p className="text-sm text-muted-foreground text-center">
-                    <AlertCircle className="h-4 w-4 inline mr-2" />
-                    Read-only view: Only parents and drivers can send messages
+                <div className="p-3 bg-warning/10 rounded-md border border-warning/20">
+                  <p className="text-xs text-muted-foreground text-center">
+                    <AlertCircle className="h-3 w-3 inline mr-2" />
+                    Admin intervention mode - Use this to support drivers and parents
                   </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Textarea
+                    placeholder="Type your message... (Admin support message)"
+                    value={messageContent}
+                    onChange={(e) => setMessageContent(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    className="resize-none"
+                    rows={3}
+                    data-testid="input-admin-message"
+                  />
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={!messageContent.trim() || isSending}
+                    size="icon"
+                    className="h-auto"
+                    data-testid="button-send-message"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ) : (
