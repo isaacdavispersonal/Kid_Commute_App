@@ -64,8 +64,8 @@ export default function DriverDashboard() {
     mutationFn: async () => {
       return await apiRequest("POST", "/api/driver/clock-in", {});
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/driver/current-time-entry"] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["/api/driver/current-time-entry"] });
       toast({
         title: "Clocked In",
         description: "Your shift has started successfully",
@@ -95,8 +95,8 @@ export default function DriverDashboard() {
     mutationFn: async () => {
       return await apiRequest("POST", "/api/driver/clock-out", {});
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/driver/current-time-entry"] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["/api/driver/current-time-entry"] });
       toast({
         title: "Clocked Out",
         description: "Your shift has ended successfully",
