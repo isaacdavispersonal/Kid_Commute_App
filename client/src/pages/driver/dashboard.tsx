@@ -1,14 +1,53 @@
 // Driver dashboard with clock-in/out and route display
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, MapPin, Users, CheckCircle, LogIn, LogOut } from "lucide-react";
+import { Clock, MapPin, Users, CheckCircle, LogIn, LogOut, Timer } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
+
+// Hook to calculate elapsed time
+function useElapsedTime(startTime: string | Date | null): string {
+  const [elapsed, setElapsed] = useState<string>("00:00:00");
+
+  useEffect(() => {
+    if (!startTime) {
+      setElapsed("00:00:00");
+      return;
+    }
+
+    const updateElapsed = () => {
+      const start = new Date(startTime).getTime();
+      const now = new Date().getTime();
+      const diff = Math.floor((now - start) / 1000); // difference in seconds
+
+      const hours = Math.floor(diff / 3600);
+      const minutes = Math.floor((diff % 3600) / 60);
+      const seconds = diff % 60;
+
+      setElapsed(
+        `${hours.toString().padStart(2, "0")}:${minutes
+          .toString()
+          .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+      );
+    };
+
+    // Update immediately
+    updateElapsed();
+
+    // Then update every second
+    const interval = setInterval(updateElapsed, 1000);
+
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  return elapsed;
+}
 
 export default function DriverDashboard() {
   const { toast } = useToast();
@@ -84,6 +123,7 @@ export default function DriverDashboard() {
   });
 
   const isClockedIn = currentTimeEntry && !currentTimeEntry.clockOut;
+  const elapsedTime = useElapsedTime(isClockedIn ? currentTimeEntry.clockIn : null);
 
   if (timeLoading || routeLoading) {
     return <DriverDashboardSkeleton />;
@@ -109,15 +149,24 @@ export default function DriverDashboard() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-muted-foreground mb-1">Current Status</p>
               {isClockedIn ? (
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <StatusBadge status="active" className="text-sm" />
                   <p className="text-xs text-muted-foreground">
                     Clocked in at{" "}
                     {new Date(currentTimeEntry.clockIn).toLocaleTimeString()}
                   </p>
+                  <div className="flex items-center gap-2 mt-3 p-3 rounded-md bg-primary/10 border border-primary/20">
+                    <Timer className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Elapsed Time</p>
+                      <p className="text-2xl font-bold text-primary font-mono" data-testid="elapsed-time">
+                        {elapsedTime}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <StatusBadge status="offline" />
