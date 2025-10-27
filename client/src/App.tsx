@@ -26,6 +26,7 @@ import Profile from "@/pages/profile";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminVehicles from "@/pages/admin/vehicles";
 import AdminRoutes from "@/pages/admin/routes";
+import AdminStops from "@/pages/admin/stops";
 import AdminSchedule from "@/pages/admin/schedule";
 import AdminUsers from "@/pages/admin/users";
 import AdminStudents from "@/pages/admin/students";
@@ -118,6 +119,7 @@ function Router() {
                   <Route path="/admin/dashboard" component={AdminDashboard} />
                   <Route path="/admin/vehicles" component={AdminVehicles} />
                   <Route path="/admin/routes" component={AdminRoutes} />
+                  <Route path="/admin/stops" component={AdminStops} />
                   <Route path="/admin/schedule" component={AdminSchedule} />
                   <Route path="/admin/users" component={AdminUsers} />
                   <Route path="/admin/students" component={AdminStudents} />

@@ -11,7 +11,8 @@ import {
   Clock,
   ClipboardCheck,
   Shield,
-  User
+  User,
+  MapPin
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
@@ -40,6 +41,11 @@ const adminMenuItems = [
     title: "Routes",
     url: "/admin/routes",
     icon: RouteIcon,
+  },
+  {
+    title: "Stops",
+    url: "/admin/stops",
+    icon: MapPin,
   },
   {
     title: "Drivers",
