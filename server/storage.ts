@@ -60,7 +60,10 @@ export interface IStorage {
   // Student operations
   getAllStudents(): Promise<Student[]>;
   getStudentsByParent(parentId: string): Promise<Student[]>;
+  getStudent(id: string): Promise<Student | undefined>;
   createStudent(student: InsertStudent): Promise<Student>;
+  updateStudent(id: string, updates: Partial<InsertStudent>): Promise<Student>;
+  deleteStudent(id: string): Promise<void>;
 
   // Driver assignment operations
   getAllDriverAssignments(): Promise<DriverAssignment[]>;
@@ -256,6 +259,29 @@ export class DatabaseStorage implements IStorage {
   async createStudent(student: InsertStudent): Promise<Student> {
     const [newStudent] = await db.insert(students).values(student).returning();
     return newStudent;
+  }
+
+  async getStudent(id: string): Promise<Student | undefined> {
+    const [student] = await db.select().from(students).where(eq(students.id, id));
+    return student;
+  }
+
+  async updateStudent(id: string, updates: Partial<InsertStudent>): Promise<Student> {
+    const [updatedStudent] = await db
+      .update(students)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(students.id, id))
+      .returning();
+    
+    if (!updatedStudent) {
+      throw new NotFoundError("Student not found");
+    }
+    
+    return updatedStudent;
+  }
+
+  async deleteStudent(id: string): Promise<void> {
+    await db.delete(students).where(eq(students.id, id));
   }
 
   // ============ Driver assignment operations ============

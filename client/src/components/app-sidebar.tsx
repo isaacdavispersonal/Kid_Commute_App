@@ -123,6 +123,11 @@ const parentMenuItems = [
     icon: LayoutDashboard,
   },
   {
+    title: "My Children",
+    url: "/parent/children",
+    icon: UserCircle,
+  },
+  {
     title: "Track Vehicle",
     url: "/parent/tracking",
     icon: Car,

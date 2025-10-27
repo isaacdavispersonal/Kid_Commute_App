@@ -35,6 +35,7 @@ import DriverIncident from "@/pages/driver/incident";
 
 import ParentDashboard from "@/pages/parent/dashboard";
 import ParentTracking from "@/pages/parent/tracking";
+import ParentChildren from "@/pages/parent/children";
 
 import MessagesPage from "@/pages/messages";
 
@@ -135,6 +136,7 @@ function Router() {
                 <>
                   <Route path="/" component={ParentDashboard} />
                   <Route path="/parent" component={ParentDashboard} />
+                  <Route path="/parent/children" component={ParentChildren} />
                   <Route path="/parent/tracking" component={ParentTracking} />
                   <Route
                     path="/parent/messages"

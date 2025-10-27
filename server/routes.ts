@@ -498,6 +498,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Create new child profile
+  app.post(
+    "/api/parent/students",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        const { insertStudentSchema } = await import("@shared/schema");
+        
+        // Validate request body
+        const result = insertStudentSchema.safeParse({
+          ...req.body,
+          parentId,
+        });
+        
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid student data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const newStudent = await storage.createStudent(result.data);
+        res.json(newStudent);
+      } catch (error: any) {
+        console.error("Error creating student:", error);
+        res.status(500).json({ message: "Failed to create student" });
+      }
+    }
+  );
+
+  // Update child profile
+  app.patch(
+    "/api/parent/students/:id",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        const studentId = req.params.id;
+        const { updateStudentSchema } = await import("@shared/schema");
+        
+        // Verify the student belongs to this parent
+        const student = await storage.getStudent(studentId);
+        if (!student || student.parentId !== parentId) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        // Validate request body
+        const result = updateStudentSchema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid student data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const updatedStudent = await storage.updateStudent(studentId, result.data);
+        res.json(updatedStudent);
+      } catch (error: any) {
+        console.error("Error updating student:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update student" });
+      }
+    }
+  );
+
+  // Delete child profile
+  app.delete(
+    "/api/parent/students/:id",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        const studentId = req.params.id;
+        
+        // Verify the student belongs to this parent
+        const student = await storage.getStudent(studentId);
+        if (!student || student.parentId !== parentId) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        await storage.deleteStudent(studentId);
+        res.json({ success: true });
+      } catch (error: any) {
+        console.error("Error deleting student:", error);
+        res.status(500).json({ message: "Failed to delete student" });
+      }
+    }
+  );
+
   // ============ Messaging routes (shared between driver and parent) ============
 
   // Get conversations
