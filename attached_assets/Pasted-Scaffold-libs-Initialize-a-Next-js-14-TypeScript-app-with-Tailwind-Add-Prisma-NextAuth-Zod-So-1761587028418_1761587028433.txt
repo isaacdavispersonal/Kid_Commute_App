@@ -1,0 +1,51 @@
+Scaffold & libs
+
+Initialize a Next.js 14 TypeScript app with Tailwind. Add Prisma, NextAuth, Zod, Socket.IO (server+client), axios, clsx, and Mapbox GL (or Google Maps). Create the folder structure exactly as listed in step 2.
+
+Prisma & DB
+
+Add the Prisma schema from step 3. Run migrations and generate the client. Create /_lib/prisma.ts that exports a singleton Prisma client for Next.js.
+
+Auth
+
+Implement NextAuth credentials provider storing hashedPwd on User. Ensure session includes user.id and user.role. Create /login/page.tsx with email+password, Zod validation, and redirects based on role.
+
+Guards & Layouts
+
+Create roles.ts, AuthGuard.tsx, and RoleGate.tsx from step 4. Implement /admin/layout.tsx, /driver/layout.tsx, /parent/layout.tsx using the provided example.
+
+Dashboard stubs
+
+Generate minimal but working dashboard pages for Admin, Driver, Parent per step 5. Each page fetches some count from the DB and displays cards.
+
+API stubs
+
+Create all REST API route files listed in step 6. For each, add placeholder handlers with session role checks returning { ok: true }. Then implement real logic for: admin drivers CRUD, admin routes CRUD (with RouteStop[]), driver clock in/out, driver incidents create, and parent kids list.
+
+Real-time
+
+Implement Socket.IO server bootstrap and client hook from step 12. Wire events vehicle:position, driver:status, chat:message, incident:new, clock:update. Add a basic Chat.tsx component that uses sockets and persists messages to Message table.
+
+Maps & Route Builder
+
+Build FleetMap.tsx to show live vehicle markers and route polyline. Build RouteBuilder.tsx with a map and a side list to add/reorder stops, save to /api/admin/routes.
+
+Driver features
+
+Implement TimeClockButton.tsx + InspectionChecklist.tsx + IncidentForm.tsx. Create pages that use them and call the respective APIs.
+
+Parent features
+
+Implement /parent/kids, /parent/tracking (subscribes to vehicle positions for the child’s assigned route), /parent/messages.
+
+Admin features
+
+Implement Scheduler.tsx (week grid → makes RouteAssignment), timeclock editor, incidents list, inspections list, chat logs viewer, students/vehicles CRUD.
+
+Seed data
+
+Create scripts/seed.ts to insert sample users (admin/driver/parent), students, a route with stops, a vehicle, and assignments. Run and verify all dashboards load.
+
+Polish
+
+Add DataTable.tsx using shadcn/ui tables, StatusPills.tsx, and toast notifications on all mutations.
