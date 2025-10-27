@@ -1,0 +1,76 @@
+🔐 LOGIN & ACCOUNT MANAGEMENT
+
+When I log in through a specific email, and I go to log out, I still automatically log back in under that same email even if I would want to log in under a different email. How can this be addressed? (this may be on my end, so please detail to me how to go around this issue)
+
+Redesign the landing page:
+
+Add a single “Login” button for all users (staff, parents, drivers).
+
+and remove information about signing up for free since we are using the app to provde a service that parents already pay for. This app is included with their service so it's already "free" and doesn't need to be readdresseed
+
+When logging in, parents are able to use google, email, and apple. But parents will most likely not use Github or X to log in, is there a way to remove Twitter and GitHub authentication options (parents should only log in via email/password).
+
+There needs to be a Profile Management section where users can update:
+
+Name
+
+Email
+
+Phone Number
+
+Address
+
+If this info is missing, show a banner or prompt at the top linking users to complete their profile.
+
+👨‍👩‍👧 CHILD INFORMATION MANAGEMENT (Parents)
+
+Allow parents to:
+
+Add / Edit / Remove child profiles.
+
+Each child should include:
+
+Name (required)
+
+Age (required)
+
+additional things like:
+
+Height, 
+
+Race, 
+
+Notes, etc, and additional information that you believe to be helpful for drivers)
+
+If no child is registered, show a prompt or button linking directly to the child registration page.
+
+🧭 ROUTE BUILDER (Admins)
+
+Admins can manually create routes by selecting children from a list and setting their order.
+
+Add a status system:
+
+Highlight children not assigned to a route.
+
+Warn the admin before creating a route if a selected child is already on another route.
+
+Add visibility tools so:
+
+Admins can see which children are assigned to which routes.
+
+Parents can view the route their child is on.
+
+🕒 DRIVER TIME TRACKING
+
+Add a Clock In/Clock Out toggle for drivers.
+
+When clocked in:
+
+Show a live timer that runs until they clock out.
+
+Add a failsafe that automatically clocks out drivers who forget around an hour after their shift time has concluded.
+
+Allow manual time adjustments but restrict them to a 24-hour window to prevent abuse.
+
+Include this feature in a dedicated Time Tracking page or section.
+
