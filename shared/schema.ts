@@ -140,7 +140,7 @@ export type Stop = typeof stops.$inferSelect;
 
 // ============ Student Management Tables ============
 
-// Students table
+// Students table - Enhanced child profiles
 export const students = pgTable("students", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   parentId: varchar("parent_id")
@@ -148,7 +148,18 @@ export const students = pgTable("students", {
     .references(() => users.id, { onDelete: "cascade" }),
   firstName: varchar("first_name").notNull(),
   lastName: varchar("last_name").notNull(),
+  dateOfBirth: varchar("date_of_birth"),
   grade: varchar("grade"),
+  heightInches: integer("height_inches"),
+  race: varchar("race"),
+  gender: varchar("gender"),
+  photoUrl: varchar("photo_url"),
+  medicalNotes: text("medical_notes"),
+  specialNeeds: text("special_needs"),
+  emergencyContactName: varchar("emergency_contact_name"),
+  emergencyContactPhone: varchar("emergency_contact_phone"),
+  emergencyContactRelation: varchar("emergency_contact_relation"),
+  notes: text("notes"),
   assignedRouteId: varchar("assigned_route_id").references(() => routes.id, {
     onDelete: "set null",
   }),
