@@ -7,6 +7,7 @@ import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/status-badge";
+import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 
 export default function ParentDashboard() {
   const { data: students, isLoading } = useQuery({
@@ -25,6 +26,8 @@ export default function ParentDashboard() {
           Track your children's transportation
         </p>
       </div>
+
+      <IncompleteProfileBanner />
 
       {students && students.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Car, Users, Route as RouteIcon, AlertTriangle, UserCircle, Clock } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 
 export default function AdminDashboard() {
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -31,6 +32,8 @@ export default function AdminDashboard() {
           Fleet overview and system status
         </p>
       </div>
+
+      <IncompleteProfileBanner />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard

@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 
 export default function DriverDashboard() {
   const { toast } = useToast();
@@ -96,6 +97,8 @@ export default function DriverDashboard() {
           Manage your shifts and routes
         </p>
       </div>
+
+      <IncompleteProfileBanner />
 
       <Card className="border-primary/20 bg-gradient-to-br from-card to-primary/5">
         <CardHeader className="pb-3">
