@@ -228,6 +228,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get all stops
+  app.get(
+    "/api/admin/stops",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const stops = await storage.getAllStops();
+        // Enrich with route names
+        const enrichedStops = await Promise.all(
+          stops.map(async (stop) => {
+            const route = await storage.getRoute(stop.routeId);
+            return { ...stop, routeName: route?.name || "Unknown" };
+          })
+        );
+        res.json(enrichedStops);
+      } catch (error) {
+        console.error("Error fetching stops:", error);
+        res.status(500).json({ message: "Failed to fetch stops" });
+      }
+    }
+  );
+
+  // Create a new stop
+  app.post(
+    "/api/admin/stops",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { insertStopSchema } = await import("@shared/schema");
+        
+        // Validate request body
+        const result = insertStopSchema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid stop data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        // Verify route exists
+        const route = await storage.getRoute(result.data.routeId);
+        if (!route) {
+          return res.status(404).json({ message: "Route not found" });
+        }
+        
+        const newStop = await storage.createStop(result.data);
+        res.json(newStop);
+      } catch (error: any) {
+        console.error("Error creating stop:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to create stop" });
+      }
+    }
+  );
+
   // Get all schedules
   app.get(
     "/api/admin/schedules",

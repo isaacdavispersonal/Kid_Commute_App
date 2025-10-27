@@ -58,6 +58,7 @@ export interface IStorage {
   getRoute(id: string): Promise<Route | undefined>;
   createRoute(route: InsertRoute): Promise<Route>;
   getRouteStops(routeId: string): Promise<Stop[]>;
+  getAllStops(): Promise<Stop[]>;
   createStop(stop: InsertStop): Promise<Stop>;
 
   // Student operations
@@ -262,6 +263,13 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(stops)
       .where(eq(stops.routeId, routeId))
+      .orderBy(stops.stopOrder);
+  }
+
+  async getAllStops(): Promise<Stop[]> {
+    return await db
+      .select()
+      .from(stops)
       .orderBy(stops.stopOrder);
   }
 
