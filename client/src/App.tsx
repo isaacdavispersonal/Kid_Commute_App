@@ -49,7 +49,15 @@ import AdminMessages from "@/pages/admin/messages";
 function Router() {
   const { user, isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading || !isAuthenticated || !user) {
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
     return (
       <Switch>
         <Route path="/" component={Landing} />

@@ -59,8 +59,6 @@ async function upsertUser(claims: any) {
   // Check if user exists to preserve their role
   const existingUser = await storage.getUser(claims["sub"]);
   
-  // For existing users, don't include role in update to preserve it
-  // For new users, set default role to parent
   const userData: any = {
     id: claims["sub"],
     email: claims["email"],
@@ -69,10 +67,15 @@ async function upsertUser(claims: any) {
     profileImageUrl: claims["profile_image_url"],
   };
   
-  // Only set role for new users
-  if (!existingUser) {
+  // Set role from OIDC claims if provided (for testing), otherwise use default or preserve existing
+  if (claims["role"] && ["admin", "driver", "parent"].includes(claims["role"])) {
+    // OIDC provided a valid role claim (common in testing environments)
+    userData.role = claims["role"];
+  } else if (!existingUser) {
+    // New user with no role claim - use default
     userData.role = "parent";
   }
+  // For existing users without a role claim, don't update role to preserve it
   
   await storage.upsertUser(userData);
 }
