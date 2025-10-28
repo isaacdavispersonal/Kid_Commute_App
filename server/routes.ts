@@ -1853,6 +1853,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ============ Parent routes ============
 
+  // Connect children by phone number matching
+  app.post(
+    "/api/parent/connect-children",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const userId = req.user.claims.sub;
+        const user = await storage.getUser(userId);
+        
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+        
+        // Check if user has a phone number
+        if (!user.phoneNumber) {
+          return res.status(400).json({ 
+            message: "Phone number required", 
+            requiresPhoneNumber: true 
+          });
+        }
+        
+        // Find household by phone number
+        const household = await storage.findHouseholdByPhone(user.phoneNumber);
+        
+        if (!household) {
+          return res.json({ 
+            success: true, 
+            message: "No matching children found", 
+            linkedCount: 0 
+          });
+        }
+        
+        // Check if user is already linked to this household
+        const existingHousehold = await storage.getUserHousehold(userId);
+        
+        if (!existingHousehold || existingHousehold.id !== household.id) {
+          // Link user to household
+          await storage.linkUserToHousehold({
+            userId,
+            householdId: household.id,
+            roleInHousehold: "SECONDARY",
+          });
+          console.log(`Manually linked user ${userId} to household ${household.id} via phone ${user.phoneNumber}`);
+        }
+        
+        // Get the students in this household
+        const students = await storage.getStudentsByParent(userId);
+        
+        res.json({ 
+          success: true, 
+          message: `Successfully connected to ${students.length} child${students.length !== 1 ? 'ren' : ''}`, 
+          linkedCount: students.length 
+        });
+      } catch (error) {
+        console.error("Error connecting children:", error);
+        res.status(500).json({ message: "Failed to connect children" });
+      }
+    }
+  );
+
   // Get parent's students
   app.get(
     "/api/parent/students",
