@@ -1356,6 +1356,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Clock in for unscheduled shift (creates shift on-the-fly)
+  app.post(
+    "/api/driver/clock-in-unscheduled",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        
+        // Check if already clocked in
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        if (activeClockIn) {
+          return res.status(400).json({ 
+            message: "Already clocked in. Please clock out first.",
+            activeShift: activeClockIn.shift
+          });
+        }
+        
+        // Create an unscheduled shift for today using local time (not UTC)
+        const { format } = await import("date-fns");
+        const now = new Date();
+        const today = format(now, "yyyy-MM-dd"); // Local date
+        const currentTime = format(now, "HH:mm"); // Local time
+        
+        // Create shift ending 8 hours from now as a reasonable default
+        const endTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+        const plannedEnd = format(endTime, "HH:mm");
+        
+        const shift = await storage.createShift({
+          driverId,
+          date: today,
+          shiftType: "EXTRA",
+          plannedStart: currentTime,
+          plannedEnd,
+          status: "ACTIVE",
+          routeId: null,
+          vehicleId: null,
+          notes: "Unscheduled shift - created at clock-in",
+        });
+        
+        // Create clock IN event
+        const clockEvent = await storage.createClockEvent({
+          shiftId: shift.id,
+          driverId,
+          type: "IN",
+          timestamp: now,
+          source: "USER",
+          isResolved: true,
+        });
+        
+        res.json({ shift, clockEvent });
+      } catch (error) {
+        console.error("Error creating unscheduled shift:", error);
+        res.status(500).json({ message: "Failed to create unscheduled shift" });
+      }
+    }
+  );
+
   // Legacy clock in (kept for backwards compatibility, maps to shift-based system)
   app.post(
     "/api/driver/clock-in",

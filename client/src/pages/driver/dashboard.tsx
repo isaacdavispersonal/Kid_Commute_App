@@ -297,6 +297,37 @@ export default function DriverDashboard() {
     queryKey: ["/api/driver/today-shifts"],
   });
 
+  const unscheduledClockInMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/driver/clock-in-unscheduled", {});
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/driver/today-shifts"] });
+      toast({
+        title: "Clocked In",
+        description: "Created unscheduled shift and clocked in successfully",
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: (error as any).message || "Failed to clock in for unscheduled shift",
+        variant: "destructive",
+      });
+    },
+  });
+
   useEffect(() => {
     if (error && isUnauthorizedError(error as Error)) {
       toast({
@@ -373,23 +404,63 @@ export default function DriverDashboard() {
         </div>
       </div>
 
-      {sortedShifts.length > 0 ? (
-        <div className="grid gap-4">
-          {sortedShifts.map((shift) => (
-            <ShiftCard key={shift.id} shift={shift} />
-          ))}
-        </div>
-      ) : (
-        <Card data-testid="card-no-shifts">
-          <CardContent className="py-12 text-center">
-            <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Shifts Today</h3>
-            <p className="text-sm text-muted-foreground">
-              You don't have any shifts scheduled for today. Check back tomorrow or contact your administrator.
-            </p>
+      <div className="space-y-4">
+        {/* Unscheduled Clock In Card */}
+        <Card className="border-dashed" data-testid="card-unscheduled-shift">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Unscheduled Shift</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Clock in for work not on your schedule
+                </p>
+              </div>
+              <Badge variant="outline" className="bg-purple-500/10 text-purple-700 dark:text-purple-400">
+                Extra
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Button
+              className="w-full"
+              onClick={() => unscheduledClockInMutation.mutate()}
+              disabled={unscheduledClockInMutation.isPending}
+              data-testid="button-clock-in-unscheduled"
+            >
+              {unscheduledClockInMutation.isPending ? (
+                <>
+                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  Creating Shift...
+                </>
+              ) : (
+                <>
+                  <LogIn className="h-4 w-4 mr-2" />
+                  Clock In (Unscheduled)
+                </>
+              )}
+            </Button>
           </CardContent>
         </Card>
-      )}
+
+        {/* Scheduled Shifts */}
+        {sortedShifts.length > 0 ? (
+          <div className="grid gap-4">
+            {sortedShifts.map((shift) => (
+              <ShiftCard key={shift.id} shift={shift} />
+            ))}
+          </div>
+        ) : (
+          <Card data-testid="card-no-shifts">
+            <CardContent className="py-8 text-center">
+              <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">No Scheduled Shifts</h3>
+              <p className="text-sm text-muted-foreground">
+                You don't have any scheduled shifts for today. Use the unscheduled clock-in above if you need to work.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
