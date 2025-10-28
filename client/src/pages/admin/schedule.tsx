@@ -439,7 +439,11 @@ export default function AdminSchedule() {
                       </FormControl>
                       <SelectContent>
                         {drivers?.map((driver) => (
-                          <SelectItem key={driver.id} value={driver.id}>
+                          <SelectItem 
+                            key={driver.id} 
+                            value={driver.id}
+                            data-testid={`option-driver-${driver.id}`}
+                          >
                             {driver.firstName} {driver.lastName}
                           </SelectItem>
                         ))}
@@ -464,7 +468,11 @@ export default function AdminSchedule() {
                       </FormControl>
                       <SelectContent>
                         {routes?.map((route) => (
-                          <SelectItem key={route.id} value={route.id}>
+                          <SelectItem 
+                            key={route.id} 
+                            value={route.id}
+                            data-testid={`option-route-${route.id}`}
+                          >
                             {route.name}
                           </SelectItem>
                         ))}
@@ -489,7 +497,11 @@ export default function AdminSchedule() {
                       </FormControl>
                       <SelectContent>
                         {vehicles?.map((vehicle) => (
-                          <SelectItem key={vehicle.id} value={vehicle.id}>
+                          <SelectItem 
+                            key={vehicle.id} 
+                            value={vehicle.id}
+                            data-testid={`option-vehicle-${vehicle.id}`}
+                          >
                             {vehicle.name} - {vehicle.plateNumber}
                           </SelectItem>
                         ))}
