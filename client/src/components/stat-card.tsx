@@ -26,7 +26,7 @@ export function StatCard({
   return (
     <Card className={cn("hover-elevate", className)} data-testid={`card-stat-${title.toLowerCase().replace(/\s+/g, "-")}`}>
       <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
-        <p className="text-sm font-medium text-muted-foreground max-w-[5.5rem]">{title}</p>
+        <p className="text-base font-medium text-muted-foreground max-w-[5rem]">{title}</p>
         <Icon className={cn("h-5 w-5 flex-shrink-0", iconColor)} />
       </CardHeader>
       <CardContent>
