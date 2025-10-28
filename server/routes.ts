@@ -616,6 +616,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Update student (admin)
+  app.patch(
+    "/api/admin/students/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const studentId = req.params.id;
+        const { updateStudentSchema } = await import("@shared/schema");
+        
+        // Verify student exists
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        // Validate request body
+        const result = updateStudentSchema.safeParse(req.body);
+        
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid student data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        // If guardian phones changed, update household
+        if (result.data.guardianPhones && result.data.guardianPhones.length > 0) {
+          const primaryPhone = result.data.guardianPhones[0];
+          let household = await storage.findHouseholdByPhone(primaryPhone);
+          
+          if (!household) {
+            // Create new household if it doesn't exist
+            household = await storage.createHousehold({
+              primaryPhone,
+              notes: `Auto-created for student: ${result.data.firstName} ${result.data.lastName}`,
+            });
+          }
+          
+          // Update student with new household
+          const updatedStudent = await storage.updateStudent(studentId, {
+            ...result.data,
+            householdId: household.id,
+          } as any);
+          
+          res.json(updatedStudent);
+        } else {
+          // Update student without changing household
+          const updatedStudent = await storage.updateStudent(studentId, result.data);
+          res.json(updatedStudent);
+        }
+      } catch (error: any) {
+        console.error("Error updating student:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update student" });
+      }
+    }
+  );
+
   // Assign student to route
   app.patch(
     "/api/admin/students/:id/assign-route",

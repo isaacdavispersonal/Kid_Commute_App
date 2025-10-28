@@ -4,7 +4,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertStudentSchema } from "@shared/schema";
+import { insertStudentSchema, updateStudentSchema } from "@shared/schema";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +45,7 @@ import {
   XCircle,
   Plus,
   X,
+  Edit,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -81,6 +82,13 @@ const createStudentFormSchema = insertStudentSchema.extend({
 
 type CreateStudentFormValues = z.infer<typeof createStudentFormSchema>;
 
+// Form schema for edit student - uses updateStudentSchema
+const editStudentFormSchema = updateStudentSchema.extend({
+  guardianPhones: z.array(z.string().min(10, "Phone number must be at least 10 digits")).min(1, "At least one guardian phone is required"),
+});
+
+type EditStudentFormValues = z.infer<typeof editStudentFormSchema>;
+
 export default function AdminStudentsPage() {
   const { toast } = useToast();
   const [selectedStudent, setSelectedStudent] = useState<EnrichedStudent | null>(null);
@@ -89,10 +97,24 @@ export default function AdminStudentsPage() {
   const [selectedDropoffStop, setSelectedDropoffStop] = useState<string>("");
   const [filter, setFilter] = useState<"all" | "assigned" | "unassigned">("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<any | null>(null);
   const [guardianPhones, setGuardianPhones] = useState<string[]>([""]);
+  const [editGuardianPhones, setEditGuardianPhones] = useState<string[]>([""]);
 
   const createForm = useForm<CreateStudentFormValues>({
     resolver: zodResolver(createStudentFormSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      guardianPhones: [""],
+      grade: "",
+      notes: "",
+    },
+  });
+
+  const editForm = useForm<EditStudentFormValues>({
+    resolver: zodResolver(editStudentFormSchema),
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -202,8 +224,60 @@ export default function AdminStudentsPage() {
     },
   });
 
+  const editMutation = useMutation({
+    mutationFn: async ({ studentId, data }: { studentId: string; data: EditStudentFormValues }) => {
+      return await apiRequest("PATCH", `/api/admin/students/${studentId}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/students"] });
+      setIsEditDialogOpen(false);
+      setEditingStudent(null);
+      editForm.reset();
+      setEditGuardianPhones([""]);
+      toast({
+        title: "Success",
+        description: "Student updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update student",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateStudent = (data: CreateStudentFormValues) => {
     createMutation.mutate(data);
+  };
+
+  const handleEditStudent = (data: EditStudentFormValues) => {
+    if (!editingStudent) return;
+    editMutation.mutate({ studentId: editingStudent.id, data });
+  };
+
+  const handleOpenEditDialog = (student: any) => {
+    setEditingStudent(student);
+    setEditGuardianPhones(student.guardianPhones || [""]);
+    editForm.reset({
+      firstName: student.firstName || "",
+      lastName: student.lastName || "",
+      guardianPhones: student.guardianPhones || [""],
+      grade: student.grade || "",
+      notes: student.notes || "",
+      dateOfBirth: student.dateOfBirth || "",
+      heightInches: student.heightInches || undefined,
+      race: student.race || "",
+      gender: student.gender || "",
+      photoUrl: student.photoUrl || "",
+      medicalNotes: student.medicalNotes || "",
+      specialNeeds: student.specialNeeds || "",
+      emergencyContactName: student.emergencyContactName || "",
+      emergencyContactPhone: student.emergencyContactPhone || "",
+      emergencyContactRelation: student.emergencyContactRelation || "",
+    });
+    setIsEditDialogOpen(true);
   };
 
   const handleAddGuardianPhone = () => {
@@ -217,6 +291,19 @@ export default function AdminStudentsPage() {
     const newPhones = guardianPhones.filter((_, i) => i !== index);
     setGuardianPhones(newPhones);
     createForm.setValue("guardianPhones", newPhones);
+  };
+
+  const handleAddEditGuardianPhone = () => {
+    setEditGuardianPhones([...editGuardianPhones, ""]);
+    const currentPhones = editForm.getValues("guardianPhones");
+    editForm.setValue("guardianPhones", [...currentPhones, ""]);
+  };
+
+  const handleRemoveEditGuardianPhone = (index: number) => {
+    if (editGuardianPhones.length <= 1) return;
+    const newPhones = editGuardianPhones.filter((_, i) => i !== index);
+    setEditGuardianPhones(newPhones);
+    editForm.setValue("guardianPhones", newPhones);
   };
 
   const handleOpenDialog = (student: EnrichedStudent) => {
@@ -457,6 +544,15 @@ export default function AdminStudentsPage() {
                     </Button>
                     <Button
                       variant="outline"
+                      size="icon"
+                      onClick={() => handleOpenEditDialog(student)}
+                      data-testid={`button-edit-info-${student.id}`}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={() => handleUnassign(student.id)}
                       disabled={unassignMutation.isPending}
                       data-testid={`button-unassign-${student.id}`}
@@ -471,13 +567,24 @@ export default function AdminStudentsPage() {
                   <p className="text-sm text-muted-foreground mb-3">
                     Not assigned to any route
                   </p>
-                  <Button
-                    onClick={() => handleOpenDialog(student)}
-                    size="sm"
-                    data-testid={`button-assign-${student.id}`}
-                  >
-                    Assign to Route
-                  </Button>
+                  <div className="flex gap-2 justify-center">
+                    <Button
+                      onClick={() => handleOpenDialog(student)}
+                      size="sm"
+                      data-testid={`button-assign-${student.id}`}
+                    >
+                      Assign to Route
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenEditDialog(student)}
+                      data-testid={`button-edit-info-${student.id}`}
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit Info
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -642,6 +749,158 @@ export default function AdminStudentsPage() {
                   data-testid="button-submit-create"
                 >
                   Create Student
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Student Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent data-testid="dialog-edit-student" className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Student Information</DialogTitle>
+            <DialogDescription>
+              Update student details and guardian contact information.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(handleEditStudent)} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="firstName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>First Name *</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-first-name" placeholder="Enter first name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={editForm.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name *</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-last-name" placeholder="Enter last name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="grade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Grade</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value || ""} data-testid="input-edit-grade" placeholder="e.g., K, 1, 2, 3..." />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="space-y-2">
+                <FormLabel>Guardian Phone Numbers *</FormLabel>
+                <FormDescription>
+                  Parents will be automatically linked when they register with these phone numbers
+                </FormDescription>
+                {editGuardianPhones.map((phone, index) => (
+                  <FormField
+                    key={index}
+                    control={editForm.control}
+                    name={`guardianPhones.${index}`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex gap-2">
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              data-testid={`input-edit-guardian-phone-${index}`}
+                              placeholder="e.g., (555) 123-4567" 
+                              onChange={(e) => {
+                                const newValue = e.target.value;
+                                field.onChange(e);
+                                const newPhones = [...editGuardianPhones];
+                                newPhones[index] = newValue;
+                                setEditGuardianPhones(newPhones);
+                                // Sync all phones to the form
+                                editForm.setValue("guardianPhones", newPhones);
+                              }}
+                            />
+                          </FormControl>
+                          {editGuardianPhones.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleRemoveEditGuardianPhone(index)}
+                              data-testid={`button-edit-remove-phone-${index}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddEditGuardianPhone}
+                  data-testid="button-edit-add-guardian-phone"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Another Guardian Phone
+                </Button>
+              </div>
+
+              <FormField
+                control={editForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value || ""} data-testid="input-edit-notes" placeholder="Optional notes..." />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsEditDialogOpen(false);
+                    setEditingStudent(null);
+                    editForm.reset();
+                    setEditGuardianPhones([""]);
+                  }}
+                  data-testid="button-cancel-edit"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={editMutation.isPending}
+                  data-testid="button-submit-edit"
+                >
+                  Save Changes
                 </Button>
               </div>
             </form>
