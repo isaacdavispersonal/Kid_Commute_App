@@ -37,7 +37,8 @@ export const userRoleEnum = pgEnum("user_role", ["admin", "driver", "parent"]);
 // User storage table - Extended for multi-role system
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
+  email: varchar("email"),
+  phone: varchar("phone").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
@@ -138,14 +139,57 @@ export const insertStopSchema = createInsertSchema(stops).omit({
 export type InsertStop = z.infer<typeof insertStopSchema>;
 export type Stop = typeof stops.$inferSelect;
 
-// ============ Student Management Tables ============
+// ============ Household Management Tables ============
 
-// Students table - Enhanced child profiles
-export const students = pgTable("students", {
+// Household table - Groups families by phone number
+export const households = pgTable("households", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  parentId: varchar("parent_id")
+  primaryPhone: varchar("primary_phone").notNull().unique(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertHouseholdSchema = createInsertSchema(households).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertHousehold = z.infer<typeof insertHouseholdSchema>;
+export type Household = typeof households.$inferSelect;
+
+// Household role enum
+export const householdRoleEnum = pgEnum("household_role", ["PRIMARY", "SECONDARY"]);
+
+// Household members table - Links users to households
+export const householdMembers = pgTable("household_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  householdId: varchar("household_id")
+    .notNull()
+    .references(() => households.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  roleInHousehold: householdRoleEnum("role_in_household").notNull().default("PRIMARY"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertHouseholdMemberSchema = createInsertSchema(householdMembers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertHouseholdMember = z.infer<typeof insertHouseholdMemberSchema>;
+export type HouseholdMember = typeof householdMembers.$inferSelect;
+
+// ============ Student Management Tables ============
+
+// Students table - Enhanced child profiles with guardian phones
+export const students = pgTable("students", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  householdId: varchar("household_id").references(() => households.id, {
+    onDelete: "set null",
+  }),
+  guardianPhones: text("guardian_phones").array().notNull(),
   firstName: varchar("first_name").notNull(),
   lastName: varchar("last_name").notNull(),
   dateOfBirth: varchar("date_of_birth"),
@@ -177,22 +221,30 @@ export const insertStudentSchema = createInsertSchema(students).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  householdId: true,
+}).extend({
+  guardianPhones: z.array(z.string()).min(1, "At least one guardian phone is required"),
 });
 
 export const updateStudentSchema = createInsertSchema(students).omit({
   id: true,
-  parentId: true,
   createdAt: true,
   updatedAt: true,
+  householdId: true,
   assignedRouteId: true,
   pickupStopId: true,
   dropoffStopId: true,
+}).extend({
+  guardianPhones: z.array(z.string()).min(1, "At least one guardian phone is required"),
 });
 
 export const adminUpdateStudentSchema = createInsertSchema(students).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  householdId: true,
+}).extend({
+  guardianPhones: z.array(z.string()).min(1, "At least one guardian phone is required"),
 });
 
 export type InsertStudent = z.infer<typeof insertStudentSchema>;
@@ -557,9 +609,9 @@ export const stopsRelations = relations(stops, ({ one, many }) => ({
 }));
 
 export const studentsRelations = relations(students, ({ one }) => ({
-  parent: one(users, {
-    fields: [students.parentId],
-    references: [users.id],
+  household: one(households, {
+    fields: [students.householdId],
+    references: [households.id],
   }),
   assignedRoute: one(routes, {
     fields: [students.assignedRouteId],
@@ -574,6 +626,22 @@ export const studentsRelations = relations(students, ({ one }) => ({
     fields: [students.dropoffStopId],
     references: [stops.id],
     relationName: "dropoffStop",
+  }),
+}));
+
+export const householdsRelations = relations(households, ({ many }) => ({
+  members: many(householdMembers),
+  students: many(students),
+}));
+
+export const householdMembersRelations = relations(householdMembers, ({ one }) => ({
+  household: one(households, {
+    fields: [householdMembers.householdId],
+    references: [households.id],
+  }),
+  user: one(users, {
+    fields: [householdMembers.userId],
+    references: [users.id],
   }),
 }));
 

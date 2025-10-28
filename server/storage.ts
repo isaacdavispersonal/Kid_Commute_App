@@ -13,6 +13,8 @@ import {
   announcements,
   incidents,
   vehicleInspections,
+  households,
+  householdMembers,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -42,6 +44,10 @@ import {
   type InsertIncident,
   type VehicleInspection,
   type InsertVehicleInspection,
+  type Household,
+  type InsertHousehold,
+  type HouseholdMember,
+  type InsertHouseholdMember,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql } from "drizzle-orm";
@@ -73,9 +79,17 @@ export interface IStorage {
   updateStop(id: string, updates: Partial<InsertStop>): Promise<Stop>;
   deleteStop(id: string): Promise<void>;
 
+  // Household operations
+  createHousehold(household: InsertHousehold): Promise<Household>;
+  findHouseholdByPhone(phone: string): Promise<Household | undefined>;
+  linkUserToHousehold(householdMember: InsertHouseholdMember): Promise<HouseholdMember>;
+  getUserHousehold(userId: string): Promise<Household | undefined>;
+
   // Student operations
   getAllStudents(): Promise<Student[]>;
   getStudentsByParent(parentId: string): Promise<Student[]>;
+  getStudentsByHousehold(householdId: string): Promise<Student[]>;
+  findStudentsByGuardianPhone(phone: string): Promise<Student[]>;
   getStudent(id: string): Promise<Student | undefined>;
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: string, updates: Partial<InsertStudent>): Promise<Student>;
@@ -363,6 +377,48 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // ============ Household operations ============
+
+  async createHousehold(household: InsertHousehold): Promise<Household> {
+    const [newHousehold] = await db.insert(households).values(household).returning();
+    return newHousehold;
+  }
+
+  async findHouseholdByPhone(phone: string): Promise<Household | undefined> {
+    const [household] = await db
+      .select()
+      .from(households)
+      .where(eq(households.primaryPhone, phone))
+      .limit(1);
+    return household;
+  }
+
+  async linkUserToHousehold(householdMember: InsertHouseholdMember): Promise<HouseholdMember> {
+    const [newMember] = await db.insert(householdMembers).values(householdMember).returning();
+    return newMember;
+  }
+
+  async getUserHousehold(userId: string): Promise<Household | undefined> {
+    const result = await db
+      .select({
+        id: households.id,
+        primaryPhone: households.primaryPhone,
+        notes: households.notes,
+        createdAt: households.createdAt,
+      })
+      .from(householdMembers)
+      .innerJoin(households, eq(householdMembers.householdId, households.id))
+      .where(eq(householdMembers.userId, userId))
+      .limit(1);
+    
+    return result[0] ? {
+      id: result[0].id,
+      primaryPhone: result[0].primaryPhone,
+      notes: result[0].notes,
+      createdAt: result[0].createdAt,
+    } : undefined;
+  }
+
   // ============ Student operations ============
 
   async getAllStudents(): Promise<Student[]> {
@@ -370,10 +426,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStudentsByParent(parentId: string): Promise<Student[]> {
+    // Legacy method - now redirects to household-based lookup
+    const household = await this.getUserHousehold(parentId);
+    if (!household) {
+      return [];
+    }
+    return this.getStudentsByHousehold(household.id);
+  }
+
+  async getStudentsByHousehold(householdId: string): Promise<Student[]> {
     return await db
       .select()
       .from(students)
-      .where(eq(students.parentId, parentId))
+      .where(eq(students.householdId, householdId))
+      .orderBy(desc(students.createdAt));
+  }
+
+  async findStudentsByGuardianPhone(phone: string): Promise<Student[]> {
+    // Query students where guardianPhones array contains the phone number
+    return await db
+      .select()
+      .from(students)
+      .where(sql`${phone} = ANY(${students.guardianPhones})`)
       .orderBy(desc(students.createdAt));
   }
 
