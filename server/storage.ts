@@ -6,6 +6,8 @@ import {
   stops,
   students,
   driverAssignments,
+  shifts,
+  clockEvents,
   timeEntries,
   messages,
   announcements,
@@ -24,6 +26,11 @@ import {
   type InsertStudent,
   type DriverAssignment,
   type InsertDriverAssignment,
+  type Shift,
+  type InsertShift,
+  type UpdateShift,
+  type ClockEvent,
+  type InsertClockEvent,
   type TimeEntry,
   type InsertTimeEntry,
   type Message,
@@ -80,6 +87,24 @@ export interface IStorage {
   createDriverAssignment(assignment: InsertDriverAssignment): Promise<DriverAssignment>;
   updateDriverAssignment(id: string, updates: Partial<InsertDriverAssignment>): Promise<DriverAssignment>;
   deleteDriverAssignment(id: string): Promise<void>;
+
+  // Shift operations
+  createShift(shift: InsertShift): Promise<Shift>;
+  updateShift(id: string, updates: UpdateShift): Promise<Shift>;
+  deleteShift(id: string): Promise<void>;
+  getShift(id: string): Promise<Shift | undefined>;
+  getShiftsByDate(date: string, driverId?: string): Promise<Shift[]>;
+  getShiftsByDriver(driverId: string, startDate?: string, endDate?: string): Promise<Shift[]>;
+  getDriverTodayShifts(driverId: string): Promise<Shift[]>;
+  checkShiftOverlap(driverId: string, date: string, plannedStart: string, plannedEnd: string, excludeShiftId?: string): Promise<boolean>;
+
+  // Clock event operations
+  createClockEvent(event: InsertClockEvent): Promise<ClockEvent>;
+  getClockEventsByShift(shiftId: string): Promise<ClockEvent[]>;
+  getClockEventsByDriver(driverId: string, startDate?: Date, endDate?: Date): Promise<ClockEvent[]>;
+  getUnresolvedClockEvents(): Promise<ClockEvent[]>;
+  resolveClockEvent(id: string, notes?: string): Promise<ClockEvent>;
+  getActiveClockIn(driverId: string): Promise<{clockEvent: ClockEvent, shift: Shift} | null>;
 
   // Time entry operations
   getCurrentTimeEntry(driverId: string): Promise<TimeEntry | undefined>;
@@ -443,6 +468,256 @@ export class DatabaseStorage implements IStorage {
     }
 
     await db.delete(driverAssignments).where(eq(driverAssignments.id, id));
+  }
+
+  // ============ Shift operations ============
+
+  async createShift(shift: InsertShift): Promise<Shift> {
+    // Check for overlapping shifts
+    const hasOverlap = await this.checkShiftOverlap(
+      shift.driverId,
+      shift.date,
+      shift.plannedStart,
+      shift.plannedEnd
+    );
+    
+    if (hasOverlap) {
+      throw new ValidationError("Shift overlaps with another shift for this driver on this date");
+    }
+
+    const [newShift] = await db.insert(shifts).values(shift).returning();
+    return newShift;
+  }
+
+  async updateShift(id: string, updates: UpdateShift): Promise<Shift> {
+    const [existing] = await db.select().from(shifts).where(eq(shifts.id, id));
+    
+    if (!existing) {
+      throw new NotFoundError("Shift not found");
+    }
+
+    // Check for overlapping shifts if time is being changed
+    if (updates.plannedStart || updates.plannedEnd) {
+      const plannedStart = updates.plannedStart || existing.plannedStart;
+      const plannedEnd = updates.plannedEnd || existing.plannedEnd;
+      const date = updates.date || existing.date;
+      
+      const hasOverlap = await this.checkShiftOverlap(
+        existing.driverId,
+        date,
+        plannedStart,
+        plannedEnd,
+        id
+      );
+      
+      if (hasOverlap) {
+        throw new ValidationError("Updated shift would overlap with another shift");
+      }
+    }
+
+    const [updated] = await db
+      .update(shifts)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(shifts.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async deleteShift(id: string): Promise<void> {
+    const [existing] = await db.select().from(shifts).where(eq(shifts.id, id));
+    
+    if (!existing) {
+      throw new NotFoundError("Shift not found");
+    }
+
+    await db.delete(shifts).where(eq(shifts.id, id));
+  }
+
+  async getShift(id: string): Promise<Shift | undefined> {
+    const [shift] = await db.select().from(shifts).where(eq(shifts.id, id));
+    return shift;
+  }
+
+  async getShiftsByDate(date: string, driverId?: string): Promise<Shift[]> {
+    if (driverId) {
+      return await db
+        .select()
+        .from(shifts)
+        .where(and(eq(shifts.date, date), eq(shifts.driverId, driverId)))
+        .orderBy(shifts.plannedStart);
+    }
+    
+    return await db
+      .select()
+      .from(shifts)
+      .where(eq(shifts.date, date))
+      .orderBy(shifts.plannedStart);
+  }
+
+  async getShiftsByDriver(driverId: string, startDate?: string, endDate?: string): Promise<Shift[]> {
+    if (startDate && endDate) {
+      return await db
+        .select()
+        .from(shifts)
+        .where(
+          and(
+            eq(shifts.driverId, driverId),
+            sql`${shifts.date} >= ${startDate}`,
+            sql`${shifts.date} <= ${endDate}`
+          )
+        )
+        .orderBy(shifts.date, shifts.plannedStart);
+    }
+    
+    return await db
+      .select()
+      .from(shifts)
+      .where(eq(shifts.driverId, driverId))
+      .orderBy(shifts.date, shifts.plannedStart);
+  }
+
+  async getDriverTodayShifts(driverId: string): Promise<Shift[]> {
+    const today = new Date().toISOString().split('T')[0];
+    return await this.getShiftsByDate(today, driverId);
+  }
+
+  async checkShiftOverlap(
+    driverId: string,
+    date: string,
+    plannedStart: string,
+    plannedEnd: string,
+    excludeShiftId?: string
+  ): Promise<boolean> {
+    let query = db
+      .select()
+      .from(shifts)
+      .where(
+        and(
+          eq(shifts.driverId, driverId),
+          eq(shifts.date, date),
+          or(
+            // New shift starts during existing shift
+            and(
+              sql`${plannedStart} >= ${shifts.plannedStart}`,
+              sql`${plannedStart} < ${shifts.plannedEnd}`
+            ),
+            // New shift ends during existing shift
+            and(
+              sql`${plannedEnd} > ${shifts.plannedStart}`,
+              sql`${plannedEnd} <= ${shifts.plannedEnd}`
+            ),
+            // New shift completely contains existing shift
+            and(
+              sql`${plannedStart} <= ${shifts.plannedStart}`,
+              sql`${plannedEnd} >= ${shifts.plannedEnd}`
+            )
+          )
+        )
+      );
+
+    if (excludeShiftId) {
+      query = query.where(sql`${shifts.id} != ${excludeShiftId}`);
+    }
+
+    const overlapping = await query;
+    return overlapping.length > 0;
+  }
+
+  // ============ Clock event operations ============
+
+  async createClockEvent(event: InsertClockEvent): Promise<ClockEvent> {
+    const [newEvent] = await db.insert(clockEvents).values(event).returning();
+    return newEvent;
+  }
+
+  async getClockEventsByShift(shiftId: string): Promise<ClockEvent[]> {
+    return await db
+      .select()
+      .from(clockEvents)
+      .where(eq(clockEvents.shiftId, shiftId))
+      .orderBy(clockEvents.timestamp);
+  }
+
+  async getClockEventsByDriver(driverId: string, startDate?: Date, endDate?: Date): Promise<ClockEvent[]> {
+    if (startDate && endDate) {
+      return await db
+        .select()
+        .from(clockEvents)
+        .where(
+          and(
+            eq(clockEvents.driverId, driverId),
+            sql`${clockEvents.timestamp} >= ${startDate}`,
+            sql`${clockEvents.timestamp} <= ${endDate}`
+          )
+        )
+        .orderBy(clockEvents.timestamp);
+    }
+    
+    return await db
+      .select()
+      .from(clockEvents)
+      .where(eq(clockEvents.driverId, driverId))
+      .orderBy(desc(clockEvents.timestamp));
+  }
+
+  async getUnresolvedClockEvents(): Promise<ClockEvent[]> {
+    return await db
+      .select()
+      .from(clockEvents)
+      .where(eq(clockEvents.isResolved, false))
+      .orderBy(desc(clockEvents.timestamp));
+  }
+
+  async resolveClockEvent(id: string, notes?: string): Promise<ClockEvent> {
+    const [updated] = await db
+      .update(clockEvents)
+      .set({ isResolved: true, notes })
+      .where(eq(clockEvents.id, id))
+      .returning();
+    
+    if (!updated) {
+      throw new NotFoundError("Clock event not found");
+    }
+    
+    return updated;
+  }
+
+  async getActiveClockIn(driverId: string): Promise<{clockEvent: ClockEvent, shift: Shift} | null> {
+    // Find the most recent IN event without a matching OUT
+    const recentEvents = await db
+      .select()
+      .from(clockEvents)
+      .where(eq(clockEvents.driverId, driverId))
+      .orderBy(desc(clockEvents.timestamp))
+      .limit(10);
+
+    // Find the latest IN without a subsequent OUT
+    let activeIn: ClockEvent | null = null;
+    for (const event of recentEvents) {
+      if (event.type === "IN") {
+        activeIn = event;
+        break;
+      } else if (event.type === "OUT") {
+        // Found an OUT, so no active IN
+        return null;
+      }
+    }
+
+    if (!activeIn) {
+      return null;
+    }
+
+    // Get the associated shift if any
+    if (activeIn.shiftId) {
+      const shift = await this.getShift(activeIn.shiftId);
+      if (shift) {
+        return { clockEvent: activeIn, shift };
+      }
+    }
+
+    // Return with a minimal shift object if no shift is linked
+    return { clockEvent: activeIn, shift: null as any };
   }
 
   // ============ Time entry operations ============
