@@ -201,9 +201,7 @@ export default function Profile() {
                   disabled={!isEditing}
                   className="pl-10"
                   placeholder="(123) 456-7890"
-                  pattern="[\d\s\(\)\-\+]+"
                   required
-                  minLength={10}
                   data-testid="input-phoneNumber"
                 />
               </div>

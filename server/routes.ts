@@ -35,16 +35,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const { updateProfileSchema } = await import("@shared/schema");
       
+      console.log(`[PATCH /api/profile] Request body:`, req.body);
+      
       // Validate request body
       const result = updateProfileSchema.safeParse(req.body);
       if (!result.success) {
+        console.log(`[PATCH /api/profile] Validation failed:`, result.error.errors);
         return res.status(400).json({ 
           message: "Invalid profile data", 
           errors: result.error.errors 
         });
       }
       
+      console.log(`[PATCH /api/profile] Validated data:`, result.data);
+      
       const updatedUser = await storage.updateUserProfile(userId, result.data);
+      
+      console.log(`[PATCH /api/profile] Updated user:`, {
+        id: updatedUser.id,
+        phoneNumber: updatedUser.phoneNumber,
+        email: updatedUser.email
+      });
       
       // If user is a parent and updated their phone number, check for household linking
       if (updatedUser.role === "parent" && result.data.phoneNumber) {
