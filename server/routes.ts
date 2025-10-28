@@ -930,6 +930,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get all clock events with optional date filtering (for admin time management dashboard)
+  app.get(
+    "/api/admin/all-clock-events",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { startDate, endDate } = req.query;
+        
+        let startDateObj: Date | undefined;
+        let endDateObj: Date | undefined;
+        
+        if (startDate && typeof startDate === "string") {
+          startDateObj = new Date(startDate + "T00:00:00");
+        }
+        if (endDate && typeof endDate === "string") {
+          endDateObj = new Date(endDate + "T23:59:59");
+        }
+        
+        const events = await storage.getClockEventsByDriver("", startDateObj, endDateObj);
+        res.json(events);
+      } catch (error) {
+        console.error("Error fetching all clock events:", error);
+        res.status(500).json({ message: "Failed to fetch clock events" });
+      }
+    }
+  );
+
   // Get unresolved clock events (for admin time exceptions queue)
   app.get(
     "/api/admin/clock-events/unresolved",
@@ -966,6 +994,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         res.status(500).json({ message: "Failed to resolve clock event" });
+      }
+    }
+  );
+
+  // Edit clock event (admin can edit any clock event)
+  app.patch(
+    "/api/admin/clock-events/:id/edit",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const eventId = req.params.id;
+        const { updateClockEventSchema } = await import("@shared/schema");
+
+        // Validate request body
+        const result = updateClockEventSchema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({
+            message: "Invalid clock event data",
+            errors: result.error.errors,
+          });
+        }
+
+        // Verify the clock event exists
+        const event = await storage.getClockEvent(eventId);
+        if (!event) {
+          return res.status(404).json({ message: "Clock event not found" });
+        }
+
+        // Update the clock event
+        const updatedEvent = await storage.updateClockEvent(eventId, {
+          ...result.data,
+          isResolved: true, // Mark as resolved after admin editing
+        });
+
+        res.json(updatedEvent);
+      } catch (error) {
+        console.error("Error updating clock event:", error);
+        res.status(500).json({ message: "Failed to update clock event" });
       }
     }
   );

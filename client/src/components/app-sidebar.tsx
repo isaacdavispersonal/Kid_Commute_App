@@ -68,6 +68,11 @@ const adminMenuItems = [
     icon: Calendar,
   },
   {
+    title: "Time Management",
+    url: "/admin/time-management",
+    icon: Clock,
+  },
+  {
     title: "Time Exceptions",
     url: "/admin/time-exceptions",
     icon: Clock,

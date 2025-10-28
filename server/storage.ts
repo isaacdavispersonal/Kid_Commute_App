@@ -662,6 +662,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClockEventsByDriver(driverId: string, startDate?: Date, endDate?: Date): Promise<ClockEvent[]> {
+    // If driverId is empty string, fetch all events (for admin dashboard)
+    if (!driverId || driverId === "") {
+      if (startDate && endDate) {
+        return await db
+          .select()
+          .from(clockEvents)
+          .where(
+            and(
+              sql`${clockEvents.timestamp} >= ${startDate}`,
+              sql`${clockEvents.timestamp} <= ${endDate}`
+            )
+          )
+          .orderBy(desc(clockEvents.timestamp));
+      }
+      
+      return await db
+        .select()
+        .from(clockEvents)
+        .orderBy(desc(clockEvents.timestamp));
+    }
+    
+    // Filter by specific driver
     if (startDate && endDate) {
       return await db
         .select()
