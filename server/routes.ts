@@ -463,17 +463,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const assignments = await storage.getAllDriverAssignments();
-        // Enrich with driver and route names
+        // Enrich with driver, route, and vehicle information
         const enrichedAssignments = await Promise.all(
           assignments.map(async (assignment) => {
             const driver = await storage.getUser(assignment.driverId);
             const route = await storage.getRoute(assignment.routeId);
+            const vehicle = await storage.getVehicle(assignment.vehicleId);
+            
             return {
               ...assignment,
               driverName: driver
                 ? `${driver.firstName} ${driver.lastName}`
                 : "Unknown",
+              driverEmail: driver?.email || "",
               routeName: route?.name || "Unknown",
+              vehicleName: vehicle?.name || "Unknown",
+              vehiclePlate: vehicle?.plateNumber || "Unknown",
             };
           })
         );
