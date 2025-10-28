@@ -235,9 +235,109 @@ export type InsertDriverAssignment = z.infer<
 >;
 export type DriverAssignment = typeof driverAssignments.$inferSelect;
 
+// ============ Shift-Based Scheduling Tables ============
+
+// Shift type enum
+export const shiftTypeEnum = pgEnum("shift_type", ["MORNING", "AFTERNOON", "EXTRA"]);
+
+// Shift status enum
+export const shiftStatusEnum = pgEnum("shift_status", [
+  "SCHEDULED",
+  "ACTIVE",
+  "COMPLETED",
+  "MISSED",
+]);
+
+// Shifts table - replaces simple day-based assignments with shift-specific scheduling
+export const shifts = pgTable(
+  "shifts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    driverId: varchar("driver_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: varchar("date").notNull(), // Format: YYYY-MM-DD
+    shiftType: shiftTypeEnum("shift_type").notNull(),
+    plannedStart: varchar("planned_start").notNull(), // Format: HH:MM
+    plannedEnd: varchar("planned_end").notNull(), // Format: HH:MM
+    routeId: varchar("route_id").references(() => routes.id, {
+      onDelete: "set null",
+    }),
+    vehicleId: varchar("vehicle_id").references(() => vehicles.id, {
+      onDelete: "set null",
+    }),
+    status: shiftStatusEnum("status").notNull().default("SCHEDULED"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_shifts_driver_date").on(table.driverId, table.date),
+  ]
+);
+
+export const insertShiftSchema = createInsertSchema(shifts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateShiftSchema = createInsertSchema(shifts).omit({
+  id: true,
+  driverId: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export type InsertShift = z.infer<typeof insertShiftSchema>;
+export type UpdateShift = z.infer<typeof updateShiftSchema>;
+export type Shift = typeof shifts.$inferSelect;
+
+// Clock event type enum
+export const clockEventTypeEnum = pgEnum("clock_event_type", ["IN", "OUT"]);
+
+// Clock event source enum
+export const clockEventSourceEnum = pgEnum("clock_event_source", [
+  "USER",
+  "AUTO",
+  "ADMIN_EDIT",
+]);
+
+// Clock events table - tracks actual clock in/out times per shift
+export const clockEvents = pgTable(
+  "clock_events",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    driverId: varchar("driver_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    shiftId: varchar("shift_id").references(() => shifts.id, {
+      onDelete: "set null",
+    }),
+    timestamp: timestamp("timestamp").notNull().defaultNow(),
+    type: clockEventTypeEnum("type").notNull(),
+    source: clockEventSourceEnum("source").notNull().default("USER"),
+    notes: text("notes"),
+    isResolved: boolean("is_resolved").notNull().default(true), // False for orphaned events
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_clock_events_driver_timestamp").on(table.driverId, table.timestamp),
+    index("idx_clock_events_shift").on(table.shiftId),
+  ]
+);
+
+export const insertClockEventSchema = createInsertSchema(clockEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertClockEvent = z.infer<typeof insertClockEventSchema>;
+export type ClockEvent = typeof clockEvents.$inferSelect;
+
 // ============ Time Tracking Tables ============
 
-// Time entries table (clock in/out)
+// Time entries table (clock in/out) - DEPRECATED in favor of shifts + clockEvents
 export const timeEntries = pgTable("time_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   driverId: varchar("driver_id")
@@ -387,6 +487,8 @@ export type VehicleInspection = typeof vehicleInspections.$inferSelect;
 export const usersRelations = relations(users, ({ many }) => ({
   studentsAsParent: many(students),
   driverAssignments: many(driverAssignments),
+  shifts: many(shifts),
+  clockEvents: many(clockEvents),
   sentMessages: many(messages, { relationName: "sentMessages" }),
   receivedMessages: many(messages, { relationName: "receivedMessages" }),
   incidents: many(incidents),
@@ -396,6 +498,7 @@ export const usersRelations = relations(users, ({ many }) => ({
 
 export const vehiclesRelations = relations(vehicles, ({ many }) => ({
   driverAssignments: many(driverAssignments),
+  shifts: many(shifts),
   incidents: many(incidents),
   inspections: many(vehicleInspections),
 }));
@@ -404,7 +507,35 @@ export const routesRelations = relations(routes, ({ many }) => ({
   stops: many(stops),
   students: many(students),
   driverAssignments: many(driverAssignments),
+  shifts: many(shifts),
   incidents: many(incidents),
+}));
+
+export const shiftsRelations = relations(shifts, ({ one, many }) => ({
+  driver: one(users, {
+    fields: [shifts.driverId],
+    references: [users.id],
+  }),
+  route: one(routes, {
+    fields: [shifts.routeId],
+    references: [routes.id],
+  }),
+  vehicle: one(vehicles, {
+    fields: [shifts.vehicleId],
+    references: [vehicles.id],
+  }),
+  clockEvents: many(clockEvents),
+}));
+
+export const clockEventsRelations = relations(clockEvents, ({ one }) => ({
+  driver: one(users, {
+    fields: [clockEvents.driverId],
+    references: [users.id],
+  }),
+  shift: one(shifts, {
+    fields: [clockEvents.shiftId],
+    references: [shifts.id],
+  }),
 }));
 
 export const stopsRelations = relations(stops, ({ one, many }) => ({
