@@ -58,9 +58,29 @@ interface EnrichedClockEvent extends ClockEvent {
 
 interface Driver {
   id: string;
-  firstName: string;
-  lastName: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
   role: string;
+}
+
+// Helper function to safely display driver names
+function getDriverDisplayName(driver: Driver | undefined): string {
+  if (!driver) return "Unknown Driver";
+  
+  const firstName = driver.firstName?.trim();
+  const lastName = driver.lastName?.trim();
+  
+  if (firstName && lastName) {
+    return `${firstName} ${lastName}`;
+  } else if (firstName) {
+    return firstName;
+  } else if (lastName) {
+    return lastName;
+  } else {
+    // Fall back to email if no name is set
+    return driver.email || "Unknown Driver";
+  }
 }
 
 export default function AdminTimeManagement() {
@@ -164,7 +184,7 @@ export default function AdminTimeManagement() {
     
     return {
       ...event,
-      driverName: driver ? `${driver.firstName} ${driver.lastName}` : "Unknown Driver",
+      driverName: getDriverDisplayName(driver),
       shiftDate: shift?.date || null,
       shiftType: shift?.shiftType || null,
     };
@@ -235,7 +255,7 @@ export default function AdminTimeManagement() {
                   <SelectItem value="all">All Drivers</SelectItem>
                   {drivers?.map((driver) => (
                     <SelectItem key={driver.id} value={driver.id}>
-                      {driver.firstName} {driver.lastName}
+                      {getDriverDisplayName(driver)}
                     </SelectItem>
                   ))}
                 </SelectContent>

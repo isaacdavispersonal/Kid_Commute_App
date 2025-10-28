@@ -12,6 +12,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 function useElapsedTime(startTime: string | Date | null): string {
   const [elapsed, setElapsed] = useState<string>("00:00:00");
@@ -76,10 +86,13 @@ const SHIFT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
 
 function ShiftCard({ shift }: { shift: EnrichedShift }) {
   const { toast } = useToast();
+  const [showNotesDialog, setShowNotesDialog] = useState(false);
+  const [clockOutNotes, setClockOutNotes] = useState("");
   
   const lastClockEvent = shift.clockEvents[shift.clockEvents.length - 1];
   const isClockedIn = lastClockEvent?.type === "IN";
   const elapsedTime = useElapsedTime(isClockedIn ? lastClockEvent.timestamp : null);
+  const isUnscheduledShift = shift.routeId === null;
 
   const clockInMutation = useMutation({
     mutationFn: async () => {
@@ -113,11 +126,15 @@ function ShiftCard({ shift }: { shift: EnrichedShift }) {
   });
 
   const clockOutMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("POST", `/api/driver/shifts/${shift.id}/clock-out`, {});
+    mutationFn: async (notes?: string) => {
+      return await apiRequest("POST", `/api/driver/shifts/${shift.id}/clock-out`, {
+        notes: notes || undefined
+      });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/driver/today-shifts"] });
+      setShowNotesDialog(false);
+      setClockOutNotes("");
       toast({
         title: "Clocked Out",
         description: `Clocked out from ${SHIFT_TYPE_LABELS[shift.shiftType].label} shift`,
@@ -144,10 +161,11 @@ function ShiftCard({ shift }: { shift: EnrichedShift }) {
   });
 
   return (
-    <Card 
-      className={isClockedIn ? "border-primary/50 bg-gradient-to-br from-card to-primary/5" : ""}
-      data-testid={`shift-card-${shift.id}`}
-    >
+    <>
+      <Card 
+        className={isClockedIn ? "border-primary/50 bg-gradient-to-br from-card to-primary/5" : ""}
+        data-testid={`shift-card-${shift.id}`}
+      >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -241,7 +259,13 @@ function ShiftCard({ shift }: { shift: EnrichedShift }) {
             <Button
               className="flex-1"
               variant="destructive"
-              onClick={() => clockOutMutation.mutate()}
+              onClick={() => {
+                if (isUnscheduledShift) {
+                  setShowNotesDialog(true);
+                } else {
+                  clockOutMutation.mutate(undefined);
+                }
+              }}
               disabled={clockOutMutation.isPending}
               data-testid={`button-clock-out-${shift.id}`}
             >
@@ -286,7 +310,62 @@ function ShiftCard({ shift }: { shift: EnrichedShift }) {
           )}
         </div>
       </CardContent>
-    </Card>
+      </Card>
+
+      {/* Notes Dialog for Unscheduled Shift Clock-Out */}
+      <Dialog open={showNotesDialog} onOpenChange={setShowNotesDialog}>
+        <DialogContent data-testid="dialog-unscheduled-notes">
+          <DialogHeader>
+            <DialogTitle>Clock Out - Add Notes</DialogTitle>
+            <DialogDescription>
+              Please provide notes about the work completed during this unscheduled shift.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes *</Label>
+              <Textarea
+                id="notes"
+                placeholder="Describe the work performed, locations visited, issues encountered, etc."
+                value={clockOutNotes}
+                onChange={(e) => setClockOutNotes(e.target.value)}
+                rows={4}
+                data-testid="textarea-clockout-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowNotesDialog(false);
+                setClockOutNotes("");
+              }}
+              data-testid="button-cancel-notes"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!clockOutNotes.trim()) {
+                  toast({
+                    title: "Notes Required",
+                    description: "Please add notes before clocking out of an unscheduled shift.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                clockOutMutation.mutate(clockOutNotes);
+              }}
+              disabled={clockOutMutation.isPending}
+              data-testid="button-confirm-clockout"
+            >
+              {clockOutMutation.isPending ? "Clocking Out..." : "Clock Out"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

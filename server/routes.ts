@@ -1537,6 +1537,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const driverId = req.user.claims.sub;
         const { shiftId } = req.params;
+        const { notes } = req.body;
         
         // Verify shift belongs to this driver
         const shift = await storage.getShift(shiftId);
@@ -1556,18 +1557,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        // Create clock OUT event
+        // Create clock OUT event with optional notes
         const clockEvent = await storage.createClockEvent({
           shiftId,
           driverId,
           type: "OUT",
           timestamp: new Date(),
           source: "USER",
+          notes: notes || null,
           isResolved: true,
         });
         
-        // Update shift status to COMPLETED
-        await storage.updateShift(shiftId, { status: "COMPLETED" });
+        // Update shift with notes if provided (for unscheduled shifts)
+        if (notes && shift.routeId === null) {
+          await storage.updateShift(shiftId, { 
+            status: "COMPLETED",
+            notes: notes
+          });
+        } else {
+          await storage.updateShift(shiftId, { status: "COMPLETED" });
+        }
         
         res.json({ clockEvent, shift });
       } catch (error) {

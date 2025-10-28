@@ -16,9 +16,28 @@ interface AdminStats {
 
 interface ActiveDriver {
   id: string;
-  firstName: string;
-  lastName: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
   routeName?: string;
+}
+
+// Helper function to safely display driver names
+function getDriverDisplayName(driver: ActiveDriver | undefined): string {
+  if (!driver) return "Unknown Driver";
+  
+  const firstName = driver.firstName?.trim();
+  const lastName = driver.lastName?.trim();
+  
+  if (firstName && lastName) {
+    return `${firstName} ${lastName}`;
+  } else if (firstName) {
+    return firstName;
+  } else if (lastName) {
+    return lastName;
+  } else {
+    return driver.email || "Unknown Driver";
+  }
 }
 
 interface Incident {
@@ -113,7 +132,7 @@ export default function AdminDashboard() {
                       </div>
                       <div>
                         <p className="font-medium text-sm">
-                          {driver.firstName} {driver.lastName}
+                          {getDriverDisplayName(driver)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {driver.routeName || "No route assigned"}

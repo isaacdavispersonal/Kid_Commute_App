@@ -62,9 +62,27 @@ interface Shift {
 interface Driver {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName: string | null;
+  lastName: string | null;
   role: string;
+}
+
+// Helper function to safely display driver names
+function getDriverDisplayName(driver: Driver | undefined): string {
+  if (!driver) return "Unknown Driver";
+  
+  const firstName = driver.firstName?.trim();
+  const lastName = driver.lastName?.trim();
+  
+  if (firstName && lastName) {
+    return `${firstName} ${lastName}`;
+  } else if (firstName) {
+    return firstName;
+  } else if (lastName) {
+    return lastName;
+  } else {
+    return driver.email || "Unknown Driver";
+  }
 }
 
 interface RouteType {
@@ -301,7 +319,7 @@ export default function AdminSchedule() {
 
   const getDriverName = (driverId: string) => {
     const driver = drivers.find(d => d.id === driverId);
-    return driver ? `${driver.firstName} ${driver.lastName}` : "Unknown";
+    return getDriverDisplayName(driver);
   };
 
   if (isLoading) {
@@ -469,7 +487,7 @@ export default function AdminSchedule() {
                             value={driver.id}
                             data-testid={`option-driver-${driver.id}`}
                           >
-                            {driver.firstName} {driver.lastName}
+                            {getDriverDisplayName(driver)}
                           </SelectItem>
                         ))}
                       </SelectContent>

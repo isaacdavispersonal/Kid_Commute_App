@@ -76,10 +76,28 @@ interface EnrichedDriverAssignment {
 
 interface Driver {
   id: string;
-  firstName: string;
-  lastName: string;
+  firstName: string | null;
+  lastName: string | null;
   email: string;
   role: string;
+}
+
+// Helper function to safely display driver names
+function getDriverDisplayName(driver: Driver | undefined): string {
+  if (!driver) return "Unknown Driver";
+  
+  const firstName = driver.firstName?.trim();
+  const lastName = driver.lastName?.trim();
+  
+  if (firstName && lastName) {
+    return `${firstName} ${lastName}`;
+  } else if (firstName) {
+    return firstName;
+  } else if (lastName) {
+    return lastName;
+  } else {
+    return driver.email || "Unknown Driver";
+  }
 }
 
 interface RouteType {
@@ -425,7 +443,7 @@ export default function AdminDriverAssignments() {
                       <SelectContent>
                         {drivers?.map((driver) => (
                           <SelectItem key={driver.id} value={driver.id}>
-                            {driver.firstName} {driver.lastName} ({driver.email})
+                            {getDriverDisplayName(driver)} ({driver.email})
                           </SelectItem>
                         ))}
                       </SelectContent>
