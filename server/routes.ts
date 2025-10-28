@@ -970,6 +970,177 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Auto-clockout orphaned shifts (run failsafe)
+  app.post(
+    "/api/admin/auto-clockout",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        let { graceHours } = req.body;
+        
+        // Validate graceHours is a non-negative number or use default
+        if (graceHours !== undefined && graceHours !== null) {
+          graceHours = Number(graceHours);
+          if (isNaN(graceHours) || graceHours < 0) {
+            return res.status(400).json({ message: "graceHours must be a non-negative number" });
+          }
+        } else {
+          graceHours = undefined; // Let storage use its default
+        }
+        
+        const result = await storage.autoClockoutOrphanedShifts(graceHours);
+        
+        res.json({
+          message: `Auto-clockout completed. Processed ${result.processed} orphaned shift(s).`,
+          processed: result.processed,
+          clockedOut: result.clockedOut,
+        });
+      } catch (error) {
+        console.error("Error running auto-clockout:", error);
+        res.status(500).json({ message: "Failed to run auto-clockout" });
+      }
+    }
+  );
+
+  // ============ Admin Reporting Endpoints ============
+
+  // Get driver payroll summary
+  app.get(
+    "/api/admin/reports/payroll/:driverId",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { driverId } = req.params;
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate || typeof startDate !== "string" || typeof endDate !== "string") {
+          return res.status(400).json({ message: "startDate and endDate are required" });
+        }
+
+        const { generatePayrollSummary } = await import("./utils/timeCalculations");
+
+        // Get shifts for the date range
+        const shifts = await storage.getShiftsByDriver(driverId, startDate, endDate);
+
+        // Get clock events for all shifts
+        const clockEventsMap = new Map();
+        for (const shift of shifts) {
+          const events = await storage.getClockEventsByShift(shift.id);
+          clockEventsMap.set(shift.id, events);
+        }
+
+        const summary = generatePayrollSummary(driverId, shifts, clockEventsMap, startDate, endDate);
+        res.json(summary);
+      } catch (error) {
+        console.error("Error generating payroll summary:", error);
+        res.status(500).json({ message: "Failed to generate payroll summary" });
+      }
+    }
+  );
+
+  // Get single shift hours details
+  app.get(
+    "/api/admin/reports/shift/:shiftId",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { shiftId } = req.params;
+        const { calculateShiftHours } = await import("./utils/timeCalculations");
+
+        const shift = await storage.getShift(shiftId);
+        if (!shift) {
+          return res.status(404).json({ message: "Shift not found" });
+        }
+
+        const clockEvents = await storage.getClockEventsByShift(shiftId);
+        const shiftHours = calculateShiftHours(shift, clockEvents);
+
+        res.json({
+          shift,
+          clockEvents,
+          hours: shiftHours,
+        });
+      } catch (error) {
+        console.error("Error calculating shift hours:", error);
+        res.status(500).json({ message: "Failed to calculate shift hours" });
+      }
+    }
+  );
+
+  // Get daily hours breakdown for all drivers
+  app.get(
+    "/api/admin/reports/daily-hours",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { date } = req.query;
+
+        if (!date || typeof date !== "string") {
+          return res.status(400).json({ message: "date is required" });
+        }
+
+        const { calculateDailyHours } = await import("./utils/timeCalculations");
+
+        // Get all shifts for this date
+        const shifts = await storage.getShiftsByDate(date);
+
+        // Get clock events for all shifts
+        const clockEventsMap = new Map();
+        for (const shift of shifts) {
+          const events = await storage.getClockEventsByShift(shift.id);
+          clockEventsMap.set(shift.id, events);
+        }
+
+        const dailyHours = calculateDailyHours(shifts, clockEventsMap);
+
+        // Group by driver
+        const driverMap = new Map();
+        for (const shift of shifts) {
+          if (!driverMap.has(shift.driverId)) {
+            const driver = await storage.getUser(shift.driverId);
+            driverMap.set(shift.driverId, {
+              driverId: shift.driverId,
+              driverName: driver ? `${driver.firstName} ${driver.lastName}` : "Unknown",
+              shifts: [],
+            });
+          }
+        }
+
+        // Add shifts to drivers
+        for (const dayData of dailyHours) {
+          for (const shiftHours of dayData.shifts) {
+            const shift = shifts.find(s => s.id === shiftHours.shiftId);
+            if (shift) {
+              const driverData = driverMap.get(shift.driverId);
+              if (driverData) {
+                driverData.shifts.push(shiftHours);
+              }
+            }
+          }
+        }
+
+        const driverBreakdown = Array.from(driverMap.values()).map(driver => ({
+          ...driver,
+          totalPlannedHours: driver.shifts.reduce((sum: number, s: any) => sum + s.plannedHours, 0),
+          totalActualHours: driver.shifts.reduce((sum: number, s: any) => sum + (s.status === "complete" ? s.actualHours : 0), 0),
+        }));
+
+        res.json({
+          date,
+          dailyHours,
+          driverBreakdown,
+        });
+      } catch (error) {
+        console.error("Error calculating daily hours:", error);
+        res.status(500).json({ message: "Failed to calculate daily hours" });
+      }
+    }
+  );
+
   // ============ Driver routes ============
 
   // Get current time entry

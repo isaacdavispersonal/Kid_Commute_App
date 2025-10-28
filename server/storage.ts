@@ -105,6 +105,7 @@ export interface IStorage {
   getUnresolvedClockEvents(): Promise<ClockEvent[]>;
   resolveClockEvent(id: string, notes?: string): Promise<ClockEvent>;
   getActiveClockIn(driverId: string): Promise<{clockEvent: ClockEvent, shift: Shift} | null>;
+  autoClockoutOrphanedShifts(graceHours?: number): Promise<{processed: number, clockedOut: ClockEvent[]}>;
 
   // Time entry operations
   getCurrentTimeEntry(driverId: string): Promise<TimeEntry | undefined>;
@@ -718,6 +719,63 @@ export class DatabaseStorage implements IStorage {
 
     // Return with a minimal shift object if no shift is linked
     return { clockEvent: activeIn, shift: null as any };
+  }
+
+  async autoClockoutOrphanedShifts(graceHours: number = 2): Promise<{processed: number, clockedOut: ClockEvent[]}> {
+    // Get all shifts from the past week that might have orphaned clock-ins
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0];
+    
+    const allShifts = await db
+      .select()
+      .from(shifts)
+      .where(sql`${shifts.date} >= ${oneWeekAgoStr}`)
+      .orderBy(shifts.date, shifts.plannedStart);
+
+    const clockedOutEvents: ClockEvent[] = [];
+    const now = new Date();
+
+    for (const shift of allShifts) {
+      // Get all clock events for this shift
+      const events = await this.getClockEventsByShift(shift.id);
+      
+      if (events.length === 0) continue;
+
+      // Check if the last event is an IN (orphaned)
+      const lastEvent = events[events.length - 1];
+      if (lastEvent.type !== "IN") continue;
+
+      // Calculate shift end time + grace period
+      const shiftEndDateTime = new Date(`${shift.date}T${shift.plannedEnd}`);
+      const graceEndTime = new Date(shiftEndDateTime.getTime() + graceHours * 60 * 60 * 1000);
+
+      // Only auto-clockout if grace period has passed
+      if (now < graceEndTime) continue;
+
+      // Create automatic clock-out event at the planned end time
+      const autoClockOut: InsertClockEvent = {
+        driverId: shift.driverId,
+        shiftId: shift.id,
+        type: "OUT",
+        timestamp: shiftEndDateTime,
+        source: "AUTO",
+        notes: `Auto-clocked out after ${graceHours}h grace period. Original clock-in: ${new Date(lastEvent.timestamp).toLocaleString()}`,
+      };
+
+      const clockOutEvent = await this.createClockEvent(autoClockOut);
+      clockedOutEvents.push(clockOutEvent);
+
+      // Update shift status to COMPLETED if it's still ACTIVE
+      if (shift.status === "ACTIVE") {
+        await this.updateShift(shift.id, { status: "COMPLETED" });
+      }
+    }
+
+    return {
+      processed: clockedOutEvents.length,
+      clockedOut: clockedOutEvents,
+    };
   }
 
   // ============ Time entry operations ============
