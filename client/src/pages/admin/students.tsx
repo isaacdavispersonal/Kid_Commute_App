@@ -2,6 +2,10 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { insertStudentSchema } from "@shared/schema";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,6 +22,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,6 +43,8 @@ import {
   AlertCircle, 
   CheckCircle,
   XCircle,
+  Plus,
+  X,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -58,6 +74,13 @@ interface Stop {
   scheduledTime: string;
 }
 
+// Form schema for create student - uses insertStudentSchema but makes guardianPhones required
+const createStudentFormSchema = insertStudentSchema.extend({
+  guardianPhones: z.array(z.string().min(10, "Phone number must be at least 10 digits")).min(1, "At least one guardian phone is required"),
+});
+
+type CreateStudentFormValues = z.infer<typeof createStudentFormSchema>;
+
 export default function AdminStudentsPage() {
   const { toast } = useToast();
   const [selectedStudent, setSelectedStudent] = useState<EnrichedStudent | null>(null);
@@ -65,6 +88,19 @@ export default function AdminStudentsPage() {
   const [selectedPickupStop, setSelectedPickupStop] = useState<string>("");
   const [selectedDropoffStop, setSelectedDropoffStop] = useState<string>("");
   const [filter, setFilter] = useState<"all" | "assigned" | "unassigned">("all");
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [guardianPhones, setGuardianPhones] = useState<string[]>([""]);
+
+  const createForm = useForm<CreateStudentFormValues>({
+    resolver: zodResolver(createStudentFormSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      guardianPhones: [""],
+      grade: "",
+      notes: "",
+    },
+  });
 
   const { data: students, isLoading: studentsLoading } = useQuery<EnrichedStudent[]>({
     queryKey: ["/api/admin/students"],
@@ -142,6 +178,46 @@ export default function AdminStudentsPage() {
       });
     },
   });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: CreateStudentFormValues) => {
+      return await apiRequest("POST", "/api/admin/students", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/students"] });
+      setIsCreateDialogOpen(false);
+      createForm.reset();
+      setGuardianPhones([""]);
+      toast({
+        title: "Success",
+        description: "Student created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create student",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreateStudent = (data: CreateStudentFormValues) => {
+    createMutation.mutate(data);
+  };
+
+  const handleAddGuardianPhone = () => {
+    setGuardianPhones([...guardianPhones, ""]);
+    const currentPhones = createForm.getValues("guardianPhones");
+    createForm.setValue("guardianPhones", [...currentPhones, ""]);
+  };
+
+  const handleRemoveGuardianPhone = (index: number) => {
+    if (guardianPhones.length <= 1) return;
+    const newPhones = guardianPhones.filter((_, i) => i !== index);
+    setGuardianPhones(newPhones);
+    createForm.setValue("guardianPhones", newPhones);
+  };
 
   const handleOpenDialog = (student: EnrichedStudent) => {
     setSelectedStudent(student);
@@ -225,11 +301,17 @@ export default function AdminStudentsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1">Student Route Assignments</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage student transportation route assignments
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Student Management</h1>
+          <p className="text-sm text-muted-foreground">
+            Create students and manage route assignments
+          </p>
+        </div>
+        <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-student">
+          <Plus className="h-4 w-4 mr-2" />
+          Create Student
+        </Button>
       </div>
 
       {unassignedCount > 0 && (
@@ -418,6 +500,154 @@ export default function AdminStudentsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Create Student Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent data-testid="dialog-create-student" className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Student</DialogTitle>
+            <DialogDescription>
+              Add a student with guardian contact information. The system will automatically link parents with matching phone numbers.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...createForm}>
+            <form onSubmit={createForm.handleSubmit(handleCreateStudent)} className="space-y-4">
+              <FormField
+                control={createForm.control}
+                name="firstName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>First Name *</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-first-name" placeholder="Enter first name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={createForm.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name *</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-last-name" placeholder="Enter last name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={createForm.control}
+                name="grade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Grade</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value || ""} data-testid="input-grade" placeholder="e.g., K, 1, 2, 3..." />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="space-y-2">
+                <FormLabel>Guardian Phone Numbers *</FormLabel>
+                <FormDescription>
+                  Parents will be automatically linked when they register with these phone numbers
+                </FormDescription>
+                {guardianPhones.map((phone, index) => (
+                  <FormField
+                    key={index}
+                    control={createForm.control}
+                    name={`guardianPhones.${index}`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex gap-2">
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              data-testid={`input-guardian-phone-${index}`}
+                              placeholder="e.g., (555) 123-4567" 
+                              onChange={(e) => {
+                                field.onChange(e);
+                                const newPhones = [...guardianPhones];
+                                newPhones[index] = e.target.value;
+                                setGuardianPhones(newPhones);
+                              }}
+                            />
+                          </FormControl>
+                          {guardianPhones.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleRemoveGuardianPhone(index)}
+                              data-testid={`button-remove-phone-${index}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddGuardianPhone}
+                  data-testid="button-add-guardian-phone"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Another Guardian Phone
+                </Button>
+              </div>
+
+              <FormField
+                control={createForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value || ""} data-testid="input-notes" placeholder="Optional notes..." />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsCreateDialogOpen(false);
+                    createForm.reset();
+                    setGuardianPhones([""]);
+                  }}
+                  data-testid="button-cancel-create"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending}
+                  data-testid="button-submit-create"
+                >
+                  Create Student
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Assignment Dialog */}
       <Dialog open={!!selectedStudent} onOpenChange={handleCloseDialog}>

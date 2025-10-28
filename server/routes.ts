@@ -46,6 +46,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedUser = await storage.updateUserProfile(userId, result.data);
       
+      // If user is a parent and updated their phone number, check for household linking
+      if (updatedUser.role === "parent" && result.data.phoneNumber) {
+        try {
+          // Find household by phone number
+          const household = await storage.findHouseholdByPhone(result.data.phoneNumber);
+          
+          if (household) {
+            // Check if user is already linked to this household
+            const existingHousehold = await storage.getUserHousehold(userId);
+            
+            if (!existingHousehold || existingHousehold.id !== household.id) {
+              // Link user to household with proper object structure
+              await storage.linkUserToHousehold({
+                userId,
+                householdId: household.id,
+                roleInHousehold: "SECONDARY",
+              });
+              console.log(`Linked user ${userId} to household ${household.id} via phone ${result.data.phoneNumber}`);
+            }
+          }
+        } catch (householdError) {
+          // Don't fail the profile update if household linking fails
+          console.error("Error linking user to household:", householdError);
+        }
+      }
+      
       res.json(updatedUser);
     } catch (error: any) {
       console.error("Error updating profile:", error);

@@ -88,6 +88,7 @@ The system manages multiple interconnected entities:
 - **Security**: Parents cannot manually add students or claim children that aren't theirs - all linking happens via phone number matching
 - **Multi-Guardian Support**: Students can have multiple guardian phone numbers for shared custody scenarios
 - **Empty State Handling**: If a parent's phone doesn't match any students, they see a "no students found" message
+- **Known Security Consideration**: Current implementation trusts phone numbers without SMS/OTP verification. For production use, SMS verification should be added to prevent unauthorized access via phone number spoofing
 
 **Time Tracking & Payroll**
 - **Shift-Based System**: Drivers work in discrete shifts (morning/afternoon/extra) with separate time tracking per shift
