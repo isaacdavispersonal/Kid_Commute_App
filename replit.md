@@ -74,11 +74,21 @@ The system manages multiple interconnected entities:
 - **Routes**: Scheduled transportation paths with associated stops
 - **Stops**: Individual pickup/dropoff locations on routes
 - **Students**: Passenger management linked to routes and parents
-- **Driver Assignments**: Route-to-driver mappings with scheduling
-- **Time Entries**: Driver clock in/out tracking for payroll and compliance
+- **Shifts**: Shift-based scheduling system supporting multiple shifts per day (MORNING, AFTERNOON, EXTRA) with planned start/end times and status tracking (SCHEDULED, ACTIVE, COMPLETED, MISSED)
+- **Clock Events**: Detailed time tracking with clock IN/OUT events per shift, supporting multiple punch segments, auto-clockout failsafe, and resolution tracking for data quality issues
 - **Messages**: Communication threads between drivers and parents
 - **Incidents**: Safety and operational issue reporting
 - **Vehicle Inspections**: Pre-trip inspection records and maintenance tracking
+
+**Time Tracking & Payroll**
+- **Shift-Based System**: Drivers work in discrete shifts (morning/afternoon/extra) with separate time tracking per shift
+- **Clock In/Out**: Drivers clock in/out via mobile-optimized interface with real-time elapsed time display
+- **Multi-Segment Support**: System handles multiple clock-in/out pairs per shift (e.g., lunch breaks, interruptions)
+- **Auto-Clockout Failsafe**: Automatically closes orphaned clock-in events after configurable grace period (default 2 hours) to prevent runaway hours
+- **Time Calculations**: `calculateShiftHours` utility computes accurate hours from punch segments, handles duplicate clock-ins by closing at new IN timestamp, caps orphaned spans at shift end + grace period
+- **Driver Time History**: Comprehensive view of all past shifts with calculated hours, punch segments, and daily/weekly summaries
+- **Admin Time Exceptions Queue**: Review and resolve unresolved clock events with shift context enrichment and manual resolution workflow
+- **Reporting Endpoints**: Backend API provides driver hours summaries, payroll aggregates, and shift-specific time details for compliance and reporting
 
 **Session Management**
 - PostgreSQL-backed sessions using connect-pg-simple
