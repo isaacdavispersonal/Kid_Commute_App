@@ -8,6 +8,7 @@ import { insertStudentSchema, updateStudentSchema } from "@shared/schema";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatPhoneNumber } from "@/lib/phoneFormat";
 import {
   Dialog,
   DialogContent,
@@ -77,14 +78,32 @@ interface Stop {
 
 // Form schema for create student - uses insertStudentSchema but makes guardianPhones required
 const createStudentFormSchema = insertStudentSchema.extend({
-  guardianPhones: z.array(z.string().min(10, "Phone number must be at least 10 digits")).min(1, "At least one guardian phone is required"),
+  guardianPhones: z.array(
+    z.string()
+      .refine(
+        (val) => {
+          const digits = val.replace(/\D/g, '');
+          return digits.length === 10;
+        },
+        { message: "Phone number must be exactly 10 digits" }
+      )
+  ).min(1, "At least one guardian phone is required"),
 });
 
 type CreateStudentFormValues = z.infer<typeof createStudentFormSchema>;
 
 // Form schema for edit student - uses updateStudentSchema
 const editStudentFormSchema = updateStudentSchema.extend({
-  guardianPhones: z.array(z.string().min(10, "Phone number must be at least 10 digits")).min(1, "At least one guardian phone is required"),
+  guardianPhones: z.array(
+    z.string()
+      .refine(
+        (val) => {
+          const digits = val.replace(/\D/g, '');
+          return digits.length === 10;
+        },
+        { message: "Phone number must be exactly 10 digits" }
+      )
+  ).min(1, "At least one guardian phone is required"),
 });
 
 type EditStudentFormValues = z.infer<typeof editStudentFormSchema>;
@@ -678,11 +697,13 @@ export default function AdminStudentsPage() {
                             <Input 
                               {...field} 
                               data-testid={`input-guardian-phone-${index}`}
-                              placeholder="e.g., (555) 123-4567" 
+                              placeholder="(123) 456-7890" 
+                              maxLength={14}
                               onChange={(e) => {
-                                field.onChange(e);
+                                const formatted = formatPhoneNumber(e.target.value);
+                                field.onChange(formatted);
                                 const newPhones = [...guardianPhones];
-                                newPhones[index] = e.target.value;
+                                newPhones[index] = formatted;
                                 setGuardianPhones(newPhones);
                               }}
                             />
@@ -826,12 +847,13 @@ export default function AdminStudentsPage() {
                             <Input 
                               {...field} 
                               data-testid={`input-edit-guardian-phone-${index}`}
-                              placeholder="e.g., (555) 123-4567" 
+                              placeholder="(123) 456-7890" 
+                              maxLength={14}
                               onChange={(e) => {
-                                const newValue = e.target.value;
-                                field.onChange(e);
+                                const formatted = formatPhoneNumber(e.target.value);
+                                field.onChange(formatted);
                                 const newPhones = [...editGuardianPhones];
-                                newPhones[index] = newValue;
+                                newPhones[index] = formatted;
                                 setEditGuardianPhones(newPhones);
                                 // Sync all phones to the form
                                 editForm.setValue("guardianPhones", newPhones);

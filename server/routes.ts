@@ -47,9 +47,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      console.log(`[PATCH /api/profile] Validated data:`, result.data);
+      // Strip phone formatting to store only digits
+      const normalizedData = {
+        ...result.data,
+        phoneNumber: result.data.phoneNumber ? result.data.phoneNumber.replace(/\D/g, '') : result.data.phoneNumber
+      };
       
-      const updatedUser = await storage.updateUserProfile(userId, result.data);
+      console.log(`[PATCH /api/profile] Normalized data:`, normalizedData);
+      
+      const updatedUser = await storage.updateUserProfile(userId, normalizedData);
       
       console.log(`[PATCH /api/profile] Updated user:`, {
         id: updatedUser.id,
@@ -58,10 +64,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // If user is a parent and updated their phone number, check for household linking
-      if (updatedUser.role === "parent" && result.data.phoneNumber) {
+      if (updatedUser.role === "parent" && normalizedData.phoneNumber) {
         try {
-          // Find household by phone number
-          const household = await storage.findHouseholdByPhone(result.data.phoneNumber);
+          // Find household by phone number (digits only)
+          const household = await storage.findHouseholdByPhone(normalizedData.phoneNumber);
           
           if (household) {
             // Check if user is already linked to this household
@@ -74,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 householdId: household.id,
                 roleInHousehold: "SECONDARY",
               });
-              console.log(`Linked user ${userId} to household ${household.id} via phone ${result.data.phoneNumber}`);
+              console.log(`Linked user ${userId} to household ${household.id} via phone ${normalizedData.phoneNumber}`);
             }
           }
         } catch (householdError) {
@@ -601,8 +607,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        // Create or find household for primary guardian phone
-        const primaryPhone = result.data.guardianPhones[0];
+        // Normalize guardian phones to digits only
+        const normalizedGuardianPhones = result.data.guardianPhones.map((phone: string) => 
+          phone.replace(/\D/g, '')
+        );
+        
+        // Create or find household for primary guardian phone (digits only)
+        const primaryPhone = normalizedGuardianPhones[0];
         let household = await storage.findHouseholdByPhone(primaryPhone);
         
         if (!household) {
@@ -615,6 +626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create student linked to household (manually add householdId since schema excludes it)
         const studentData: any = {
           ...result.data,
+          guardianPhones: normalizedGuardianPhones,
           householdId: household.id,
         };
         const newStudent = await storage.createStudent(studentData);
@@ -655,7 +667,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // If guardian phones changed, update household
         if (result.data.guardianPhones && result.data.guardianPhones.length > 0) {
-          const primaryPhone = result.data.guardianPhones[0];
+          // Normalize guardian phones to digits only
+          const normalizedGuardianPhones = result.data.guardianPhones.map((phone: string) => 
+            phone.replace(/\D/g, '')
+          );
+          
+          const primaryPhone = normalizedGuardianPhones[0];
           let household = await storage.findHouseholdByPhone(primaryPhone);
           
           if (!household) {
@@ -666,9 +683,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
-          // Update student with new household
+          // Update student with new household and normalized phones
           const updatedStudent = await storage.updateStudent(studentId, {
             ...result.data,
+            guardianPhones: normalizedGuardianPhones,
             householdId: household.id,
           } as any);
           

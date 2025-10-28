@@ -85,6 +85,8 @@ The system manages multiple interconnected entities:
 **Phone-Based Household System**
 - **Admin-Driven Student Creation**: Admins add students with guardian phone numbers; system auto-creates/links households
 - **Automatic Parent Linking**: When parents register with a phone matching a student's guardian phone, they're automatically linked to that household
+- **Explicit Connection Flow**: Parents must explicitly click "Connect Children" to link their account - automatic linking on profile update + manual connection endpoint provides flexibility
+- **Phone Number Formatting**: All phone inputs auto-format to (123) 456-7890 standard as users type, ensuring exact matches across parent profiles and admin guardian phone entries (utility: `client/src/lib/phoneFormat.ts`)
 - **Security**: Parents cannot manually add students or claim children that aren't theirs - all linking happens via phone number matching
 - **Multi-Guardian Support**: Students can have multiple guardian phone numbers for shared custody scenarios
 - **Empty State Handling**: If a parent's phone doesn't match any students, they see a "no students found" message

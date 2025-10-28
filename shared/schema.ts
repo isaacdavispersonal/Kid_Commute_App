@@ -59,7 +59,18 @@ export const updateProfileSchema = createInsertSchema(users).pick({
   email: true,
   phoneNumber: true,
   address: true,
-});
+}).refine(
+  (data) => {
+    if (!data.phoneNumber) return true; // Allow empty if optional
+    // Strip formatting and check digit count
+    const digits = data.phoneNumber.replace(/\D/g, '');
+    return digits.length === 10;
+  },
+  {
+    message: "Phone number must be exactly 10 digits",
+    path: ["phoneNumber"],
+  }
+);
 
 export type UpdateProfile = z.infer<typeof updateProfileSchema>;
 

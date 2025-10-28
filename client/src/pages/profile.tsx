@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { User, Mail, Phone, MapPin, Save } from "lucide-react";
 import type { User as UserType, UpdateProfile } from "@shared/schema";
+import { formatPhoneNumber } from "@/lib/phoneFormat";
 
 export default function Profile() {
   const { user } = useAuth();
@@ -36,7 +37,7 @@ export default function Profile() {
         firstName: profile.firstName || "",
         lastName: profile.lastName || "",
         email: profile.email || "",
-        phoneNumber: profile.phoneNumber || "",
+        phoneNumber: profile.phoneNumber ? formatPhoneNumber(profile.phoneNumber) : "",
         address: profile.address || "",
       });
     }
@@ -75,7 +76,7 @@ export default function Profile() {
         firstName: profile.firstName || "",
         lastName: profile.lastName || "",
         email: profile.email || "",
-        phoneNumber: profile.phoneNumber || "",
+        phoneNumber: profile.phoneNumber ? formatPhoneNumber(profile.phoneNumber) : "",
         address: profile.address || "",
       });
     }
@@ -197,11 +198,15 @@ export default function Profile() {
                   id="phoneNumber"
                   type="tel"
                   value={formData.phoneNumber || ""}
-                  onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                  onChange={(e) => {
+                    const formatted = formatPhoneNumber(e.target.value);
+                    setFormData({ ...formData, phoneNumber: formatted });
+                  }}
                   disabled={!isEditing}
                   className="pl-10"
                   placeholder="(123) 456-7890"
                   required
+                  maxLength={14}
                   data-testid="input-phoneNumber"
                 />
               </div>
