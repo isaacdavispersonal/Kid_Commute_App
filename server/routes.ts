@@ -1195,7 +1195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Get driver's shifts (with date range)
+  // Get driver's shifts (with date range) - enriched with clock events and calculated hours
   app.get(
     "/api/driver/shifts",
     isAuthenticated,
@@ -1211,7 +1211,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           endDate as string | undefined
         );
         
-        res.json(shifts);
+        // Enrich with route, vehicle, clock events, and calculated hours
+        const { calculateShiftHours } = await import("./utils/timeCalculations");
+        
+        const enrichedShifts = await Promise.all(
+          shifts.map(async (shift) => {
+            const route = shift.routeId ? await storage.getRoute(shift.routeId) : null;
+            const vehicle = shift.vehicleId ? await storage.getVehicle(shift.vehicleId) : null;
+            const clockEvents = await storage.getClockEventsByShift(shift.id);
+            const calculatedHours = calculateShiftHours(shift, clockEvents);
+            
+            return {
+              ...shift,
+              routeName: route?.name || "No Route",
+              vehicleName: vehicle?.name || "No Vehicle",
+              vehiclePlate: vehicle?.plateNumber || "N/A",
+              clockEvents,
+              calculatedHours,
+            };
+          })
+        );
+        
+        res.json(enrichedShifts);
       } catch (error) {
         console.error("Error fetching driver shifts:", error);
         res.status(500).json({ message: "Failed to fetch shifts" });

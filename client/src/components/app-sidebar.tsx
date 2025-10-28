@@ -106,6 +106,11 @@ const driverMenuItems = [
     icon: Calendar,
   },
   {
+    title: "Time History",
+    url: "/driver/time-history",
+    icon: Clock,
+  },
+  {
     title: "Messages",
     url: "/driver/messages",
     icon: MessageSquare,
