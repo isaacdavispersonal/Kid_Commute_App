@@ -163,35 +163,58 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    // Check if user exists by ID or email
-    const existingById = userData.id ? await this.getUser(userData.id) : null;
-    const existingByEmail = userData.email ? await db
-      .select()
-      .from(users)
-      .where(eq(users.email, userData.email))
-      .limit(1)
-      .then(rows => rows[0]) : null;
-    
-    const existing = existingById || existingByEmail;
-    
-    if (existing) {
-      // Update existing user
+    try {
+      // Use PostgreSQL's native INSERT ... ON CONFLICT to handle upserts
+      // First try to insert, if conflict on id or email, then update
       const [user] = await db
-        .update(users)
-        .set({
+        .insert(users)
+        .values({
           ...userData,
           updatedAt: new Date(),
         })
-        .where(eq(users.id, existing.id))
+        .onConflictDoUpdate({
+          target: users.id, // conflict on ID
+          set: {
+            email: userData.email,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            profileImageUrl: userData.profileImageUrl,
+            role: userData.role,
+            phoneNumber: userData.phoneNumber,
+            address: userData.address,
+            updatedAt: new Date(),
+          },
+        })
         .returning();
       return user;
-    } else {
-      // Insert new user
-      const [user] = await db
-        .insert(users)
-        .values(userData)
-        .returning();
-      return user;
+    } catch (error: any) {
+      // If there's still a conflict (e.g., on email), try to find and update by email
+      if (error.message?.includes('duplicate') && userData.email) {
+        const [existingUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, userData.email))
+          .limit(1);
+        
+        if (existingUser) {
+          const [user] = await db
+            .update(users)
+            .set({
+              email: userData.email,
+              firstName: userData.firstName,
+              lastName: userData.lastName,
+              profileImageUrl: userData.profileImageUrl,
+              role: userData.role || existingUser.role,
+              phoneNumber: userData.phoneNumber,
+              address: userData.address,
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, existingUser.id))
+            .returning();
+          return user;
+        }
+      }
+      throw error;
     }
   }
 
