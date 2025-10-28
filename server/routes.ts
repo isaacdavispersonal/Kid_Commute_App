@@ -783,6 +783,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // ============ Shift routes (Admin) ============
+
+  // Get shifts by date (optionally filtered by driver)
+  app.get(
+    "/api/admin/shifts",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { date, driverId, startDate, endDate } = req.query;
+        
+        if (driverId && typeof driverId === "string") {
+          if (startDate && endDate && typeof startDate === "string" && typeof endDate === "string") {
+            const shifts = await storage.getShiftsByDriver(driverId, startDate, endDate);
+            return res.json(shifts);
+          } else if (date && typeof date === "string") {
+            const shifts = await storage.getShiftsByDate(date, driverId);
+            return res.json(shifts);
+          } else {
+            const shifts = await storage.getShiftsByDriver(driverId);
+            return res.json(shifts);
+          }
+        } else if (date && typeof date === "string") {
+          const shifts = await storage.getShiftsByDate(date);
+          return res.json(shifts);
+        }
+        
+        return res.status(400).json({ message: "Please provide either date or driverId" });
+      } catch (error) {
+        console.error("Error fetching shifts:", error);
+        res.status(500).json({ message: "Failed to fetch shifts" });
+      }
+    }
+  );
+
+  // Create new shift
+  app.post(
+    "/api/admin/shifts",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { insertShiftSchema } = await import("@shared/schema");
+        const validatedData = insertShiftSchema.parse(req.body);
+        
+        // Validate driver exists
+        const driver = await storage.getUser(validatedData.driverId);
+        if (!driver || driver.role !== "driver") {
+          return res.status(400).json({ message: "Invalid driver specified" });
+        }
+        
+        // Validate route exists (if provided)
+        if (validatedData.routeId) {
+          const route = await storage.getRoute(validatedData.routeId);
+          if (!route) {
+            return res.status(400).json({ message: "Route not found" });
+          }
+        }
+        
+        // Validate vehicle exists (if provided)
+        if (validatedData.vehicleId) {
+          const vehicle = await storage.getVehicle(validatedData.vehicleId);
+          if (!vehicle) {
+            return res.status(400).json({ message: "Vehicle not found" });
+          }
+        }
+        
+        const shift = await storage.createShift(validatedData);
+        res.json(shift);
+      } catch (error: any) {
+        console.error("Error creating shift:", error);
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to create shift" });
+      }
+    }
+  );
+
+  // Update shift
+  app.patch(
+    "/api/admin/shifts/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const shiftId = req.params.id;
+        const { updateShiftSchema } = await import("@shared/schema");
+        const updates = updateShiftSchema.parse(req.body);
+        
+        // Validate references if they're being updated
+        if (updates.routeId) {
+          const route = await storage.getRoute(updates.routeId);
+          if (!route) {
+            return res.status(400).json({ message: "Route not found" });
+          }
+        }
+        
+        if (updates.vehicleId) {
+          const vehicle = await storage.getVehicle(updates.vehicleId);
+          if (!vehicle) {
+            return res.status(400).json({ message: "Vehicle not found" });
+          }
+        }
+        
+        const updated = await storage.updateShift(shiftId, updates);
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error updating shift:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update shift" });
+      }
+    }
+  );
+
+  // Delete shift
+  app.delete(
+    "/api/admin/shifts/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const shiftId = req.params.id;
+        await storage.deleteShift(shiftId);
+        res.json({ message: "Shift deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting shift:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to delete shift" });
+      }
+    }
+  );
+
+  // Get unresolved clock events (for admin time exceptions queue)
+  app.get(
+    "/api/admin/clock-events/unresolved",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const events = await storage.getUnresolvedClockEvents();
+        res.json(events);
+      } catch (error) {
+        console.error("Error fetching unresolved clock events:", error);
+        res.status(500).json({ message: "Failed to fetch unresolved clock events" });
+      }
+    }
+  );
+
+  // Resolve clock event
+  app.patch(
+    "/api/admin/clock-events/:id/resolve",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const eventId = req.params.id;
+        const { notes } = req.body;
+        
+        const resolved = await storage.resolveClockEvent(eventId, notes);
+        res.json(resolved);
+      } catch (error: any) {
+        console.error("Error resolving clock event:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to resolve clock event" });
+      }
+    }
+  );
+
   // ============ Driver routes ============
 
   // Get current time entry
@@ -802,7 +989,182 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Clock in
+  // Get today's shifts for driver
+  app.get(
+    "/api/driver/today-shifts",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const shifts = await storage.getDriverTodayShifts(driverId);
+        
+        // Enrich with route and vehicle information
+        const enrichedShifts = await Promise.all(
+          shifts.map(async (shift) => {
+            const route = shift.routeId ? await storage.getRoute(shift.routeId) : null;
+            const vehicle = shift.vehicleId ? await storage.getVehicle(shift.vehicleId) : null;
+            const clockEvents = await storage.getClockEventsByShift(shift.id);
+            
+            return {
+              ...shift,
+              routeName: route?.name || "Unknown",
+              vehicleName: vehicle?.name || "Unknown",
+              vehiclePlate: vehicle?.plateNumber || "Unknown",
+              clockEvents,
+            };
+          })
+        );
+        
+        res.json(enrichedShifts);
+      } catch (error) {
+        console.error("Error fetching today's shifts:", error);
+        res.status(500).json({ message: "Failed to fetch shifts" });
+      }
+    }
+  );
+
+  // Get driver's shifts (with date range)
+  app.get(
+    "/api/driver/shifts",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { startDate, endDate } = req.query;
+        
+        const shifts = await storage.getShiftsByDriver(
+          driverId,
+          startDate as string | undefined,
+          endDate as string | undefined
+        );
+        
+        res.json(shifts);
+      } catch (error) {
+        console.error("Error fetching driver shifts:", error);
+        res.status(500).json({ message: "Failed to fetch shifts" });
+      }
+    }
+  );
+
+  // Clock in for shift
+  app.post(
+    "/api/driver/shifts/:shiftId/clock-in",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { shiftId } = req.params;
+        
+        // Verify shift belongs to this driver
+        const shift = await storage.getShift(shiftId);
+        if (!shift) {
+          return res.status(404).json({ message: "Shift not found" });
+        }
+        
+        if (shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Not authorized for this shift" });
+        }
+        
+        // Check if already clocked in
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        if (activeClockIn) {
+          return res.status(400).json({ 
+            message: "Already clocked in. Please clock out first.",
+            activeShift: activeClockIn.shift
+          });
+        }
+        
+        // Create clock IN event
+        const clockEvent = await storage.createClockEvent({
+          shiftId,
+          driverId,
+          type: "IN",
+          timestamp: new Date(),
+          source: "USER",
+          isResolved: true,
+        });
+        
+        // Update shift status to ACTIVE
+        await storage.updateShift(shiftId, { status: "ACTIVE" });
+        
+        res.json({ clockEvent, shift });
+      } catch (error) {
+        console.error("Error clocking in:", error);
+        res.status(500).json({ message: "Failed to clock in" });
+      }
+    }
+  );
+
+  // Clock out from shift
+  app.post(
+    "/api/driver/shifts/:shiftId/clock-out",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { shiftId } = req.params;
+        
+        // Verify shift belongs to this driver
+        const shift = await storage.getShift(shiftId);
+        if (!shift) {
+          return res.status(404).json({ message: "Shift not found" });
+        }
+        
+        if (shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Not authorized for this shift" });
+        }
+        
+        // Verify driver is clocked in for this shift
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        if (!activeClockIn || activeClockIn.clockEvent.shiftId !== shiftId) {
+          return res.status(400).json({ 
+            message: "Not currently clocked in for this shift" 
+          });
+        }
+        
+        // Create clock OUT event
+        const clockEvent = await storage.createClockEvent({
+          shiftId,
+          driverId,
+          type: "OUT",
+          timestamp: new Date(),
+          source: "USER",
+          isResolved: true,
+        });
+        
+        // Update shift status to COMPLETED
+        await storage.updateShift(shiftId, { status: "COMPLETED" });
+        
+        res.json({ clockEvent, shift });
+      } catch (error) {
+        console.error("Error clocking out:", error);
+        res.status(500).json({ message: "Failed to clock out" });
+      }
+    }
+  );
+
+  // Get active clock-in status
+  app.get(
+    "/api/driver/active-clock-in",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        res.json(activeClockIn);
+      } catch (error) {
+        console.error("Error fetching active clock-in:", error);
+        res.status(500).json({ message: "Failed to fetch clock-in status" });
+      }
+    }
+  );
+
+  // Legacy clock in (kept for backwards compatibility, maps to shift-based system)
   app.post(
     "/api/driver/clock-in",
     isAuthenticated,
@@ -830,7 +1192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Clock out
+  // Legacy clock out (kept for backwards compatibility)
   app.post(
     "/api/driver/clock-out",
     isAuthenticated,
