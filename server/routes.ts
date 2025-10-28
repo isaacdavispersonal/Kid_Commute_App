@@ -498,10 +498,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const students = await storage.getAllStudents();
-        // Enrich with parent and route information
+        // Enrich with household and route information
         const enrichedStudents = await Promise.all(
           students.map(async (student) => {
-            const parent = await storage.getUser(student.parentId);
+            // Get household information
+            let householdInfo = "No household";
+            if (student.householdId) {
+              const household = await storage.findHouseholdByPhone("");
+              if (household) {
+                householdInfo = household.primaryPhone;
+              }
+            }
+            
             let routeName = null;
             let pickupStop = null;
             let dropoffStop = null;
@@ -521,8 +529,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             return {
               ...student,
-              parentName: parent ? `${parent.firstName} ${parent.lastName}` : "Unknown",
-              parentEmail: parent?.email || null,
+              guardianPhones: student.guardianPhones || [],
+              householdInfo,
               routeName,
               pickupStop,
               dropoffStop,
@@ -533,6 +541,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error fetching students:", error);
         res.status(500).json({ message: "Failed to fetch students" });
+      }
+    }
+  );
+
+  // Create new student (admin)
+  app.post(
+    "/api/admin/students",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { insertStudentSchema } = await import("@shared/schema");
+        
+        // Validate request body
+        const result = insertStudentSchema.safeParse(req.body);
+        
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid student data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        // Create or find household for primary guardian phone
+        const primaryPhone = result.data.guardianPhones[0];
+        let household = await storage.findHouseholdByPhone(primaryPhone);
+        
+        if (!household) {
+          household = await storage.createHousehold({
+            primaryPhone,
+            notes: `Auto-created for student: ${result.data.firstName} ${result.data.lastName}`,
+          });
+        }
+        
+        // Create student linked to household (manually add householdId since schema excludes it)
+        const studentData: any = {
+          ...result.data,
+          householdId: household.id,
+        };
+        const newStudent = await storage.createStudent(studentData);
+        
+        res.json(newStudent);
+      } catch (error: any) {
+        console.error("Error creating student:", error);
+        res.status(500).json({ message: "Failed to create student" });
       }
     }
   );
@@ -1810,31 +1863,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Create new child profile
+  // Create new child profile (DEPRECATED - parents should not create students directly)
   app.post(
     "/api/parent/students",
     isAuthenticated,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
-        const { insertStudentSchema } = await import("@shared/schema");
-        
-        // Validate request body
-        const result = insertStudentSchema.safeParse({
-          ...req.body,
-          parentId,
+        return res.status(403).json({ 
+          message: "Parents cannot create student profiles. Please contact an administrator to add your child to the system." 
         });
-        
-        if (!result.success) {
-          return res.status(400).json({ 
-            message: "Invalid student data", 
-            errors: result.error.errors 
-          });
-        }
-        
-        const newStudent = await storage.createStudent(result.data);
-        res.json(newStudent);
       } catch (error: any) {
         console.error("Error creating student:", error);
         res.status(500).json({ message: "Failed to create student" });
@@ -1853,9 +1891,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const studentId = req.params.id;
         const { updateStudentSchema } = await import("@shared/schema");
         
-        // Verify the student belongs to this parent
+        // Verify the student belongs to this parent's household
         const student = await storage.getStudent(studentId);
-        if (!student || student.parentId !== parentId) {
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        // Check if parent is in the same household
+        const parentHousehold = await storage.getUserHousehold(parentId);
+        if (!parentHousehold || student.householdId !== parentHousehold.id) {
           return res.status(404).json({ message: "Student not found" });
         }
         
@@ -1892,9 +1936,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const parentId = req.user.claims.sub;
         const studentId = req.params.id;
         
-        // Verify the student belongs to this parent
+        // Verify the student belongs to this parent's household
         const student = await storage.getStudent(studentId);
-        if (!student || student.parentId !== parentId) {
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        // Check if parent is in the same household
+        const parentHousehold = await storage.getUserHousehold(parentId);
+        if (!parentHousehold || student.householdId !== parentHousehold.id) {
           return res.status(404).json({ message: "Student not found" });
         }
         

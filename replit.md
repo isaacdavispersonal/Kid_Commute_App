@@ -69,16 +69,25 @@ Preferred communication style: Simple, everyday language.
 
 **Data Model**
 The system manages multiple interconnected entities:
-- **Users**: Multi-role system (admin/driver/parent) with profile information
+- **Users**: Multi-role system (admin/driver/parent) with profile information and phone number for household linking
+- **Households**: Family groups identified by primary phone number, linking parents to their students
+- **HouseholdMembers**: Junction table linking users to households with role specification (PRIMARY/SECONDARY)
 - **Vehicles**: Fleet management with status tracking and location data
 - **Routes**: Scheduled transportation paths with associated stops
 - **Stops**: Individual pickup/dropoff locations on routes
-- **Students**: Passenger management linked to routes and parents
+- **Students**: Passenger management with guardian phone numbers (array) and household linkage - admin-created only
 - **Shifts**: Shift-based scheduling system supporting multiple shifts per day (MORNING, AFTERNOON, EXTRA) with planned start/end times and status tracking (SCHEDULED, ACTIVE, COMPLETED, MISSED)
 - **Clock Events**: Detailed time tracking with clock IN/OUT events per shift, supporting multiple punch segments, auto-clockout failsafe, and resolution tracking for data quality issues
 - **Messages**: Communication threads between drivers and parents
 - **Incidents**: Safety and operational issue reporting
 - **Vehicle Inspections**: Pre-trip inspection records and maintenance tracking
+
+**Phone-Based Household System**
+- **Admin-Driven Student Creation**: Admins add students with guardian phone numbers; system auto-creates/links households
+- **Automatic Parent Linking**: When parents register with a phone matching a student's guardian phone, they're automatically linked to that household
+- **Security**: Parents cannot manually add students or claim children that aren't theirs - all linking happens via phone number matching
+- **Multi-Guardian Support**: Students can have multiple guardian phone numbers for shared custody scenarios
+- **Empty State Handling**: If a parent's phone doesn't match any students, they see a "no students found" message
 
 **Time Tracking & Payroll**
 - **Shift-Based System**: Drivers work in discrete shifts (morning/afternoon/extra) with separate time tracking per shift
