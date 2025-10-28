@@ -1,12 +1,17 @@
 // Driver time history page showing all shifts and calculated hours
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Clock, Calendar, PlayCircle, StopCircle, TrendingUp, AlertCircle } from "lucide-react";
+import { Clock, Calendar, PlayCircle, StopCircle, TrendingUp, AlertCircle, Edit, X, Check } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 
 interface ClockEvent {
@@ -59,7 +64,10 @@ const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secon
 };
 
 export default function DriverTimeHistory() {
+  const { toast } = useToast();
   const [dateRange, setDateRange] = useState<"week" | "month" | "all">("week");
+  const [editingEvent, setEditingEvent] = useState<{ id: string; timestamp: string; type: "IN" | "OUT" } | null>(null);
+  const [editedTimestamp, setEditedTimestamp] = useState<string>("");
 
   // Calculate date range
   const getDateRange = () => {
@@ -102,6 +110,46 @@ export default function DriverTimeHistory() {
       return response.json();
     },
   });
+
+  // Edit clock event mutation
+  const editClockEventMutation = useMutation({
+    mutationFn: async (data: { id: string; timestamp: string }) => {
+      const timestampDate = new Date(data.timestamp);
+      return await apiRequest("PATCH", `/api/driver/clock-event/${data.id}`, {
+        timestamp: timestampDate.toISOString(),
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/driver/shifts"] });
+      toast({
+        title: "Clock Event Updated",
+        description: "Your clock event has been successfully updated",
+      });
+      setEditingEvent(null);
+      setEditedTimestamp("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: (error as any).message || "Failed to update clock event",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEditClick = (event: ClockEvent) => {
+    setEditingEvent({ id: event.id, timestamp: event.timestamp, type: event.type });
+    // Format timestamp for datetime-local input
+    const date = new Date(event.timestamp);
+    const formatted = format(date, "yyyy-MM-dd'T'HH:mm");
+    setEditedTimestamp(formatted);
+  };
+
+  const handleSaveEdit = () => {
+    if (editingEvent && editedTimestamp) {
+      editClockEventMutation.mutate({ id: editingEvent.id, timestamp: editedTimestamp });
+    }
+  };
 
   // Calculate summary statistics
   const summary = shifts?.reduce(
@@ -312,44 +360,55 @@ export default function DriverTimeHistory() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {/* Punch Segments */}
+                  {/* Clock Events */}
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">Clock Events</p>
-                    {shift.calculatedHours.punchSegments.length > 0 ? (
+                    {shift.clockEvents.length > 0 ? (
                       <div className="space-y-1">
-                        {shift.calculatedHours.punchSegments.map((segment, idx) => (
+                        {shift.clockEvents.map((event, idx) => (
                           <div
-                            key={idx}
-                            className="flex items-center justify-between text-sm bg-muted/50 p-2 rounded"
-                            data-testid={`segment-${shift.id}-${idx}`}
+                            key={event.id}
+                            className="flex items-center justify-between text-sm bg-muted/50 p-2 rounded group"
+                            data-testid={`event-${event.id}`}
                           >
                             <div className="flex items-center gap-2">
-                              <PlayCircle className="h-3 w-3 text-green-600" />
-                              <span data-testid={`text-clock-in-${shift.id}-${idx}`}>
-                                {new Date(segment.clockIn).toLocaleTimeString()}
-                              </span>
-                              {segment.clockOut ? (
-                                <>
-                                  <span className="text-muted-foreground">→</span>
-                                  <StopCircle className="h-3 w-3 text-red-600" />
-                                  <span data-testid={`text-clock-out-${shift.id}-${idx}`}>
-                                    {new Date(segment.clockOut).toLocaleTimeString()}
-                                  </span>
-                                </>
+                              {event.type === "IN" ? (
+                                <PlayCircle className="h-3 w-3 text-green-600" />
                               ) : (
-                                <Badge variant="secondary" className="ml-2">
-                                  In Progress
-                                </Badge>
+                                <StopCircle className="h-3 w-3 text-red-600" />
+                              )}
+                              <span className="font-medium">
+                                {event.type === "IN" ? "Clock In" : "Clock Out"}
+                              </span>
+                              <span data-testid={`text-time-${event.id}`}>
+                                {new Date(event.timestamp).toLocaleString()}
+                              </span>
+                              {event.source === "AUTO" && (
+                                <Badge variant="outline" className="text-xs">Auto</Badge>
                               )}
                             </div>
-                            <span
-                              className="font-medium"
-                              data-testid={`text-segment-hours-${shift.id}-${idx}`}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => handleEditClick(event)}
+                              data-testid={`button-edit-${event.id}`}
                             >
-                              {segment.hours.toFixed(2)}h
-                            </span>
+                              <Edit className="h-3 w-3" />
+                            </Button>
                           </div>
                         ))}
+                        {/* Summary */}
+                        {shift.calculatedHours.punchSegments.length > 0 && (
+                          <div className="mt-2 pt-2 border-t text-sm">
+                            <div className="flex items-center justify-between font-medium">
+                              <span>Total Hours</span>
+                              <span data-testid={`text-total-hours-${shift.id}`}>
+                                {shift.calculatedHours.actualHours.toFixed(2)}h
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground italic">No clock events recorded</p>
@@ -386,6 +445,48 @@ export default function DriverTimeHistory() {
           </Card>
         )}
       </div>
+
+      {/* Edit Clock Event Dialog */}
+      <Dialog open={editingEvent !== null} onOpenChange={() => setEditingEvent(null)}>
+        <DialogContent data-testid="dialog-edit-clock-event">
+          <DialogHeader>
+            <DialogTitle>Edit Clock Event</DialogTitle>
+            <DialogDescription>
+              Correct the timestamp for this {editingEvent?.type === "IN" ? "clock in" : "clock out"} event
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="timestamp">Timestamp</Label>
+              <Input
+                id="timestamp"
+                type="datetime-local"
+                value={editedTimestamp}
+                onChange={(e) => setEditedTimestamp(e.target.value)}
+                data-testid="input-timestamp"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingEvent(null)}
+              data-testid="button-cancel-edit"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={editClockEventMutation.isPending}
+              data-testid="button-save-edit"
+            >
+              <Check className="h-4 w-4 mr-2" />
+              {editClockEventMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

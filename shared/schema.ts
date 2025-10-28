@@ -332,7 +332,16 @@ export const insertClockEventSchema = createInsertSchema(clockEvents).omit({
   createdAt: true,
 });
 
+export const updateClockEventSchema = createInsertSchema(clockEvents).omit({
+  id: true,
+  driverId: true,
+  shiftId: true,
+  type: true,
+  createdAt: true,
+}).partial();
+
 export type InsertClockEvent = z.infer<typeof insertClockEventSchema>;
+export type UpdateClockEvent = z.infer<typeof updateClockEventSchema>;
 export type ClockEvent = typeof clockEvents.$inferSelect;
 
 // ============ Time Tracking Tables ============

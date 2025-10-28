@@ -31,6 +31,7 @@ import {
   type UpdateShift,
   type ClockEvent,
   type InsertClockEvent,
+  type UpdateClockEvent,
   type TimeEntry,
   type InsertTimeEntry,
   type Message,
@@ -100,6 +101,8 @@ export interface IStorage {
 
   // Clock event operations
   createClockEvent(event: InsertClockEvent): Promise<ClockEvent>;
+  updateClockEvent(id: string, updates: UpdateClockEvent): Promise<ClockEvent>;
+  getClockEvent(id: string): Promise<ClockEvent | undefined>;
   getClockEventsByShift(shiftId: string): Promise<ClockEvent[]>;
   getClockEventsByDriver(driverId: string, startDate?: Date, endDate?: Date): Promise<ClockEvent[]>;
   getUnresolvedClockEvents(): Promise<ClockEvent[]>;
@@ -630,6 +633,24 @@ export class DatabaseStorage implements IStorage {
   async createClockEvent(event: InsertClockEvent): Promise<ClockEvent> {
     const [newEvent] = await db.insert(clockEvents).values(event).returning();
     return newEvent;
+  }
+
+  async updateClockEvent(id: string, updates: UpdateClockEvent): Promise<ClockEvent> {
+    const [updated] = await db
+      .update(clockEvents)
+      .set(updates)
+      .where(eq(clockEvents.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getClockEvent(id: string): Promise<ClockEvent | undefined> {
+    const [event] = await db
+      .select()
+      .from(clockEvents)
+      .where(eq(clockEvents.id, id))
+      .limit(1);
+    return event;
   }
 
   async getClockEventsByShift(shiftId: string): Promise<ClockEvent[]> {

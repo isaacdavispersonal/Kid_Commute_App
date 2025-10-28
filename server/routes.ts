@@ -1466,6 +1466,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Update clock event (for drivers to fix mistakes)
+  app.patch(
+    "/api/driver/clock-event/:id",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const eventId = req.params.id;
+        const { updateClockEventSchema } = await import("@shared/schema");
+
+        // Validate request body
+        const result = updateClockEventSchema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({
+            message: "Invalid clock event data",
+            errors: result.error.errors,
+          });
+        }
+
+        // Verify the clock event exists and belongs to this driver
+        const event = await storage.getClockEvent(eventId);
+        if (!event) {
+          return res.status(404).json({ message: "Clock event not found" });
+        }
+        if (event.driverId !== driverId) {
+          return res.status(403).json({ message: "Not authorized to edit this clock event" });
+        }
+
+        // Update the clock event
+        const updatedEvent = await storage.updateClockEvent(eventId, {
+          ...result.data,
+          isResolved: true, // Mark as resolved after editing
+        });
+
+        res.json(updatedEvent);
+      } catch (error) {
+        console.error("Error updating clock event:", error);
+        res.status(500).json({ message: "Failed to update clock event" });
+      }
+    }
+  );
+
   // Get today's route
   app.get(
     "/api/driver/today-route",
