@@ -1,0 +1,141 @@
+Problem Description:Right now, our app only allows admins to assign drivers to certain days with set hour durations (like “8 hours on Monday”), but it does not allow them to specify when those hours start or end.
+Each driver, however, can have multiple shifts in one day — typically a morning route (AM) and an afternoon route (PM), and sometimes a special or extra route later in the day.
+We need a more dynamic scheduling and time tracking system that:
+Allows admins to assign specific start and end times for multiple shifts per driver per day.
+Recognizes and separates morning, afternoon, and extra shifts.
+Lets drivers clock in and out multiple times per day, one for each shift.
+Tracks total hours accurately without overlap or confusion.
+Keeps everything organized so the system (and admins) can clearly see which shift belongs to which route.
+In short, we want to move from a “day-based assignment” system to a “shift-based assignment” system that supports multiple clock-ins per day (morning/afternoon/extra) while staying clean and easy to manage.
+
+Here are some possible solutions, which do you think would be the best solution to fixing this?
+
+task 1 — introduce shift-based model
+
+Add a Shift entity separate from Driver and Route.
+
+Fields: id, driverId, date (YYYY-MM-DD), shiftType (MORNING | AFTERNOON | EXTRA), plannedStart, plannedEnd, routeId (nullable), status (SCHEDULED | ACTIVE | COMPLETED | MISSED).
+
+A driver can have 0–N shifts per day (commonly two: MORNING, AFTERNOON; optionally EXTRA).
+
+Store shift templates per weekday to auto-generate daily shifts (e.g., Mon-Fri: MORNING 06:30–09:30, AFTERNOON 14:00–17:00).
+
+task 2 — admin schedule builder (AM/PM/EXTRA)
+
+Replace “assign days + duration” with a calendar/list that shows three slots per day: MORNING, AFTERNOON, EXTRA.
+
+Admin can: add/remove shifts; set plannedStart/plannedEnd; assign a routeId to a shift; drag-and-drop drivers onto shifts.
+
+Prevent overlapping shifts for the same driver on the same date.
+
+Show badges for unassigned route, missing times, or conflicts.
+
+task 3 — route-to-shift linkage
+
+Update Route to allow assignment to a specific Shift (routeId on Shift is sufficient).
+
+In child/parent views, display the route + shiftType badge (e.g., “Route A — Morning”).
+
+In admin view, highlight children not on any shift-linked route for the selected date.
+
+task 4 — clock events and pairing logic
+
+Add ClockEvent entity: id, driverId, shiftId (nullable until resolved), timestamp, type (IN|OUT), source (USER|AUTO|ADMIN_EDIT), notes.
+
+On driver clock-in from dashboard, require selecting an ACTIVE or SCHEDULED shift for today.
+
+Pair IN→OUT chronologically per shift; if a new IN arrives without a prior OUT for the same shift, prompt to end previous or auto-close it (see failsafes).
+
+task 5 — driver UI for multiple shifts
+
+On the driver dashboard, show today’s shifts as cards: MORNING, AFTERNOON, EXTRA with planned windows.
+
+Each card has a single toggle button that becomes “Clock In” → “Clock Out” and shows a running timer while IN.
+
+Disable clock-in on a second shift if another shift is currently IN. Offer “End current shift” CTA.
+
+task 6 — failsafes and grace rules
+
+Auto soft-clockout rule: if a driver remains IN longer than (plannedEnd + N minutes), create an OUT event with source=AUTO and status note “Soft clock-out”.
+
+Allow manual edits within 24 hours by driver; require admin approval beyond 24 hours.
+
+Detect orphaned INs or OUTs and surface in an admin “Time Exceptions” queue for resolution (merge, discard, or adjust timestamps).
+
+task 7 — calculations and reporting
+
+For each shift, sum paired intervals to get shiftHours; for the day, sum all shiftHours.
+
+Prevent negative or overlapping intervals; clamp OUT before next IN if admin merges intervals.
+
+Export per-driver daily/weekly timesheets grouped by shiftType (separate Morning vs Afternoon totals).
+
+task 8 — validations and conflict detection
+
+Block creating two shifts with overlapping planned windows for the same driver/date.
+
+Warn if admin assigns a driver to two routes that overlap in time.
+
+Warn if a driver tries to clock into a shift more than 30 minutes before plannedStart (configurable), allow with confirmation + flag.
+
+task 9 — data migration and backfill
+
+Migrate existing “assigned days + duration” records into Shift templates per weekday.
+
+Generate upcoming 30 days of shifts from templates; leave routeId null where unknown.
+
+For existing time logs, attempt to infer shift assignment by nearest planned window; otherwise leave shiftId null and queue for admin mapping.
+
+task 10 — APIs and queries
+
+Add endpoints/handlers: createShift, updateShift, listShiftsByDate(driverId?, date), clockIn(shiftId), clockOut(shiftId), listClockEvents(shiftId|driverId|date), resolveException(eventId).
+
+Optimize queries to fetch “today’s shifts + latest clock state” in one call per driver dashboard.
+
+Add index on (driverId, date) for shifts and (driverId, timestamp) for clock events.
+
+task 11 — UI prompts and empty states
+
+If driver has no shift today, show “No scheduled shifts” and a link to contact admin.
+
+If parent’s child has no shift-linked route today, show “Not assigned to a route yet” with date and contact CTA.
+
+If admin views a date with unassigned children, show a banner and a quick action to create/assign shifts.
+
+task 12 — edge cases
+
+Midday EXTRA shift: allow creating EXTRA with custom times; UI should render third card for driver.
+
+Partial day edits: if planned times change while a shift is ACTIVE, keep actuals intact; only adjust validation windows.
+
+Timezone safety: store timestamps in UTC; render per tenant timezone; never mix.
+
+task 13 — audit and permissions
+
+Log who created/edited shifts and who approved manual time edits.
+
+Only admins can edit plannedStart/plannedEnd and approve out-of-window edits.
+
+Drivers can only edit their own clock events within the 24-hour window.
+
+task 14 — testing checklist
+
+A driver completes MORNING and AFTERNOON with clean IN/OUT pairs; totals match expectations.
+
+Driver forgets to clock out; system soft-clocks-out; admin later adjusts within 24 hours.
+
+Admin assigns overlapping shifts; system blocks with error.
+
+EXTRA shift created and correctly appears in dashboard and reports.
+
+Parent sees correct route + shiftType for today.
+
+task 15 — success criteria
+
+Admins can explicitly schedule MORNING/AFTERNOON/EXTRA shifts with start/end times.
+
+Drivers can clock in/out multiple times per day, one shift at a time, with a running timer per shift.
+
+The system reliably recognizes and organizes morning vs afternoon routes via shiftType.
+
+Exceptions are surfaced and resolvable; reports roll up by shiftType and day/week.
