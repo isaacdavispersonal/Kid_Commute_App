@@ -1,17 +1,16 @@
-// Driver dashboard with clock-in/out and route display
+// Driver dashboard with shift-based clock-in/out
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, MapPin, Users, CheckCircle, LogIn, LogOut, Timer } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Clock, MapPin, Users, LogIn, LogOut, Timer, Calendar } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
-import { isUnauthorizedError } from "@/lib/authUtils";
 import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 
-// Hook to calculate elapsed time
 function useElapsedTime(startTime: string | Date | null): string {
   const [elapsed, setElapsed] = useState<string>("00:00:00");
 
@@ -24,7 +23,7 @@ function useElapsedTime(startTime: string | Date | null): string {
     const updateElapsed = () => {
       const start = new Date(startTime).getTime();
       const now = new Date().getTime();
-      const diff = Math.floor((now - start) / 1000); // difference in seconds
+      const diff = Math.floor((now - start) / 1000);
 
       const hours = Math.floor(diff / 3600);
       const minutes = Math.floor((diff % 3600) / 60);
@@ -37,55 +36,64 @@ function useElapsedTime(startTime: string | Date | null): string {
       );
     };
 
-    // Update immediately
     updateElapsed();
-
-    // Then update every second
     const interval = setInterval(updateElapsed, 1000);
-
     return () => clearInterval(interval);
   }, [startTime]);
 
   return elapsed;
 }
 
-export default function DriverDashboard() {
+interface EnrichedShift {
+  id: string;
+  driverId: string;
+  routeId: string | null;
+  vehicleId: string | null;
+  date: string;
+  shiftType: "MORNING" | "AFTERNOON" | "EXTRA";
+  status: "SCHEDULED" | "ACTIVE" | "COMPLETED" | "MISSED";
+  plannedStart: string;
+  plannedEnd: string;
+  notes: string | null;
+  routeName: string;
+  vehicleName: string;
+  vehiclePlate: string;
+  clockEvents: Array<{
+    id: string;
+    type: "IN" | "OUT";
+    timestamp: string;
+    source: string;
+  }>;
+}
+
+const SHIFT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  MORNING: { label: "Morning", color: "bg-blue-500/10 text-blue-700 dark:text-blue-400" },
+  AFTERNOON: { label: "Afternoon", color: "bg-orange-500/10 text-orange-700 dark:text-orange-400" },
+  EXTRA: { label: "Extra", color: "bg-purple-500/10 text-purple-700 dark:text-purple-400" },
+};
+
+function ShiftCard({ shift }: { shift: EnrichedShift }) {
   const { toast } = useToast();
-
-  const { data: currentTimeEntry, isLoading: timeLoading } = useQuery({
-    queryKey: ["/api/driver/current-time-entry"],
-  });
-
-  const { data: todayRoute, isLoading: routeLoading } = useQuery({
-    queryKey: ["/api/driver/today-route"],
-  });
+  
+  const lastClockEvent = shift.clockEvents[shift.clockEvents.length - 1];
+  const isClockedIn = lastClockEvent?.type === "IN";
+  const elapsedTime = useElapsedTime(isClockedIn ? lastClockEvent.timestamp : null);
 
   const clockInMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", "/api/driver/clock-in", {});
+      return await apiRequest("POST", `/api/driver/shifts/${shift.id}/clock-in`, {});
     },
     onSuccess: async () => {
-      await queryClient.refetchQueries({ queryKey: ["/api/driver/current-time-entry"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/driver/today-shifts"] });
       toast({
         title: "Clocked In",
-        description: "Your shift has started successfully",
+        description: `Clocked in for ${SHIFT_TYPE_LABELS[shift.shiftType].label} shift`,
       });
     },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to clock in. Please try again.",
+        description: error.message || "Failed to clock in",
         variant: "destructive",
       });
     },
@@ -93,188 +101,174 @@ export default function DriverDashboard() {
 
   const clockOutMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", "/api/driver/clock-out", {});
+      return await apiRequest("POST", `/api/driver/shifts/${shift.id}/clock-out`, {});
     },
     onSuccess: async () => {
-      await queryClient.refetchQueries({ queryKey: ["/api/driver/current-time-entry"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/driver/today-shifts"] });
       toast({
         title: "Clocked Out",
-        description: "Your shift has ended successfully",
+        description: `Clocked out from ${SHIFT_TYPE_LABELS[shift.shiftType].label} shift`,
       });
     },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to clock out. Please try again.",
+        description: error.message || "Failed to clock out",
         variant: "destructive",
       });
     },
   });
 
-  const isClockedIn = currentTimeEntry && !currentTimeEntry.clockOut;
-  const elapsedTime = useElapsedTime(isClockedIn ? currentTimeEntry.clockIn : null);
+  return (
+    <Card className={isClockedIn ? "border-primary/50 bg-gradient-to-br from-card to-primary/5" : ""}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Badge className={SHIFT_TYPE_LABELS[shift.shiftType].color}>
+              {SHIFT_TYPE_LABELS[shift.shiftType].label}
+            </Badge>
+            {shift.status === "ACTIVE" && <StatusBadge status="active" className="text-xs" />}
+            {shift.status === "COMPLETED" && <StatusBadge status="offline" className="text-xs" />}
+          </div>
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <Clock className="h-4 w-4" />
+            <span>{shift.plannedStart} - {shift.plannedEnd}</span>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">{shift.routeName}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Users className="h-4 w-4" />
+            <span>{shift.vehicleName} - {shift.vehiclePlate}</span>
+          </div>
+        </div>
 
-  if (timeLoading || routeLoading) {
-    return <DriverDashboardSkeleton />;
+        {isClockedIn && (
+          <div className="p-3 rounded-md bg-primary/10 border border-primary/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Elapsed Time</p>
+                <p className="text-xl font-bold text-primary font-mono" data-testid={`elapsed-time-${shift.id}`}>
+                  {elapsedTime}
+                </p>
+              </div>
+              <Timer className="h-5 w-5 text-primary" />
+            </div>
+          </div>
+        )}
+
+        {shift.clockEvents.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Clock Events</p>
+            {shift.clockEvents.slice(-3).map((event) => (
+              <div key={event.id} className="flex items-center justify-between text-xs p-2 rounded bg-muted/50">
+                <span className={event.type === "IN" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                  {event.type === "IN" ? "Clock In" : "Clock Out"}
+                </span>
+                <span className="text-muted-foreground">
+                  {new Date(event.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          {isClockedIn ? (
+            <Button
+              className="flex-1"
+              variant="destructive"
+              onClick={() => clockOutMutation.mutate()}
+              disabled={clockOutMutation.isPending}
+              data-testid={`button-clock-out-${shift.id}`}
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Clock Out
+            </Button>
+          ) : shift.status !== "COMPLETED" ? (
+            <Button
+              className="flex-1"
+              onClick={() => clockInMutation.mutate()}
+              disabled={clockInMutation.isPending}
+              data-testid={`button-clock-in-${shift.id}`}
+            >
+              <LogIn className="h-4 w-4 mr-2" />
+              Clock In
+            </Button>
+          ) : (
+            <div className="flex-1 text-center text-sm text-muted-foreground py-2">
+              Shift Completed
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function DriverDashboard() {
+  const { data: todayShifts, isLoading } = useQuery<EnrichedShift[]>({
+    queryKey: ["/api/driver/today-shifts"],
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-12 w-64" />
+        <Skeleton className="h-48" />
+        <Skeleton className="h-48" />
+      </div>
+    );
   }
+
+  const sortedShifts = todayShifts?.sort((a, b) => {
+    const order = { MORNING: 0, AFTERNOON: 1, EXTRA: 2 };
+    return order[a.shiftType] - order[b.shiftType];
+  }) || [];
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Driver Dashboard</h1>
+        <h1 className="text-2xl font-semibold mb-1" data-testid="title-dashboard">Driver Dashboard</h1>
         <p className="text-sm text-muted-foreground">
-          Manage your shifts and routes
+          Manage your shifts and clock in/out for each shift
         </p>
       </div>
 
       <IncompleteProfileBanner />
 
-      <Card className="border-primary/20 bg-gradient-to-br from-card to-primary/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Time Tracking
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex-1">
-              <p className="text-sm text-muted-foreground mb-1">Current Status</p>
-              {isClockedIn ? (
-                <div className="space-y-2">
-                  <StatusBadge status="active" className="text-sm" />
-                  <p className="text-xs text-muted-foreground">
-                    Clocked in at{" "}
-                    {new Date(currentTimeEntry.clockIn).toLocaleTimeString()}
-                  </p>
-                  <div className="flex items-center gap-2 mt-3 p-3 rounded-md bg-primary/10 border border-primary/20">
-                    <Timer className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Elapsed Time</p>
-                      <p className="text-2xl font-bold text-primary font-mono" data-testid="elapsed-time">
-                        {elapsedTime}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <StatusBadge status="offline" />
-              )}
-            </div>
-            {isClockedIn ? (
-              <Button
-                size="lg"
-                variant="destructive"
-                onClick={() => clockOutMutation.mutate()}
-                disabled={clockOutMutation.isPending}
-                data-testid="button-clock-out"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Clock Out
-              </Button>
-            ) : (
-              <Button
-                size="lg"
-                onClick={() => clockInMutation.mutate()}
-                disabled={clockInMutation.isPending}
-                data-testid="button-clock-in"
-              >
-                <LogIn className="h-4 w-4 mr-2" />
-                Clock In
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-2 p-4 rounded-md bg-muted/30 border">
+        <Calendar className="h-5 w-5 text-primary" />
+        <div>
+          <p className="font-medium">Today's Shifts</p>
+          <p className="text-sm text-muted-foreground">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Today's Route
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {todayRoute ? (
-            <div className="space-y-4">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="font-semibold text-base">{todayRoute.routeName}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {todayRoute.startTime} - {todayRoute.endTime}
-                  </p>
-                </div>
-                <StatusBadge status="active" />
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Stops ({todayRoute.stops?.length || 0})
-                </p>
-                <div className="space-y-2">
-                  {todayRoute.stops && todayRoute.stops.length > 0 ? (
-                    todayRoute.stops.map((stop: any, index: number) => (
-                      <div
-                        key={stop.id}
-                        className="flex items-center gap-3 p-3 rounded-md bg-accent/50"
-                        data-testid={`stop-item-${index}`}
-                      >
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <span className="text-sm font-semibold text-primary">
-                            {index + 1}
-                          </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm">{stop.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {stop.address}
-                          </p>
-                        </div>
-                        <p className="text-sm font-medium whitespace-nowrap">
-                          {stop.scheduledTime}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No stops scheduled
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <CheckCircle className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">
-                No route assigned for today
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function DriverDashboardSkeleton() {
-  return (
-    <div className="space-y-6">
-      <Skeleton className="h-12 w-64" />
-      <Skeleton className="h-40" />
-      <Skeleton className="h-96" />
+      {sortedShifts.length > 0 ? (
+        <div className="grid gap-4">
+          {sortedShifts.map((shift) => (
+            <ShiftCard key={shift.id} shift={shift} />
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Shifts Today</h3>
+            <p className="text-sm text-muted-foreground">
+              You don't have any shifts scheduled for today. Check back tomorrow or contact your administrator.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
