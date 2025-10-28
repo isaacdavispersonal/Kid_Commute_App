@@ -379,7 +379,7 @@ export class DatabaseStorage implements IStorage {
   // ============ Driver assignment operations ============
 
   async getAllDriverAssignments(): Promise<DriverAssignment[]> {
-    return await db.select().from(driverAssignments).orderBy(driverAssignments.dayOfWeek);
+    return await db.select().from(driverAssignments).orderBy(driverAssignments.date);
   }
 
   async getDriverAssignmentsByDriver(driverId: string): Promise<DriverAssignment[]> {
@@ -387,18 +387,18 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(driverAssignments)
       .where(eq(driverAssignments.driverId, driverId))
-      .orderBy(driverAssignments.dayOfWeek);
+      .orderBy(driverAssignments.date);
   }
 
   async getDriverAssignmentForToday(driverId: string): Promise<DriverAssignment | undefined> {
-    const today = new Date().getDay();
+    const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
     const [assignment] = await db
       .select()
       .from(driverAssignments)
       .where(
         and(
           eq(driverAssignments.driverId, driverId),
-          eq(driverAssignments.dayOfWeek, today),
+          eq(driverAssignments.date, today),
           eq(driverAssignments.isActive, true)
         )
       );

@@ -214,7 +214,7 @@ export const driverAssignments = pgTable("driver_assignments", {
   vehicleId: varchar("vehicle_id")
     .notNull()
     .references(() => vehicles.id, { onDelete: "cascade" }),
-  dayOfWeek: integer("day_of_week").notNull(),
+  date: varchar("date").notNull(), // Format: YYYY-MM-DD
   startTime: varchar("start_time").notNull(),
   endTime: varchar("end_time").notNull(),
   isActive: boolean("is_active").notNull().default(true),

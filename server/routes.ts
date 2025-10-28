@@ -674,6 +674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireRole("admin"),
     async (req: any, res) => {
       try {
+        const { insertDriverAssignmentSchema } = await import("@shared/schema");
         const validatedData = insertDriverAssignmentSchema.parse(req.body);
         
         // Validate driver exists and has driver role
@@ -1056,11 +1057,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Get vehicle assigned to this route (simplified)
+        const today = new Date().toISOString().split('T')[0];
         const assignments = await storage.getAllDriverAssignments();
         const todayAssignment = assignments.find(
           (a) =>
             a.routeId === students[0].assignedRouteId &&
-            a.dayOfWeek === new Date().getDay() &&
+            a.date === today &&
             a.isActive
         );
 

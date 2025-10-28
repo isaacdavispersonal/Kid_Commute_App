@@ -1,11 +1,10 @@
-// Admin schedule management page with interactive weekly calendar
+// Admin monthly calendar schedule management
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Clock, Plus, Edit, Trash2, User, Route as RouteIcon } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Edit, Trash2, User } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/status-badge";
 import {
   Dialog,
   DialogContent,
@@ -45,22 +44,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const DAYS_OF_WEEK = [
-  { value: 0, label: "Sunday", short: "Sun" },
-  { value: 1, label: "Monday", short: "Mon" },
-  { value: 2, label: "Tuesday", short: "Tue" },
-  { value: 3, label: "Wednesday", short: "Wed" },
-  { value: 4, label: "Thursday", short: "Thu" },
-  { value: 5, label: "Friday", short: "Fri" },
-  { value: 6, label: "Saturday", short: "Sat" },
-];
-
 interface EnrichedAssignment {
   id: string;
   driverId: string;
   routeId: string;
   vehicleId: string;
-  dayOfWeek: number;
+  date: string; // YYYY-MM-DD
   startTime: string;
   endTime: string;
   isActive: boolean;
@@ -91,19 +80,50 @@ interface Vehicle {
 }
 
 const formSchema = insertDriverAssignmentSchema.extend({
-  dayOfWeek: z.number().min(0).max(6),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
   startTime: z.string().min(1, "Start time is required"),
   endTime: z.string().min(1, "End time is required"),
 });
 
 type FormData = z.infer<typeof formSchema>;
 
+function getDaysInMonth(year: number, month: number): Date[] {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const days: Date[] = [];
+  
+  // Add empty slots for days before month starts
+  const startDayOfWeek = firstDay.getDay();
+  for (let i = 0; i < startDayOfWeek; i++) {
+    days.push(new Date(0)); // Placeholder
+  }
+  
+  // Add all days in month
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    days.push(new Date(year, month, day));
+  }
+  
+  return days;
+}
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 export default function AdminSchedule() {
   const { toast } = useToast();
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingAssignment, setEditingAssignment] = useState<EnrichedAssignment | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<EnrichedAssignment | null>(null);
+
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -111,7 +131,7 @@ export default function AdminSchedule() {
       driverId: "",
       routeId: "",
       vehicleId: "",
-      dayOfWeek: 1,
+      date: "",
       startTime: "07:00",
       endTime: "15:00",
       isActive: true,
@@ -202,14 +222,14 @@ export default function AdminSchedule() {
     },
   });
 
-  const handleAddAssignment = (dayOfWeek: number) => {
-    setSelectedDay(dayOfWeek);
+  const handleAddAssignment = (date: string) => {
+    setSelectedDate(date);
     setEditingAssignment(null);
     form.reset({
       driverId: "",
       routeId: "",
       vehicleId: "",
-      dayOfWeek,
+      date,
       startTime: "07:00",
       endTime: "15:00",
       isActive: true,
@@ -219,12 +239,12 @@ export default function AdminSchedule() {
 
   const handleEditAssignment = (assignment: EnrichedAssignment) => {
     setEditingAssignment(assignment);
-    setSelectedDay(assignment.dayOfWeek);
+    setSelectedDate(assignment.date);
     form.reset({
       driverId: assignment.driverId,
       routeId: assignment.routeId,
       vehicleId: assignment.vehicleId,
-      dayOfWeek: assignment.dayOfWeek,
+      date: assignment.date,
       startTime: assignment.startTime,
       endTime: assignment.endTime,
       isActive: assignment.isActive,
@@ -235,7 +255,7 @@ export default function AdminSchedule() {
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setEditingAssignment(null);
-    setSelectedDay(null);
+    setSelectedDate(null);
     form.reset();
   };
 
@@ -245,6 +265,20 @@ export default function AdminSchedule() {
     } else {
       createMutation.mutate(data);
     }
+  };
+
+  const nextMonth = () => {
+    setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
+  };
+
+  const prevMonth = () => {
+    setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
+  };
+
+  const getAssignmentsForDate = (date: Date): EnrichedAssignment[] => {
+    if (date.getTime() === 0) return []; // Placeholder date
+    const dateStr = date.toISOString().split('T')[0];
+    return schedules?.filter(s => s.date === dateStr) || [];
   };
 
   if (isLoading) {
@@ -261,110 +295,131 @@ export default function AdminSchedule() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1" data-testid="title-schedule">
-            Weekly Schedule
+            Monthly Schedule
           </h1>
           <p className="text-sm text-muted-foreground">
-            View and manage driver assignments by day
+            View and manage driver assignments by date
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {DAYS_OF_WEEK.map((day) => {
-          const daySchedules = schedules?.filter(
-            (s) => s.dayOfWeek === day.value
-          ) || [];
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xl flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              {MONTH_NAMES[currentMonth]} {currentYear}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={prevMonth} data-testid="button-prev-month">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" onClick={nextMonth} data-testid="button-next-month">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* Day names header */}
+          <div className="grid grid-cols-7 gap-2 mb-2">
+            {DAY_NAMES.map(day => (
+              <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
+                {day}
+              </div>
+            ))}
+          </div>
 
-          return (
-            <Card key={day.value} data-testid={`day-card-${day.value}`}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between gap-4">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <CalendarIcon className="h-5 w-5" />
-                    {day.label}
-                  </CardTitle>
-                  <Button
-                    size="sm"
-                    onClick={() => handleAddAssignment(day.value)}
-                    data-testid={`button-add-${day.value}`}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Assign Driver
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {daySchedules.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {daySchedules.map((schedule) => (
-                      <div
-                        key={schedule.id}
-                        className="p-4 rounded-md bg-accent/50 hover-elevate"
-                        data-testid={`schedule-${schedule.id}`}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-primary" />
-                            <p className="font-semibold text-sm">
-                              {schedule.driverName}
-                            </p>
-                          </div>
-                          <StatusBadge
-                            status={schedule.isActive ? "active" : "inactive"}
-                          />
-                        </div>
+          {/* Calendar grid */}
+          <div className="grid grid-cols-7 gap-2">
+            {daysInMonth.map((date, index) => {
+              const isPlaceholder = date.getTime() === 0;
+              const dateStr = isPlaceholder ? "" : date.toISOString().split('T')[0];
+              const dayAssignments = isPlaceholder ? [] : getAssignmentsForDate(date);
+              const isToday = !isPlaceholder && dateStr === new Date().toISOString().split('T')[0];
 
-                        <div className="space-y-1.5 mb-3">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <RouteIcon className="h-3 w-3" />
-                            <span>{schedule.routeName}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            <span>{schedule.startTime} - {schedule.endTime}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleEditAssignment(schedule)}
-                            className="flex-1"
-                            data-testid={`button-edit-${schedule.id}`}
-                          >
-                            <Edit className="h-3 w-3 mr-1" />
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setDeleteDialog(schedule)}
-                            data-testid={`button-delete-${schedule.id}`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
+              return (
+                <div
+                  key={index}
+                  className={`min-h-[120px] p-2 rounded-md border ${
+                    isPlaceholder ? "bg-muted/20" : "bg-card hover-elevate"
+                  } ${isToday ? "border-primary" : ""}`}
+                  data-testid={isPlaceholder ? `placeholder-${index}` : `day-${dateStr}`}
+                >
+                  {!isPlaceholder && (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-sm font-medium ${isToday ? "text-primary" : ""}`}>
+                          {date.getDate()}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0"
+                          onClick={() => handleAddAssignment(dateStr)}
+                          data-testid={`button-add-${dateStr}`}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8" data-testid={`no-assignments-${day.value}`}>
-                    No assignments for {day.label}. Click "Assign Driver" to add one.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+
+                      <div className="space-y-1">
+                        {dayAssignments.map((assignment) => (
+                          <div
+                            key={assignment.id}
+                            className="text-xs p-2 rounded bg-accent/50 hover-elevate cursor-pointer"
+                            onClick={() => handleEditAssignment(assignment)}
+                            data-testid={`assignment-${assignment.id}`}
+                          >
+                            <div className="flex items-start justify-between gap-1 mb-1">
+                              <div className="flex items-center gap-1 min-w-0 flex-1">
+                                <User className="h-3 w-3 flex-shrink-0" />
+                                <span className="font-medium truncate">
+                                  {assignment.driverName.split(' ')[0]}
+                                </span>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-4 w-4 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteDialog(assignment);
+                                }}
+                                data-testid={`button-delete-${assignment.id}`}
+                              >
+                                <Trash2 className="h-2.5 w-2.5" />
+                              </Button>
+                            </div>
+                            <div className="text-muted-foreground truncate">
+                              {assignment.routeName}
+                            </div>
+                            <div className="text-muted-foreground">
+                              {assignment.startTime}
+                            </div>
+                          </div>
+                        ))}
+                        {dayAssignments.length === 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-2">
+                            No assignments
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle data-testid="dialog-title">
               {editingAssignment ? "Edit Driver Assignment" : "New Driver Assignment"}
-              {selectedDay !== null && ` - ${DAYS_OF_WEEK[selectedDay].label}`}
+              {selectedDate && ` - ${new Date(selectedDate + 'T00:00:00').toLocaleDateString()}`}
             </DialogTitle>
           </DialogHeader>
 
@@ -535,7 +590,7 @@ export default function AdminSchedule() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Driver Assignment</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the assignment for {deleteDialog?.driverName} on {deleteDialog && DAYS_OF_WEEK[deleteDialog.dayOfWeek]?.label}? This action cannot be undone.
+              Are you sure you want to delete the assignment for {deleteDialog?.driverName} on {deleteDialog && new Date(deleteDialog.date + 'T00:00:00').toLocaleDateString()}? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

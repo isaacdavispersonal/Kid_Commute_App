@@ -5,21 +5,11 @@ import { Calendar as CalendarIcon, Clock, Route as RouteIcon, Car } from "lucide
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/status-badge";
 
-const DAYS_OF_WEEK = [
-  { value: 0, label: "Sunday", short: "Sun" },
-  { value: 1, label: "Monday", short: "Mon" },
-  { value: 2, label: "Tuesday", short: "Tue" },
-  { value: 3, label: "Wednesday", short: "Wed" },
-  { value: 4, label: "Thursday", short: "Thu" },
-  { value: 5, label: "Friday", short: "Fri" },
-  { value: 6, label: "Saturday", short: "Sat" },
-];
-
 interface ScheduleAssignment {
   id: string;
   routeId: string;
   vehicleId: string;
-  dayOfWeek: number;
+  date: string; // YYYY-MM-DD
   startTime: string;
   endTime: string;
   isActive: boolean;
@@ -29,10 +19,31 @@ interface ScheduleAssignment {
   stops: any[];
 }
 
+function getWeekDates(): Date[] {
+  const today = new Date();
+  const currentDay = today.getDay(); // 0 = Sunday, 6 = Saturday
+  
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - currentDay); // Go to Sunday
+  
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + i);
+    dates.push(date);
+  }
+  
+  return dates;
+}
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 export default function DriverSchedule() {
   const { data: schedule, isLoading } = useQuery<ScheduleAssignment[]>({
     queryKey: ["/api/driver/schedule"],
   });
+
+  const weekDates = getWeekDates();
 
   if (isLoading) {
     return (
@@ -43,6 +54,13 @@ export default function DriverSchedule() {
     );
   }
 
+  const getAssignmentsForDate = (date: Date): ScheduleAssignment[] => {
+    const dateStr = date.toISOString().split('T')[0];
+    return schedule?.filter(s => s.date === dateStr) || [];
+  };
+
+  const today = new Date().toISOString().split('T')[0];
+
   return (
     <div className="space-y-6">
       <div>
@@ -50,23 +68,34 @@ export default function DriverSchedule() {
           My Schedule
         </h1>
         <p className="text-sm text-muted-foreground">
-          View your weekly route assignments
+          View your route assignments for this week
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {DAYS_OF_WEEK.map((day) => {
-          const dayAssignments = schedule?.filter(
-            (s) => s.dayOfWeek === day.value
-          ) || [];
+        {weekDates.map((date, dayIndex) => {
+          const dateStr = date.toISOString().split('T')[0];
+          const dayAssignments = getAssignmentsForDate(date);
+          const isToday = dateStr === today;
 
           return (
-            <Card key={day.value} data-testid={`day-card-${day.value}`}>
+            <Card 
+              key={dayIndex} 
+              data-testid={`day-card-${dayIndex}`}
+              className={isToday ? "border-primary" : ""}
+            >
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <CalendarIcon className="h-5 w-5" />
-                    {day.label}
+                    <div>
+                      <div className={`${isToday ? "text-primary" : ""}`}>
+                        {DAY_NAMES[dayIndex]}
+                      </div>
+                      <div className="text-sm font-normal text-muted-foreground">
+                        {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    </div>
                   </div>
                   {dayAssignments.length > 0 && (
                     <span className="text-sm font-normal text-muted-foreground">
@@ -135,8 +164,8 @@ export default function DriverSchedule() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8" data-testid={`no-assignments-${day.value}`}>
-                    No routes assigned for {day.label}
+                  <p className="text-sm text-muted-foreground text-center py-8" data-testid={`no-assignments-${dayIndex}`}>
+                    No routes assigned for {DAY_NAMES[dayIndex]}
                   </p>
                 )}
               </CardContent>
