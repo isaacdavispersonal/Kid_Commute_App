@@ -877,6 +877,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get driver's weekly schedule
+  app.get(
+    "/api/driver/schedule",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const allAssignments = await storage.getAllDriverAssignments();
+        
+        // Filter assignments for this driver
+        const driverAssignments = allAssignments.filter(
+          a => a.driverId === driverId && a.isActive
+        );
+
+        // Enrich with route and vehicle information
+        const enrichedAssignments = await Promise.all(
+          driverAssignments.map(async (assignment) => {
+            const route = await storage.getRoute(assignment.routeId);
+            const vehicle = await storage.getVehicle(assignment.vehicleId);
+            const stops = route ? await storage.getRouteStops(route.id) : [];
+            
+            return {
+              ...assignment,
+              routeName: route?.name || "Unknown",
+              vehicleName: vehicle?.name || "Unknown",
+              vehiclePlate: vehicle?.plateNumber || "Unknown",
+              stops,
+            };
+          })
+        );
+
+        res.json(enrichedAssignments);
+      } catch (error) {
+        console.error("Error fetching driver schedule:", error);
+        res.status(500).json({ message: "Failed to fetch schedule" });
+      }
+    }
+  );
+
   // Submit vehicle inspection
   app.post(
     "/api/driver/inspection",

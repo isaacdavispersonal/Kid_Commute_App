@@ -96,9 +96,9 @@ const driverMenuItems = [
     icon: RouteIcon,
   },
   {
-    title: "Time Tracking",
-    url: "/driver/time",
-    icon: Clock,
+    title: "My Schedule",
+    url: "/driver/schedule",
+    icon: Calendar,
   },
   {
     title: "Messages",
