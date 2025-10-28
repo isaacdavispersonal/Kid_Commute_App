@@ -1,0 +1,123 @@
+task 1 — make phone the primary identifier
+
+Use phone numbers as the primary login/registration identifier; email becomes optional.
+
+Normalize and store all phone numbers in E.164 format; enforce uniqueness on User.phone.
+
+Add User.phoneVerified (bool) and require verification before any role activation or data access.
+
+task 2 — household model (one phone → one household)
+
+Create Household entity keyed by a verified phone number: id, primaryPhone (E.164), createdAt, notes.
+
+On parent signup with a verified phone, auto-create/find the Household and link the user: HouseholdMember { householdId, userId, roleInHousehold (PRIMARY|SECONDARY) }.
+
+All children assigned to that phone inherit the same householdId.
+
+task 3 — student records keyed to household phone
+
+Add Student.guardianPhones: string[] (E.164) and student.householdId (derived from primary guardian phone).
+
+Admin “Add Student” requires at least one guardian phone; disallow saving a student with no guardian phone.
+
+On parent signup/verification: auto-link all students whose guardianPhones contains that phone (same household).
+
+task 4 — SMS-first verification (OTP)
+
+Implement SMS OTP (6 digits, TTL 10 minutes, 5 attempts, sliding rate limits per IP/device/phone).
+
+Store OTP hashes (salted) and validate with constant-time comparison; never store raw codes.
+
+Mark User.phoneVerified = true after successful OTP; only then create/link Household and activate role flows.
+
+task 5 — parent invite via phone (optional but supported)
+
+Keep an optional ParentInvite for explicit flows: code, phone, studentId, expiresAt, maxClaims.
+
+If present, redemption must match both phone and code; else fallback to phone-only auto-link (when admin trusts phone mapping).
+
+Upon redemption or phone-only verification, link to the matching student(s) and set User.role = PARENT, User.status = ACTIVE.
+
+task 6 — prevent unauthorized child linking
+
+Remove any “search by name / free add child” UX for parents.
+
+Only link students by exact phone match (or explicit admin-issued invite).
+
+If a parent’s verified phone does not match any student: show “No students found for this phone” and allow Request Review → sends admin a task to verify/update guardianPhones.
+
+task 7 — multi-child & multi-guardian support
+
+Auto-link all students sharing the verified phone into the same Household.
+
+Support multiple guardians by allowing multiple phones in Student.guardianPhones.
+
+If a second guardian verifies a different phone that exists in guardianPhones, link them to the same student and household (or create a sibling household link if configured).
+
+task 8 — driver onboarding (no child dependency)
+
+Drivers also register with phone + OTP, but follow a separate flow:
+
+Admin-provisioned: send DriverInvite via phone; upon redemption, set role=DRIVER, status=ACTIVE.
+
+Self-apply: driver signs up, role=DRIVER, status=PENDING_VERIFICATION; admin approves to activate.
+
+Allow a single user to hold both roles (PARENT & DRIVER) behind explicit admin approval; keep dashboards role-aware.
+
+task 9 — phone change & edge cases
+
+Add Phone Change Request: parent submits new phone; require OTP on new phone + admin approval to migrate householdId links.
+
+Support shared custody: allow multiple guardianPhones on a student (each must OTP-verify to link).
+
+Handle landline/VoIP: provide fallback email verification + admin review flag when SMS fails.
+
+task 10 — database/schema updates
+
+User { id, phone (E.164, unique), phoneVerified, email?, role, status }.
+
+Household { id, primaryPhone (unique), createdAt }.
+
+HouseholdMember { householdId, userId, roleInHousehold } (composite unique).
+
+Student { id, firstName, lastName, guardianPhones: string[], householdId, routeId? }.
+
+ParentInvite { id, phone, studentId, codeHash, expiresAt, maxClaims, claimsUsed, status }.
+
+Indexes: User.phone, Student.guardianPhones (GIN/array), Student.householdId, ParentInvite.phone, ParentInvite.codeHash.
+
+task 11 — APIs
+
+POST /auth/request-otp { phone } → send SMS.
+
+POST /auth/verify-otp { phone, code } → verify, upsert User, link/create Household.
+
+POST /invites/parent { studentId, phone } (admin).
+
+POST /auth/redeem-parent { phone, code } → link student(s) and activate parent.
+
+POST /invites/driver { phone } (admin).
+
+POST /auth/redeem-driver { phone, code } → activate driver.
+
+POST /requests/phone-change { newPhone } (parent) → admin approve endpoint: POST /admin/approve-phone-change.
+
+task 12 — UI/UX flows
+
+Landing: two CTAs → “I’m a Parent” / “I’m a Driver”.
+
+Parent path: phone → OTP → (optional code) → auto-link students with matching phone → show kids.
+
+Driver path: phone → OTP → redeem driver invite or await admin approval → show driver dashboard.
+
+Empty state for parents with no matches: “No students found for this phone” + Request Review button.
+
+Settings: show current verified phone; “Change phone” guarded by OTP + admin approval.
+
+task 13 — migration plan
+
+Backfill guardianPhones for existing students from current records; normalize to E.164.
+
+Create Households for distinct phones and link existing parent users where phone known.
+
+Disable legacy parent → free-create-child flows after migration completion.
