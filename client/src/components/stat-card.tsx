@@ -25,9 +25,9 @@ export function StatCard({
 }: StatCardProps) {
   return (
     <Card className={cn("hover-elevate", className)} data-testid={`card-stat-${title.toLowerCase().replace(/\s+/g, "-")}`}>
-      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+      <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
         <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        <Icon className={cn("h-5 w-5", iconColor)} />
+        <Icon className={cn("h-5 w-5 flex-shrink-0", iconColor)} />
       </CardHeader>
       <CardContent>
         <div className="flex items-baseline justify-between gap-2">
