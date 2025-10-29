@@ -64,11 +64,7 @@ export default function AdminMessagesPage() {
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async ({ recipientId, content }: { recipientId: string; content: string }) => {
-      return apiRequest("/api/admin/send-message", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipientId, content }),
-      });
+      return apiRequest("POST", "/api/admin/send-message", { recipientId, content });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/direct-messages"] });
