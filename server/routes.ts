@@ -2154,6 +2154,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ============ Parent Messaging routes ============
 
+  // Get drivers currently assigned to parent's children's routes
+  app.get(
+    "/api/parent/assigned-drivers",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        const drivers = await storage.getActiveDriversForParent(parentId);
+        res.json(drivers);
+      } catch (error) {
+        console.error("Error fetching assigned drivers:", error);
+        res.status(500).json({ message: "Failed to fetch assigned drivers" });
+      }
+    }
+  );
+
   // Get driver info for parent
   app.get(
     "/api/parent/driver-info/:driverId",
@@ -2267,7 +2284,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ============ Driver Messaging routes ============
 
-  // Get conversations (parents who have messaged this driver)
+  // Get all parents whose children are on driver's routes (can message any of them)
+  app.get(
+    "/api/driver/messageable-parents",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const parents = await storage.getMessageableParentsForDriver(driverId);
+        res.json(parents);
+      } catch (error) {
+        console.error("Error fetching messageable parents:", error);
+        res.status(500).json({ message: "Failed to fetch messageable parents" });
+      }
+    }
+  );
+
+  // Get conversations (parents who have messaged this driver) - legacy endpoint for active conversations
   app.get(
     "/api/driver/conversations",
     isAuthenticated,
@@ -2330,12 +2364,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Recipient ID required" });
         }
 
-        // Verify this is a response-only conversation (parent must have messaged driver first)
-        const existingMessages = await storage.getMessagesBetweenUsers(senderId, recipientId);
-        const parentInitiated = existingMessages.some((msg: any) => msg.senderId === recipientId);
+        // Verify driver can message this parent (parent's child is on driver's route)
+        const messageableParents = await storage.getMessageableParentsForDriver(senderId);
+        const canMessage = messageableParents.some((parent: any) => parent.id === recipientId);
         
-        if (!parentInitiated) {
-          return res.status(403).json({ message: "You can only respond to messages from parents. Parents must initiate conversations." });
+        if (!canMessage) {
+          return res.status(403).json({ message: "You can only message parents whose children are on your assigned routes" });
         }
 
         const message = await storage.createMessage({
