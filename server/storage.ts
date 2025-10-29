@@ -50,7 +50,7 @@ import {
   type InsertHouseholdMember,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, or, sql, gte, lte } from "drizzle-orm";
+import { eq, and, desc, or, sql, gte, lte, ne } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "./errors";
 
 export interface IStorage {
@@ -1289,6 +1289,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(incidents)
+      .where(ne(incidents.status, "resolved"))
       .orderBy(desc(incidents.createdAt))
       .limit(limit);
   }
