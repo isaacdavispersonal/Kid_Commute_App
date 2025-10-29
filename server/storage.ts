@@ -1061,6 +1061,197 @@ export class DatabaseStorage implements IStorage {
     return Array.from(conversationMap.values());
   }
 
+  // Get parents whose children are on routes this driver is assigned to
+  async getMessageableParentsForDriver(driverId: string): Promise<any[]> {
+    // Get driver's active routes from driver assignments
+    const driverRoutes = await db
+      .select({ routeId: driverAssignments.routeId })
+      .from(driverAssignments)
+      .where(
+        and(
+          eq(driverAssignments.driverId, driverId),
+          eq(driverAssignments.isActive, true)
+        )
+      );
+
+    const routeIds = driverRoutes.map(r => r.routeId);
+    if (routeIds.length === 0) return [];
+
+    // Get students on these routes
+    const studentsOnRoutes = await db
+      .select()
+      .from(students)
+      .where(
+        or(...routeIds.map(routeId => eq(students.assignedRouteId, routeId)))
+      );
+
+    // Get unique household IDs
+    const householdIdsSet = new Set(studentsOnRoutes.map(s => s.householdId).filter(Boolean));
+    const householdIds = Array.from(householdIdsSet);
+    if (householdIds.length === 0) return [];
+
+    // Get household members who are parents
+    const parentMembers = await db
+      .select()
+      .from(householdMembers)
+      .where(
+        or(...householdIds.map(hId => eq(householdMembers.householdId, hId!)))
+      );
+
+    const parentUserIdsSet = new Set(parentMembers.map(pm => pm.userId));
+    const parentUserIds = Array.from(parentUserIdsSet);
+    if (parentUserIds.length === 0) return [];
+
+    // Get parent user details
+    const parents = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          or(...parentUserIds.map(pId => eq(users.id, pId))),
+          eq(users.role, "parent")
+        )
+      );
+
+    // Build result with child context
+    const result = [];
+    for (const parent of parents) {
+      // Get parent's household memberships
+      const parentHouseholds = parentMembers
+        .filter(pm => pm.userId === parent.id)
+        .map(pm => pm.householdId);
+
+      // Get children on driver's routes
+      const children = studentsOnRoutes.filter(s => 
+        parentHouseholds.includes(s.householdId!)
+      );
+
+      if (children.length > 0) {
+        // Get route names
+        const childRoutes = await Promise.all(
+          children.map(async (child) => {
+            if (!child.assignedRouteId) return null;
+            const [route] = await db
+              .select()
+              .from(routes)
+              .where(eq(routes.id, child.assignedRouteId));
+            return route;
+          })
+        );
+
+        result.push({
+          id: parent.id,
+          firstName: parent.firstName,
+          lastName: parent.lastName,
+          email: parent.email,
+          children: children.map((child, idx) => ({
+            id: child.id,
+            firstName: child.firstName,
+            lastName: child.lastName,
+            routeName: childRoutes[idx]?.name || "Unknown Route",
+          })),
+        });
+      }
+    }
+
+    return result;
+  }
+
+  // Get drivers currently assigned to a parent's children's routes
+  async getActiveDriversForParent(parentId: string): Promise<any[]> {
+    // Get parent's household memberships
+    const parentHouseholds = await db
+      .select()
+      .from(householdMembers)
+      .where(eq(householdMembers.userId, parentId));
+
+    const householdIds = parentHouseholds.map(h => h.householdId);
+    if (householdIds.length === 0) return [];
+
+    // Get children in parent's households
+    const children = await db
+      .select()
+      .from(students)
+      .where(
+        or(...householdIds.map(hId => eq(students.householdId, hId)))
+      );
+
+    // Get unique route IDs for children
+    const routeIdsSet = new Set(children.map(c => c.assignedRouteId).filter(Boolean));
+    const routeIds = Array.from(routeIdsSet);
+    if (routeIds.length === 0) return [];
+
+    // Get active driver assignments for these routes
+    const activeAssignments = await db
+      .select()
+      .from(driverAssignments)
+      .where(
+        and(
+          or(...routeIds.map(routeId => eq(driverAssignments.routeId, routeId!))),
+          eq(driverAssignments.isActive, true)
+        )
+      );
+
+    // Get unique driver IDs
+    const driverIdsSet = new Set(activeAssignments.map(a => a.driverId));
+    const driverIds = Array.from(driverIdsSet);
+    if (driverIds.length === 0) return [];
+
+    // Get driver details
+    const drivers = await db
+      .select()
+      .from(users)
+      .where(
+        or(...driverIds.map(dId => eq(users.id, dId)))
+      );
+
+    // Build result with route and child context
+    const result = [];
+    for (const driver of drivers) {
+      // Get driver's route assignments
+      const driverRoutes = activeAssignments
+        .filter(a => a.driverId === driver.id)
+        .map(a => a.routeId);
+
+      // Get children on driver's routes
+      const childrenOnDriverRoutes = children.filter(c => 
+        c.assignedRouteId && driverRoutes.includes(c.assignedRouteId)
+      );
+
+      if (childrenOnDriverRoutes.length > 0) {
+        // Get route names
+        const uniqueRouteIdsSet = new Set(childrenOnDriverRoutes.map(c => c.assignedRouteId));
+        const uniqueRouteIds = Array.from(uniqueRouteIdsSet);
+        const routesData: Array<typeof routes.$inferSelect | null> = await Promise.all(
+          uniqueRouteIds.map(async (routeId) => {
+            if (!routeId) return null;
+            const [route] = await db
+              .select()
+              .from(routes)
+              .where(eq(routes.id, routeId));
+            return route;
+          })
+        );
+
+        result.push({
+          id: driver.id,
+          firstName: driver.firstName,
+          lastName: driver.lastName,
+          email: driver.email,
+          children: childrenOnDriverRoutes.map((child) => ({
+            id: child.id,
+            firstName: child.firstName,
+            lastName: child.lastName,
+            routeId: child.assignedRouteId,
+            routeName: routesData.find((r) => r?.id === child.assignedRouteId)?.name || "Unknown Route",
+          })),
+        });
+      }
+    }
+
+    return result;
+  }
+
   // ============ Incident operations ============
 
   async getAllIncidents(): Promise<Incident[]> {
