@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, MessageSquare, AlertCircle, User, Megaphone } from "lucide-react";
+import { useMemo } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -27,24 +28,41 @@ export default function ParentMessagesPage() {
   });
 
   // Get drivers currently assigned to parent's children's routes
-  const { data: assignedDrivers = [], isLoading: driversLoading } = useQuery({
+  const { data: assignedDrivers = [], isLoading: driversLoading } = useQuery<any[]>({
     queryKey: ["/api/parent/assigned-drivers"],
     refetchInterval: 10000,
   });
 
+  // Get admin contacts (admins who have messaged this parent)
+  const { data: adminContacts = [], isLoading: adminsLoading } = useQuery<any[]>({
+    queryKey: ["/api/parent/admin-contacts"],
+    refetchInterval: 10000,
+  });
+
   // Get messages between parent and selected driver
-  const { data: messages, isLoading: messagesLoading } = useQuery({
+  const { data: messages, isLoading: messagesLoading } = useQuery<any[]>({
     queryKey: ["/api/parent/messages", selectedDriver],
     enabled: !!selectedDriver,
     refetchInterval: 3000,
   });
 
-  // Auto-select first driver on load
+  // Merge admin contacts with drivers for unified contact list
+  const allContacts = useMemo(() => {
+    // Add a special flag to distinguish admins from drivers
+    const adminsAsContacts = adminContacts.map((admin: any) => ({
+      ...admin,
+      isAdmin: true,
+      children: [], // Admins don't have children associations
+    }));
+    return [...adminsAsContacts, ...assignedDrivers];
+  }, [adminContacts, assignedDrivers]);
+
+  // Auto-select first contact on load
   useEffect(() => {
-    if (assignedDrivers.length > 0 && !selectedDriver) {
-      setSelectedDriver(assignedDrivers[0].id);
+    if (allContacts.length > 0 && !selectedDriver) {
+      setSelectedDriver(allContacts[0].id);
     }
-  }, [assignedDrivers, selectedDriver]);
+  }, [allContacts, selectedDriver]);
 
   // Listen for real-time messages via WebSocket
   useEffect(() => {
@@ -106,11 +124,11 @@ export default function ParentMessagesPage() {
     sendMessageMutation.mutate(newMessage);
   };
 
-  if (driversLoading) {
+  if (driversLoading || adminsLoading) {
     return <MessagesSkeleton />;
   }
 
-  if (assignedDrivers.length === 0) {
+  if (allContacts.length === 0) {
     return (
       <div className="space-y-6">
         <div>
@@ -135,7 +153,7 @@ export default function ParentMessagesPage() {
     );
   }
 
-  const selectedDriverData = assignedDrivers.find((d: any) => d.id === selectedDriver);
+  const selectedContactData = allContacts.find((c: any) => c.id === selectedDriver);
 
   return (
     <div className="space-y-6">
@@ -189,9 +207,10 @@ export default function ParentMessagesPage() {
             <CardTitle className="text-lg flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
               Conversation
-              {selectedDriverData && (
+              {selectedContactData && (
                 <span className="text-sm font-normal text-muted-foreground">
-                  with {selectedDriverData.firstName} {selectedDriverData.lastName}
+                  with {selectedContactData.firstName} {selectedContactData.lastName}
+                  {selectedContactData.isAdmin && " (Admin Support)"}
                 </span>
               )}
             </CardTitle>
@@ -279,33 +298,40 @@ export default function ParentMessagesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Your Drivers</CardTitle>
+            <CardTitle className="text-lg">Contacts</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {assignedDrivers.map((driver: any) => (
+              {allContacts.map((contact: any) => (
                 <Button
-                  key={driver.id}
-                  variant={selectedDriver === driver.id ? "default" : "outline"}
+                  key={contact.id}
+                  variant={selectedDriver === contact.id ? "default" : "outline"}
                   className="w-full justify-start h-auto py-3"
-                  onClick={() => setSelectedDriver(driver.id)}
-                  data-testid={`button-driver-${driver.id}`}
+                  onClick={() => setSelectedDriver(contact.id)}
+                  data-testid={`button-contact-${contact.id}`}
                 >
                   <div className="flex items-start gap-3 w-full">
                     <Avatar className="h-8 w-8 mt-1">
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                      <AvatarFallback className={contact.isAdmin ? "bg-warning/10 text-warning text-xs" : "bg-primary/10 text-primary text-xs"}>
                         <User className="h-4 w-4" />
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 text-left overflow-hidden">
                       <p className="font-medium text-sm">
-                        {driver.firstName} {driver.lastName}
+                        {contact.firstName} {contact.lastName}
+                        {contact.isAdmin && (
+                          <Badge variant="outline" className="ml-2 text-xs border-warning/50 text-warning-foreground">
+                            Admin
+                          </Badge>
+                        )}
                       </p>
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Route Driver
-                      </p>
+                      {!contact.isAdmin && (
+                        <p className="text-xs text-muted-foreground mb-1">
+                          Route Driver
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-1">
-                        {driver.children?.map((child: any) => (
+                        {contact.children?.map((child: any) => (
                           <Badge 
                             key={child.id} 
                             variant="secondary" 

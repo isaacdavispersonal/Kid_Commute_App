@@ -2296,23 +2296,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get messages between parent and specific driver
   app.get(
-    "/api/parent/messages/:driverId",
+    "/api/parent/messages/:recipientId",
     isAuthenticated,
     requireRole("parent"),
     async (req: any, res) => {
       try {
         const parentId = req.user.claims.sub;
-        const driverId = req.params.driverId;
+        const recipientId = req.params.recipientId;
         
-        // Verify driver is currently assigned to parent's children's routes
-        const assignedDrivers = await storage.getActiveDriversForParent(parentId);
-        const isDriverAssigned = assignedDrivers.some((driver: any) => driver.id === driverId);
+        // Check if recipient is admin - no route restriction needed for admin conversations
+        const recipient = await storage.getUser(recipientId);
+        const isAdmin = recipient?.role === "admin";
         
-        if (!isDriverAssigned) {
-          return res.status(403).json({ message: "You can only message drivers assigned to your children" });
+        // If not admin, verify driver is currently assigned to parent's children's routes
+        if (!isAdmin) {
+          const assignedDrivers = await storage.getActiveDriversForParent(parentId);
+          const isDriverAssigned = assignedDrivers.some((driver: any) => driver.id === recipientId);
+          
+          if (!isDriverAssigned) {
+            return res.status(403).json({ message: "You can only message drivers assigned to your children" });
+          }
         }
         
-        const messages = await storage.getMessagesBetweenUsers(parentId, driverId);
+        const messages = await storage.getMessagesBetweenUsers(parentId, recipientId);
         
         // Add sender details to each message
         const messagesWithDetails = await Promise.all(
@@ -2391,6 +2397,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get admin contacts for parent (admins who have messaged this parent)
+  app.get(
+    "/api/parent/admin-contacts",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        
+        // Get all admins who have messaged this parent
+        const admins = await storage.getUsersByRole("admin");
+        const adminsWithMessages = [];
+        
+        for (const admin of admins) {
+          const messages = await storage.getMessagesBetweenUsers(parentId, admin.id);
+          if (messages.length > 0) {
+            adminsWithMessages.push({
+              id: admin.id,
+              firstName: admin.firstName,
+              lastName: admin.lastName,
+              email: admin.email,
+              role: admin.role,
+            });
+          }
+        }
+        
+        res.json(adminsWithMessages);
+      } catch (error) {
+        console.error("Error fetching admin contacts:", error);
+        res.status(500).json({ message: "Failed to fetch admin contacts" });
+      }
+    }
+  );
+
   // ============ Driver Messaging routes ============
 
   // Get all parents whose children are on driver's routes (can message any of them)
@@ -2459,16 +2499,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Get messages between driver and specific parent
+  // Get messages between driver and specific parent/admin
   app.get(
-    "/api/driver/messages/:parentId",
+    "/api/driver/messages/:recipientId",
     isAuthenticated,
     requireRole("driver"),
     async (req: any, res) => {
       try {
         const driverId = req.user.claims.sub;
-        const parentId = req.params.parentId;
-        const messages = await storage.getMessagesBetweenUsers(driverId, parentId);
+        const recipientId = req.params.recipientId;
+        
+        // Check if recipient is admin - no route restriction needed for admin conversations
+        const recipient = await storage.getUser(recipientId);
+        const isAdmin = recipient?.role === "admin";
+        
+        // If not admin, verify driver can message this parent (via routes)
+        if (!isAdmin) {
+          const messageableParents = await storage.getMessageableParentsForDriver(driverId);
+          const canMessage = messageableParents.some((parent: any) => parent.id === recipientId);
+          
+          if (!canMessage) {
+            return res.status(403).json({ message: "You can only message parents whose children are on your assigned routes" });
+          }
+        }
+        
+        const messages = await storage.getMessagesBetweenUsers(driverId, recipientId);
         
         // Add sender details to each message
         const messagesWithDetails = await Promise.all(
@@ -2543,6 +2598,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error sending message:", error);
         res.status(500).json({ message: "Failed to send message" });
+      }
+    }
+  );
+
+  // Get admin contacts for driver (admins who have messaged this driver)
+  app.get(
+    "/api/driver/admin-contacts",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        
+        // Get all admins who have messaged this driver
+        const admins = await storage.getUsersByRole("admin");
+        const adminsWithMessages = [];
+        
+        for (const admin of admins) {
+          const messages = await storage.getMessagesBetweenUsers(driverId, admin.id);
+          if (messages.length > 0) {
+            adminsWithMessages.push({
+              id: admin.id,
+              firstName: admin.firstName,
+              lastName: admin.lastName,
+              email: admin.email,
+              role: admin.role,
+            });
+          }
+        }
+        
+        res.json(adminsWithMessages);
+      } catch (error) {
+        console.error("Error fetching admin contacts:", error);
+        res.status(500).json({ message: "Failed to fetch admin contacts" });
       }
     }
   );

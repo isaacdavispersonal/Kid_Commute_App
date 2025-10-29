@@ -38,39 +38,56 @@ export default function DriverMessagesPage() {
   });
 
   // Get all parents whose children are on driver's routes
-  const { data: messageableParents = [], isLoading: parentsLoading } = useQuery({
+  const { data: messageableParents = [], isLoading: parentsLoading } = useQuery<any[]>({
     queryKey: ["/api/driver/messageable-parents"],
     refetchInterval: 10000,
   });
 
+  // Get admin contacts (admins who have messaged this driver)
+  const { data: adminContacts = [], isLoading: adminsLoading } = useQuery<any[]>({
+    queryKey: ["/api/driver/admin-contacts"],
+    refetchInterval: 10000,
+  });
+
   // Get messages with selected parent
-  const { data: messages, isLoading: messagesLoading } = useQuery({
+  const { data: messages, isLoading: messagesLoading } = useQuery<any[]>({
     queryKey: ["/api/driver/messages", selectedParent],
     enabled: !!selectedParent,
     refetchInterval: 3000,
   });
 
-  // Filter parents by search query (search in parent name or children names)
-  const filteredParents = useMemo(() => {
-    if (!searchQuery.trim()) return messageableParents;
+  // Merge admin contacts with parents for unified contact list
+  const allContacts = useMemo(() => {
+    // Add a special flag to distinguish admins from parents
+    const adminsAsContacts = adminContacts.map((admin: any) => ({
+      ...admin,
+      isAdmin: true,
+      children: [], // Admins don't have children associations
+    }));
+    return [...adminsAsContacts, ...messageableParents];
+  }, [adminContacts, messageableParents]);
+
+  // Filter contacts by search query (search in contact name or children names for parents)
+  const filteredContacts = useMemo(() => {
+    if (!searchQuery.trim()) return allContacts;
     
     const query = searchQuery.toLowerCase();
-    return messageableParents.filter((parent: any) => {
-      const parentName = `${parent.firstName || ''} ${parent.lastName || ''}`.toLowerCase();
-      const childrenNames = parent.children?.map((child: any) => 
+    return allContacts.filter((contact: any) => {
+      const contactName = `${contact.firstName || ''} ${contact.lastName || ''}`.toLowerCase();
+      const childrenNames = contact.children?.map((child: any) => 
         `${child.firstName} ${child.lastName}`.toLowerCase()
       ).join(' ') || '';
       
-      return parentName.includes(query) || childrenNames.includes(query);
+      return contactName.includes(query) || childrenNames.includes(query);
     });
-  }, [messageableParents, searchQuery]);
+  }, [allContacts, searchQuery]);
 
-  // Auto-select first parent when list loads
+  // Auto-select first contact when list loads
   useEffect(() => {
-    if (filteredParents.length > 0 && !selectedParent) {
-      setSelectedParent(filteredParents[0].id);
+    if (filteredContacts.length > 0 && !selectedParent) {
+      setSelectedParent(filteredContacts[0].id);
     }
-  }, [filteredParents, selectedParent]);
+  }, [filteredContacts, selectedParent]);
 
   // Listen for real-time messages via WebSocket
   useEffect(() => {
@@ -139,11 +156,11 @@ export default function DriverMessagesPage() {
     sendMessageMutation.mutate(reply);
   };
 
-  if (parentsLoading) {
+  if (parentsLoading || adminsLoading) {
     return <MessagesSkeleton />;
   }
 
-  if (messageableParents.length === 0) {
+  if (allContacts.length === 0) {
     return (
       <div className="space-y-6">
         <div>
@@ -167,7 +184,7 @@ export default function DriverMessagesPage() {
     );
   }
 
-  const selectedParentData = filteredParents.find((p: any) => p.id === selectedParent);
+  const selectedContactData = filteredContacts.find((c: any) => c.id === selectedParent);
 
   return (
     <div className="space-y-6">
@@ -221,9 +238,10 @@ export default function DriverMessagesPage() {
             <CardTitle className="text-lg flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
               Conversation
-              {selectedParentData && (
+              {selectedContactData && (
                 <span className="text-sm font-normal text-muted-foreground">
-                  with {selectedParentData.firstName} {selectedParentData.lastName}
+                  with {selectedContactData.firstName} {selectedContactData.lastName}
+                  {selectedContactData.isAdmin && " (Admin Support)"}
                 </span>
               )}
             </CardTitle>
@@ -332,41 +350,46 @@ export default function DriverMessagesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Parents</CardTitle>
+            <CardTitle className="text-lg">Contacts</CardTitle>
             <div className="relative mt-2">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by parent or child name..."
+                placeholder="Search by name or child name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
-                data-testid="input-search-parents"
+                data-testid="input-search-contacts"
               />
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
-              {filteredParents.length > 0 ? (
-                filteredParents.map((parent: any) => (
+              {filteredContacts.length > 0 ? (
+                filteredContacts.map((contact: any) => (
                   <Button
-                    key={parent.id}
-                    variant={selectedParent === parent.id ? "default" : "outline"}
+                    key={contact.id}
+                    variant={selectedParent === contact.id ? "default" : "outline"}
                     className="w-full justify-start h-auto py-3"
-                    onClick={() => setSelectedParent(parent.id)}
-                    data-testid={`button-parent-${parent.id}`}
+                    onClick={() => setSelectedParent(contact.id)}
+                    data-testid={`button-contact-${contact.id}`}
                   >
                     <div className="flex items-start gap-3 w-full">
                       <Avatar className="h-8 w-8 mt-1">
-                        <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                        <AvatarFallback className={contact.isAdmin ? "bg-warning/10 text-warning text-xs" : "bg-primary/10 text-primary text-xs"}>
                           <User className="h-4 w-4" />
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 text-left overflow-hidden">
                         <p className="font-medium text-sm">
-                          {parent.firstName} {parent.lastName}
+                          {contact.firstName} {contact.lastName}
+                          {contact.isAdmin && (
+                            <Badge variant="outline" className="ml-2 text-xs border-warning/50 text-warning-foreground">
+                              Admin
+                            </Badge>
+                          )}
                         </p>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {parent.children?.map((child: any) => (
+                          {contact.children?.map((child: any) => (
                             <Badge 
                               key={child.id} 
                               variant="secondary" 
@@ -384,7 +407,7 @@ export default function DriverMessagesPage() {
               ) : (
                 <div className="text-center py-8">
                   <p className="text-sm text-muted-foreground">
-                    No parents match your search
+                    No contacts match your search
                   </p>
                 </div>
               )}
