@@ -168,8 +168,12 @@ export default function AdminSchedule() {
     },
   });
 
+  // Query for entire month using date range
+  const monthStart = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+  const monthEnd = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${new Date(currentYear, currentMonth + 1, 0).getDate()}`;
+  
   const { data: allShifts, isLoading } = useQuery<Shift[]>({
-    queryKey: ["/api/admin/shifts", { date: `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01` }],
+    queryKey: ["/api/admin/shifts", { startDate: monthStart, endDate: monthEnd }],
   });
 
   const { data: allUsers } = useQuery<Driver[]>({
@@ -344,7 +348,7 @@ export default function AdminSchedule() {
         </div>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl flex items-center gap-2">
@@ -361,98 +365,95 @@ export default function AdminSchedule() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-7 gap-2 mb-2">
-            {DAY_NAMES.map(day => (
-              <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
-                {day}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-2">
-            {daysInMonth.map((date, index) => {
-              const isPlaceholder = date.getTime() === 0;
-              const dateStr = isPlaceholder ? "" : date.toISOString().split('T')[0];
-              const dayShifts = isPlaceholder ? [] : getShiftsForDate(date);
-              const isToday = !isPlaceholder && dateStr === new Date().toISOString().split('T')[0];
-
-              return (
-                <div
-                  key={index}
-                  className={`min-h-[140px] p-2 rounded-md border ${
-                    isPlaceholder ? "bg-muted/20" : "bg-card hover-elevate"
-                  } ${isToday ? "border-primary" : ""}`}
-                  data-testid={isPlaceholder ? `placeholder-${index}` : `day-${dateStr}`}
-                >
-                  {!isPlaceholder && (
-                    <>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-sm font-medium ${isToday ? "text-primary" : ""}`}>
-                          {date.getDate()}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0"
-                          onClick={() => handleAddShift(dateStr)}
-                          data-testid={`button-add-${dateStr}`}
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                      </div>
-
-                      <div className="space-y-1">
-                        {dayShifts.map((shift) => (
-                          <div
-                            key={shift.id}
-                            className="text-xs p-2 rounded bg-accent/30 hover-elevate cursor-pointer"
-                            onClick={() => handleEditShift(shift)}
-                            data-testid={`shift-${shift.id}`}
-                          >
-                            <div className="flex items-start justify-between gap-1 mb-1">
-                              <Badge 
-                                variant="secondary" 
-                                className={`text-xs px-1 py-0 ${SHIFT_TYPE_LABELS[shift.shiftType].color}`}
-                              >
-                                {SHIFT_TYPE_LABELS[shift.shiftType].label}
-                              </Badge>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-4 w-4 p-0"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteDialog(shift);
-                                }}
-                                data-testid={`button-delete-${shift.id}`}
-                              >
-                                <Trash2 className="h-2.5 w-2.5" />
-                              </Button>
-                            </div>
-                            <div className="flex items-center gap-1 mb-1">
-                              <User className="h-3 w-3 flex-shrink-0" />
-                              <span className="font-medium truncate text-xs">
-                                {getDriverName(shift.driverId).split(' ')[0]}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1 text-muted-foreground">
-                              <Clock className="h-3 w-3 flex-shrink-0" />
-                              <span className="text-xs">{shift.plannedStart}</span>
-                            </div>
-                          </div>
-                        ))}
-                        {dayShifts.length === 0 && (
-                          <p className="text-xs text-muted-foreground text-center py-2">
-                            No shifts
-                          </p>
-                        )}
-                      </div>
-                    </>
-                  )}
+        <CardContent className="overflow-x-auto">
+          <div className="min-w-[800px]">
+            <div className="grid grid-cols-7 gap-2 mb-2">
+              {DAY_NAMES.map(day => (
+                <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
+                  {day}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-2">
+              {daysInMonth.map((date, index) => {
+                const isPlaceholder = date.getTime() === 0;
+                const dateStr = isPlaceholder ? "" : date.toISOString().split('T')[0];
+                const dayShifts = isPlaceholder ? [] : getShiftsForDate(date);
+                const isToday = !isPlaceholder && dateStr === new Date().toISOString().split('T')[0];
+
+                return (
+                  <div
+                    key={index}
+                    className={`min-h-[120px] p-1.5 rounded-md border ${
+                      isPlaceholder ? "bg-muted/20" : "bg-card hover-elevate"
+                    } ${isToday ? "border-primary" : ""}`}
+                    data-testid={isPlaceholder ? `placeholder-${index}` : `day-${dateStr}`}
+                  >
+                    {!isPlaceholder && (
+                      <>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className={`text-sm font-medium ${isToday ? "text-primary" : ""}`}>
+                            {date.getDate()}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-5 w-5 p-0"
+                            onClick={() => handleAddShift(dateStr)}
+                            data-testid={`button-add-${dateStr}`}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+
+                        <div className="space-y-1 max-h-[80px] overflow-y-auto">
+                          {dayShifts.map((shift) => (
+                            <div
+                              key={shift.id}
+                              className="text-xs p-1.5 rounded bg-accent/30 hover-elevate cursor-pointer"
+                              onClick={() => handleEditShift(shift)}
+                              data-testid={`shift-${shift.id}`}
+                            >
+                              <div className="flex items-start justify-between gap-1 mb-1">
+                                <Badge 
+                                  variant="secondary" 
+                                  className={`text-[10px] px-1 py-0 h-4 ${SHIFT_TYPE_LABELS[shift.shiftType].color}`}
+                                >
+                                  {SHIFT_TYPE_LABELS[shift.shiftType].label.substring(0, 3)}
+                                </Badge>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-3.5 w-3.5 p-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteDialog(shift);
+                                  }}
+                                  data-testid={`button-delete-${shift.id}`}
+                                >
+                                  <Trash2 className="h-2.5 w-2.5" />
+                                </Button>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <User className="h-2.5 w-2.5 flex-shrink-0" />
+                                <span className="font-medium truncate text-[10px]">
+                                  {getDriverName(shift.driverId).split(' ')[0]}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <Clock className="h-2.5 w-2.5 flex-shrink-0" />
+                                <span className="text-[10px]">{shift.plannedStart}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </CardContent>
       </Card>

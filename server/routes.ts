@@ -965,11 +965,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { date, driverId, startDate, endDate } = req.query;
         
-        if (driverId && typeof driverId === "string") {
-          if (startDate && endDate && typeof startDate === "string" && typeof endDate === "string") {
+        // Support date range query without driverId (for monthly calendar view)
+        if (startDate && endDate && typeof startDate === "string" && typeof endDate === "string") {
+          if (driverId && typeof driverId === "string") {
             const shifts = await storage.getShiftsByDriver(driverId, startDate, endDate);
             return res.json(shifts);
-          } else if (date && typeof date === "string") {
+          } else {
+            // Query all shifts in date range
+            const shifts = await storage.getShiftsByDateRange(startDate, endDate);
+            return res.json(shifts);
+          }
+        } else if (driverId && typeof driverId === "string") {
+          if (date && typeof date === "string") {
             const shifts = await storage.getShiftsByDate(date, driverId);
             return res.json(shifts);
           } else {
@@ -981,7 +988,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.json(shifts);
         }
         
-        return res.status(400).json({ message: "Please provide either date or driverId" });
+        return res.status(400).json({ message: "Please provide date, date range (startDate & endDate), or driverId" });
       } catch (error) {
         console.error("Error fetching shifts:", error);
         res.status(500).json({ message: "Failed to fetch shifts" });

@@ -50,7 +50,7 @@ import {
   type InsertHouseholdMember,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, or, sql } from "drizzle-orm";
+import { eq, and, desc, or, sql, gte, lte } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "./errors";
 
 export interface IStorage {
@@ -109,6 +109,7 @@ export interface IStorage {
   deleteShift(id: string): Promise<void>;
   getShift(id: string): Promise<Shift | undefined>;
   getShiftsByDate(date: string, driverId?: string): Promise<Shift[]>;
+  getShiftsByDateRange(startDate: string, endDate: string): Promise<Shift[]>;
   getShiftsByDriver(driverId: string, startDate?: string, endDate?: string): Promise<Shift[]>;
   getDriverTodayShifts(driverId: string): Promise<Shift[]>;
   checkShiftOverlap(driverId: string, date: string, plannedStart: string, plannedEnd: string, excludeShiftId?: string): Promise<boolean>;
@@ -654,6 +655,14 @@ export class DatabaseStorage implements IStorage {
       .from(shifts)
       .where(eq(shifts.date, date))
       .orderBy(shifts.plannedStart);
+  }
+
+  async getShiftsByDateRange(startDate: string, endDate: string): Promise<Shift[]> {
+    return await db
+      .select()
+      .from(shifts)
+      .where(and(gte(shifts.date, startDate), lte(shifts.date, endDate)))
+      .orderBy(shifts.date, shifts.plannedStart);
   }
 
   async getShiftsByDriver(driverId: string, startDate?: string, endDate?: string): Promise<Shift[]> {
