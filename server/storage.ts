@@ -11,6 +11,7 @@ import {
   timeEntries,
   messages,
   announcements,
+  announcementReads,
   incidents,
   vehicleInspections,
   households,
@@ -40,6 +41,8 @@ import {
   type InsertMessage,
   type Announcement,
   type InsertAnnouncement,
+  type AnnouncementRead,
+  type InsertAnnouncementRead,
   type Incident,
   type InsertIncident,
   type VehicleInspection,
@@ -137,11 +140,16 @@ export interface IStorage {
   getConversations(userId: string): Promise<User[]>;
   getMessagesBetweenUsers(userId1: string, userId2: string): Promise<Message[]>;
   getAllConversations(): Promise<any[]>;
+  markMessagesAsRead(recipientId: string, senderId: string): Promise<void>;
+  getUnreadMessageCount(userId: string): Promise<number>;
+  getUnreadCountsBySender(userId: string): Promise<{ [senderId: string]: number }>;
 
   // Announcement operations
   createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement>;
   getAnnouncementsByRole(role: "driver" | "parent"): Promise<Announcement[]>;
   getAllAnnouncements(): Promise<Announcement[]>;
+  markAnnouncementAsRead(userId: string, announcementId: string): Promise<void>;
+  getUnreadAnnouncementCount(userId: string, role: "driver" | "parent"): Promise<number>;
 
   // Incident operations
   getAllIncidents(): Promise<any[]>;
@@ -1067,6 +1075,54 @@ export class DatabaseStorage implements IStorage {
     return Array.from(conversationMap.values());
   }
 
+  async markMessagesAsRead(recipientId: string, senderId: string): Promise<void> {
+    await db
+      .update(messages)
+      .set({ isRead: true })
+      .where(
+        and(
+          eq(messages.recipientId, recipientId),
+          eq(messages.senderId, senderId),
+          eq(messages.isRead, false)
+        )
+      );
+  }
+
+  async getUnreadMessageCount(userId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.recipientId, userId),
+          eq(messages.isRead, false)
+        )
+      );
+    return Number(result[0]?.count || 0);
+  }
+
+  async getUnreadCountsBySender(userId: string): Promise<{ [senderId: string]: number }> {
+    const results = await db
+      .select({
+        senderId: messages.senderId,
+        count: sql<number>`count(*)`,
+      })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.recipientId, userId),
+          eq(messages.isRead, false)
+        )
+      )
+      .groupBy(messages.senderId);
+
+    const counts: { [senderId: string]: number } = {};
+    for (const result of results) {
+      counts[result.senderId] = Number(result.count);
+    }
+    return counts;
+  }
+
   // Get parents whose children are on routes this driver is assigned to
   async getMessageableParentsForDriver(driverId: string): Promise<any[]> {
     // Get driver's active routes from driver assignments
@@ -1382,6 +1438,52 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(announcements)
       .orderBy(desc(announcements.createdAt));
+  }
+
+  async markAnnouncementAsRead(userId: string, announcementId: string): Promise<void> {
+    // Check if already marked as read
+    const existing = await db
+      .select()
+      .from(announcementReads)
+      .where(
+        and(
+          eq(announcementReads.userId, userId),
+          eq(announcementReads.announcementId, announcementId)
+        )
+      )
+      .limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(announcementReads).values({
+        userId,
+        announcementId,
+      });
+    }
+  }
+
+  async getUnreadAnnouncementCount(userId: string, role: "driver" | "parent"): Promise<number> {
+    // Get all announcements for this role
+    const allAnnouncements = await db
+      .select({ id: announcements.id })
+      .from(announcements)
+      .where(eq(announcements.targetRole, role));
+
+    const announcementIds = allAnnouncements.map(a => a.id);
+    if (announcementIds.length === 0) return 0;
+
+    // Get announcements this user has read
+    const readAnnouncements = await db
+      .select({ announcementId: announcementReads.announcementId })
+      .from(announcementReads)
+      .where(
+        and(
+          eq(announcementReads.userId, userId),
+          or(...announcementIds.map(id => eq(announcementReads.announcementId, id)))
+        )
+      );
+
+    const readIds = new Set(readAnnouncements.map(r => r.announcementId));
+    return announcementIds.filter(id => !readIds.has(id)).length;
   }
 }
 
