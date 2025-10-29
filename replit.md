@@ -120,6 +120,25 @@ The system manages multiple interconnected entities:
 - **Security**: Messaging is strictly scoped to current route assignments; parents cannot message arbitrary drivers
 - **UI Features**: Empty state handling when no assignments exist, search filtering on driver side, child context badges for clarity
 
+**Admin Direct Messaging System**
+- **Admin Capabilities**: Admins can directly message any driver or parent in the system regardless of route assignments
+  - Three-tab interface: "View Conversations" (driver-parent threads), "Message Drivers", "Message Parents"
+  - Search functionality to find specific drivers/parents by name
+  - Clean list view showing all available users by role
+  - Messages display sender role badge for context
+- **Reply Functionality**: Drivers and parents can reply to admin messages without route restrictions
+  - Admin messages appear in driver/parent conversation views alongside route-based messages
+  - Bi-directional communication channel for administrative announcements, questions, or support
+- **Backend Implementation**:
+  - `getUsersByRole(role)` - Returns all users filtered by role (driver/parent)
+  - GET `/api/admin/all-drivers` - Returns list of all drivers with profile information
+  - GET `/api/admin/all-parents` - Returns list of all parents with profile information
+  - GET `/api/admin/direct-messages/:userId` - Returns message thread between admin and specific user
+  - POST `/api/admin/send-message` - Send message to specific user (body: `{recipientId, content}`)
+  - Updated driver/parent send endpoints to allow unrestricted replies to admins
+- **Security**: All admin messaging endpoints protected by role-based access control (requireRole("admin"))
+- **UI Features**: Role badges on messages, real-time message updates, empty state handling, responsive tabbed interface
+
 **Session Management**
 - PostgreSQL-backed sessions using connect-pg-simple
 - Session table for persistent authentication across server restarts
