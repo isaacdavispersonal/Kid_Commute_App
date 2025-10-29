@@ -263,6 +263,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Create a new vehicle
+  app.post(
+    "/api/admin/vehicles",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { insertVehicleSchema } = await import("@shared/schema");
+        
+        // Validate request body
+        const result = insertVehicleSchema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid vehicle data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const newVehicle = await storage.createVehicle(result.data);
+        res.json(newVehicle);
+      } catch (error: any) {
+        console.error("Error creating vehicle:", error);
+        
+        if (error.code === '23505') { // Unique constraint violation
+          return res.status(400).json({ message: "A vehicle with this plate number already exists" });
+        }
+        
+        res.status(500).json({ message: "Failed to create vehicle" });
+      }
+    }
+  );
+
   // Get all routes
   app.get(
     "/api/admin/routes",
