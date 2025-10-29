@@ -102,6 +102,24 @@ The system manages multiple interconnected entities:
 - **Admin Time Exceptions Queue**: Review and resolve unresolved clock events with shift context enrichment and manual resolution workflow
 - **Reporting Endpoints**: Backend API provides driver hours summaries, payroll aggregates, and shift-specific time details for compliance and reporting
 
+**Route-Based Messaging System**
+- **Driver Messaging**: Drivers can message parents whose children are assigned to their current routes
+  - Search functionality to find parents by typing parent or child names
+  - Each parent shown with badges displaying their children's names for context
+  - Drivers can initiate conversations (not limited to responding)
+  - Real-time message updates via WebSocket
+- **Parent Messaging**: Parents can only message drivers currently assigned to their children's routes
+  - Displays all assigned drivers with associated children shown as badges
+  - Prevents messaging drivers not actively transporting their children
+  - Clean interface with driver selection based on which child's driver they want to contact
+- **Backend Implementation**:
+  - `getMessageableParentsForDriver(driverId)` - Returns parents based on current route-student assignments
+  - `getActiveDriversForParent(parentId)` - Returns drivers currently assigned to parent's children
+  - GET `/api/driver/messageable-parents` - Driver endpoint to fetch available parent contacts
+  - GET `/api/parent/assigned-drivers` - Parent endpoint to fetch assigned drivers
+- **Security**: Messaging is strictly scoped to current route assignments; parents cannot message arbitrary drivers
+- **UI Features**: Empty state handling when no assignments exist, search filtering on driver side, child context badges for clarity
+
 **Session Management**
 - PostgreSQL-backed sessions using connect-pg-simple
 - Session table for persistent authentication across server restarts
