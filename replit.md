@@ -29,6 +29,12 @@ Preferred communication style: Simple, everyday language.
 **Role-Based Interface Design**
 - Three distinct user experiences optimized for different workflows:
   - **Admin Dashboard**: Desktop-optimized with sidebar navigation, data tables, fleet maps, and statistics cards
+    - **Schedule Calendar**: Compact shift-type summary view designed for high-volume scheduling (24+ drivers/day)
+      - Each day displays total shift count with breakdown by type (Morning/Afternoon/Extra)
+      - Visual indicators using Lucide React icons (Sun, Sunset, Star) for shift types
+      - Click any day to open modal with full driver details grouped by shift type
+      - Modal shows 2-column grid of driver cards with time, route, vehicle, status, notes
+      - Maintains all CRUD operations (add/edit/delete) within the modal interface
   - **Driver Interface**: Mobile-first design with larger touch targets, clock in/out functionality, and route cards
   - **Parent Portal**: Real-time tracking interface with messaging capabilities
 
