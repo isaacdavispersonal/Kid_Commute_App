@@ -1,17 +1,19 @@
-// Driver messaging - respond to parent messages only
+// Driver messaging - message parents whose children are on assigned routes
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, MessageSquare, User, AlertCircle, Megaphone } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Send, MessageSquare, User, AlertCircle, Megaphone, Search } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { formatDistanceToNow } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 
 const quickReplies = [
   "Running 5 minutes late",
@@ -26,6 +28,7 @@ export default function DriverMessagesPage() {
   const { toast } = useToast();
   const [newMessage, setNewMessage] = useState("");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const { socket } = useWebSocket();
 
   // Get announcements from admin
@@ -34,10 +37,10 @@ export default function DriverMessagesPage() {
     refetchInterval: 10000,
   });
 
-  // Get list of parents who have messaged the driver
-  const { data: conversations, isLoading: conversationsLoading } = useQuery({
-    queryKey: ["/api/driver/conversations"],
-    refetchInterval: 5000,
+  // Get all parents whose children are on driver's routes
+  const { data: messageableParents = [], isLoading: parentsLoading } = useQuery({
+    queryKey: ["/api/driver/messageable-parents"],
+    refetchInterval: 10000,
   });
 
   // Get messages with selected parent
@@ -47,12 +50,27 @@ export default function DriverMessagesPage() {
     refetchInterval: 3000,
   });
 
-  // Auto-select first conversation
+  // Filter parents by search query (search in parent name or children names)
+  const filteredParents = useMemo(() => {
+    if (!searchQuery.trim()) return messageableParents;
+    
+    const query = searchQuery.toLowerCase();
+    return messageableParents.filter((parent: any) => {
+      const parentName = `${parent.firstName || ''} ${parent.lastName || ''}`.toLowerCase();
+      const childrenNames = parent.children?.map((child: any) => 
+        `${child.firstName} ${child.lastName}`.toLowerCase()
+      ).join(' ') || '';
+      
+      return parentName.includes(query) || childrenNames.includes(query);
+    });
+  }, [messageableParents, searchQuery]);
+
+  // Auto-select first parent when list loads
   useEffect(() => {
-    if (conversations && conversations.length > 0 && !selectedParent) {
-      setSelectedParent(conversations[0].id);
+    if (filteredParents.length > 0 && !selectedParent) {
+      setSelectedParent(filteredParents[0].id);
     }
-  }, [conversations, selectedParent]);
+  }, [filteredParents, selectedParent]);
 
   // Listen for real-time messages via WebSocket
   useEffect(() => {
@@ -62,7 +80,7 @@ export default function DriverMessagesPage() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "new_message") {
-          queryClient.refetchQueries({ queryKey: ["/api/driver/conversations"] });
+          queryClient.refetchQueries({ queryKey: ["/api/driver/messageable-parents"] });
           if (selectedParent) {
             queryClient.refetchQueries({ queryKey: ["/api/driver/messages", selectedParent] });
           }
@@ -121,27 +139,26 @@ export default function DriverMessagesPage() {
     sendMessageMutation.mutate(reply);
   };
 
-  if (conversationsLoading) {
+  if (parentsLoading) {
     return <MessagesSkeleton />;
   }
 
-  if (!conversations || conversations.length === 0) {
+  if (messageableParents.length === 0) {
     return (
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Messages</h1>
           <p className="text-sm text-muted-foreground">
-            Respond to parent messages
+            Message parents of children on your routes
           </p>
         </div>
         <Card>
           <CardContent className="py-16">
             <div className="text-center">
               <AlertCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Messages Yet</h3>
+              <h3 className="text-lg font-semibold mb-2">No Parents Available</h3>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Parents will be able to message you about their children's transportation.
-                When they do, you'll be able to respond here.
+                You don't have any active route assignments yet. Once you're assigned to routes with students, you'll be able to message their parents here.
               </p>
             </div>
           </CardContent>
@@ -150,12 +167,14 @@ export default function DriverMessagesPage() {
     );
   }
 
+  const selectedParentData = filteredParents.find((p: any) => p.id === selectedParent);
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold mb-1">Messages</h1>
         <p className="text-sm text-muted-foreground">
-          Respond to parent messages
+          Message parents of children on your routes
         </p>
       </div>
 
@@ -202,6 +221,11 @@ export default function DriverMessagesPage() {
             <CardTitle className="text-lg flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
               Conversation
+              {selectedParentData && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  with {selectedParentData.firstName} {selectedParentData.lastName}
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -215,7 +239,6 @@ export default function DriverMessagesPage() {
                   messages.map((message: any) => {
                     const isOwn = message.isOwn;
                     const isAdmin = message.senderRole === "admin";
-                    const isParent = message.senderRole === "parent";
                     
                     return (
                       <div
@@ -252,7 +275,7 @@ export default function DriverMessagesPage() {
                 ) : (
                   <div className="flex items-center justify-center h-full">
                     <p className="text-sm text-muted-foreground">
-                      No messages in this conversation yet
+                      Start the conversation by sending a message
                     </p>
                   </div>
                 )}
@@ -280,7 +303,7 @@ export default function DriverMessagesPage() {
 
                 <div className="flex gap-2">
                   <Textarea
-                    placeholder="Type your response..."
+                    placeholder="Type your message..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={(e) => {
@@ -309,35 +332,62 @@ export default function DriverMessagesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Parent Conversations</CardTitle>
+            <CardTitle className="text-lg">Parents</CardTitle>
+            <div className="relative mt-2">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by parent or child name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+                data-testid="input-search-parents"
+              />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {conversations.map((parent: any) => (
-                <Button
-                  key={parent.id}
-                  variant={selectedParent === parent.id ? "default" : "outline"}
-                  className="w-full justify-start"
-                  onClick={() => setSelectedParent(parent.id)}
-                  data-testid={`button-conversation-${parent.id}`}
-                >
-                  <div className="flex items-center gap-3 w-full">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                        <User className="h-4 w-4" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 text-left overflow-hidden">
-                      <p className="font-medium text-sm truncate">
-                        {parent.firstName} {parent.lastName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Parent
-                      </p>
+            <div className="space-y-2 max-h-[500px] overflow-y-auto">
+              {filteredParents.length > 0 ? (
+                filteredParents.map((parent: any) => (
+                  <Button
+                    key={parent.id}
+                    variant={selectedParent === parent.id ? "default" : "outline"}
+                    className="w-full justify-start h-auto py-3"
+                    onClick={() => setSelectedParent(parent.id)}
+                    data-testid={`button-parent-${parent.id}`}
+                  >
+                    <div className="flex items-start gap-3 w-full">
+                      <Avatar className="h-8 w-8 mt-1">
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                          <User className="h-4 w-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 text-left overflow-hidden">
+                        <p className="font-medium text-sm">
+                          {parent.firstName} {parent.lastName}
+                        </p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {parent.children?.map((child: any) => (
+                            <Badge 
+                              key={child.id} 
+                              variant="secondary" 
+                              className="text-xs"
+                              data-testid={`badge-child-${child.id}`}
+                            >
+                              {child.firstName} {child.lastName}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </Button>
-              ))}
+                  </Button>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-sm text-muted-foreground">
+                    No parents match your search
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
