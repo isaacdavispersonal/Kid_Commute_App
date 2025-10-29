@@ -139,6 +139,25 @@ The system manages multiple interconnected entities:
 - **Security**: All admin messaging endpoints protected by role-based access control (requireRole("admin"))
 - **UI Features**: Role badges on messages, real-time message updates, empty state handling, responsive tabbed interface
 
+**Incident Management System**
+- **Driver Incident Reporting**: Drivers can report safety and operational incidents with detailed information
+  - Mobile-optimized form with title, severity level (low/medium/high/critical), location, and detailed description
+  - Incidents immediately visible to administrators for review
+  - POST `/api/driver/incident` - Create incident report
+- **Admin Incident Review**: Comprehensive incident management interface for administrators
+  - Enriched incident data with reporter information (driver name, email) joined from users table
+  - Filter incidents by status: All / Pending / Resolved
+  - Incident cards show: title, description preview, severity badge, status badge, reporter name, timestamp, location
+  - Inspection dialog displays full details: reporter info, exact timestamp, location, complete description
+  - One-click resolution with "Mark as Resolved" button
+- **Backend Implementation**:
+  - `getAllIncidents()` - Returns all incidents with enriched reporter data via JOIN with users table
+  - `updateIncidentStatus(id, status)` - Updates incident status (pending/reviewed/resolved)
+  - GET `/api/admin/incidents` - Returns all incidents with reporter information
+  - PATCH `/api/admin/incidents/:id` - Updates incident status (body: `{status}`)
+- **Data Model**: Incidents table includes reporterId (driver), vehicleId, routeId, title, description, severity, status, location, photoUrl, timestamps
+- **UI Features**: Status badges (Pending/Reviewed/Resolved), severity indicators, filter tabs, real-time cache invalidation after updates
+
 **Session Management**
 - PostgreSQL-backed sessions using connect-pg-simple
 - Session table for persistent authentication across server restarts
