@@ -144,7 +144,7 @@ export interface IStorage {
   getAllAnnouncements(): Promise<Announcement[]>;
 
   // Incident operations
-  getAllIncidents(): Promise<Incident[]>;
+  getAllIncidents(): Promise<any[]>;
   getRecentIncidents(limit: number): Promise<Incident[]>;
   createIncident(incident: InsertIncident): Promise<Incident>;
   updateIncidentStatus(id: string, status: "pending" | "reviewed" | "resolved"): Promise<Incident>;
@@ -1260,8 +1260,29 @@ export class DatabaseStorage implements IStorage {
 
   // ============ Incident operations ============
 
-  async getAllIncidents(): Promise<Incident[]> {
-    return await db.select().from(incidents).orderBy(desc(incidents.createdAt));
+  async getAllIncidents(): Promise<any[]> {
+    const result = await db
+      .select({
+        id: incidents.id,
+        reporterId: incidents.reporterId,
+        vehicleId: incidents.vehicleId,
+        routeId: incidents.routeId,
+        title: incidents.title,
+        description: incidents.description,
+        severity: incidents.severity,
+        status: incidents.status,
+        location: incidents.location,
+        photoUrl: incidents.photoUrl,
+        createdAt: incidents.createdAt,
+        updatedAt: incidents.updatedAt,
+        reporterFirstName: users.firstName,
+        reporterLastName: users.lastName,
+        reporterEmail: users.email,
+      })
+      .from(incidents)
+      .leftJoin(users, eq(incidents.reporterId, users.id))
+      .orderBy(desc(incidents.createdAt));
+    return result;
   }
 
   async getRecentIncidents(limit: number): Promise<Incident[]> {
