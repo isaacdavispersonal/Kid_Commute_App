@@ -151,6 +151,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get all incidents
+  app.get(
+    "/api/admin/incidents",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const incidents = await storage.getAllIncidents();
+        res.json(incidents);
+      } catch (error) {
+        console.error("Error fetching incidents:", error);
+        res.status(500).json({ message: "Failed to fetch incidents" });
+      }
+    }
+  );
+
+  // Update incident status (resolve incident)
+  app.patch(
+    "/api/admin/incidents/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!status || !["pending", "reviewed", "resolved"].includes(status)) {
+          return res.status(400).json({ message: "Invalid status. Must be: pending, reviewed, or resolved" });
+        }
+
+        const updatedIncident = await storage.updateIncidentStatus(id, status);
+        res.json(updatedIncident);
+      } catch (error) {
+        console.error("Error updating incident:", error);
+        res.status(500).json({ message: "Failed to update incident" });
+      }
+    }
+  );
+
   // Get all users
   app.get(
     "/api/admin/users",
