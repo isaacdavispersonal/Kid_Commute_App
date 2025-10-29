@@ -173,7 +173,13 @@ export default function AdminSchedule() {
   const monthEnd = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${new Date(currentYear, currentMonth + 1, 0).getDate()}`;
   
   const { data: allShifts, isLoading } = useQuery<Shift[]>({
-    queryKey: ["/api/admin/shifts", { startDate: monthStart, endDate: monthEnd }],
+    queryKey: ["/api/admin/shifts", monthStart, monthEnd],
+    queryFn: async () => {
+      const url = `/api/admin/shifts?startDate=${monthStart}&endDate=${monthEnd}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch shifts");
+      return res.json();
+    },
   });
 
   const { data: allUsers } = useQuery<Driver[]>({
