@@ -2402,6 +2402,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ============ Admin Messaging routes ============
 
+  // Get all drivers for admin to message
+  app.get(
+    "/api/admin/all-drivers",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const drivers = await storage.getUsersByRole("driver");
+        res.json(drivers);
+      } catch (error) {
+        console.error("Error fetching drivers:", error);
+        res.status(500).json({ message: "Failed to fetch drivers" });
+      }
+    }
+  );
+
+  // Get all parents for admin to message
+  app.get(
+    "/api/admin/all-parents",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const parents = await storage.getUsersByRole("parent");
+        res.json(parents);
+      } catch (error) {
+        console.error("Error fetching parents:", error);
+        res.status(500).json({ message: "Failed to fetch parents" });
+      }
+    }
+  );
+
+  // Get direct messages between admin and specific user
+  app.get(
+    "/api/admin/direct-messages/:userId",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const adminId = req.user.claims.sub;
+        const userId = req.params.userId;
+        
+        const messages = await storage.getMessagesBetweenUsers(adminId, userId);
+        
+        // Add sender details to each message
+        const messagesWithDetails = await Promise.all(
+          messages.map(async (msg) => {
+            const sender = await storage.getUser(msg.senderId);
+            return {
+              ...msg,
+              isOwn: msg.senderId === adminId,
+              senderRole: sender?.role || "unknown",
+              senderName: sender ? `${sender.firstName} ${sender.lastName}` : "Unknown",
+            };
+          })
+        );
+        
+        res.json(messagesWithDetails);
+      } catch (error) {
+        console.error("Error fetching admin direct messages:", error);
+        res.status(500).json({ message: "Failed to fetch messages" });
+      }
+    }
+  );
+
   // Get all conversations between drivers and parents
   app.get(
     "/api/admin/all-conversations",
