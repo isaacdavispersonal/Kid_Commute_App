@@ -15,6 +15,7 @@ import {
   MapPin
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   Sidebar,
   SidebarContent,
@@ -25,6 +26,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
 
 const adminMenuItems = [
   {
@@ -167,12 +169,23 @@ interface AppSidebarProps {
 export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
   const [location] = useLocation();
 
+  // Fetch unread counts
+  const { data: unreadCounts } = useQuery<{
+    messages: number;
+    announcements: number;
+  }>({
+    queryKey: ["/api/user/unread-counts"],
+    refetchInterval: 10000, // Refresh every 10 seconds
+  });
+
   const menuItems =
     userRole === "admin"
       ? adminMenuItems
       : userRole === "driver"
       ? driverMenuItems
       : parentMenuItems;
+
+  const totalUnread = (unreadCounts?.messages || 0) + (unreadCounts?.announcements || 0);
 
   return (
     <Sidebar>
@@ -185,6 +198,9 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
             <SidebarMenu>
               {menuItems.map((item) => {
                 const isActive = location === item.url;
+                const isMessages = item.title === "Messages";
+                const showBadge = isMessages && totalUnread > 0;
+
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
@@ -195,6 +211,15 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
                       <Link href={item.url}>
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
+                        {showBadge && (
+                          <Badge 
+                            variant="destructive" 
+                            className="ml-auto h-5 min-w-5 px-1 text-xs"
+                            data-testid="badge-unread-count"
+                          >
+                            {totalUnread}
+                          </Badge>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
