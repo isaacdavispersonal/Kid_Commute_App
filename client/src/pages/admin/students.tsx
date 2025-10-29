@@ -369,38 +369,6 @@ export default function AdminStudentsPage() {
 
   const unassignedCount = students?.filter((s) => !s.assignedRouteId).length || 0;
 
-  // Detect duplicate stop assignments
-  const getDuplicateStopAssignments = () => {
-    if (!students) return { pickupDuplicates: new Map(), dropoffDuplicates: new Map() };
-    
-    const pickupMap = new Map<string, string[]>();
-    const dropoffMap = new Map<string, string[]>();
-    
-    students.forEach(student => {
-      if (student.pickupStopId) {
-        const existing = pickupMap.get(student.pickupStopId) || [];
-        pickupMap.set(student.pickupStopId, [...existing, `${student.firstName} ${student.lastName}`]);
-      }
-      if (student.dropoffStopId) {
-        const existing = dropoffMap.get(student.dropoffStopId) || [];
-        dropoffMap.set(student.dropoffStopId, [...existing, `${student.firstName} ${student.lastName}`]);
-      }
-    });
-    
-    // Filter to only duplicates
-    const pickupDuplicates = new Map(
-      Array.from(pickupMap.entries()).filter(([_, names]) => names.length > 1)
-    );
-    const dropoffDuplicates = new Map(
-      Array.from(dropoffMap.entries()).filter(([_, names]) => names.length > 1)
-    );
-    
-    return { pickupDuplicates, dropoffDuplicates };
-  };
-
-  const { pickupDuplicates, dropoffDuplicates } = getDuplicateStopAssignments();
-  const hasDuplicates = pickupDuplicates.size > 0 || dropoffDuplicates.size > 0;
-
   if (studentsLoading) {
     return <AdminStudentsSkeleton />;
   }
@@ -425,25 +393,6 @@ export default function AdminStudentsPage() {
           <AlertCircle className="h-4 w-4 text-warning" />
           <AlertDescription className="text-warning">
             <span className="font-semibold">{unassignedCount}</span> student{unassignedCount !== 1 ? 's' : ''} not assigned to any route
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {hasDuplicates && (
-        <Alert className="border-destructive/50 bg-destructive/5" data-testid="alert-duplicate-assignments">
-          <AlertCircle className="h-4 w-4 text-destructive" />
-          <AlertDescription className="text-destructive">
-            <span className="font-semibold">Warning:</span> Multiple students assigned to the same stop(s)
-            {pickupDuplicates.size > 0 && (
-              <div className="mt-2 text-sm">
-                <span className="font-medium">Pickup conflicts:</span> {pickupDuplicates.size} stop(s)
-              </div>
-            )}
-            {dropoffDuplicates.size > 0 && (
-              <div className="mt-1 text-sm">
-                <span className="font-medium">Dropoff conflicts:</span> {dropoffDuplicates.size} stop(s)
-              </div>
-            )}
           </AlertDescription>
         </Alert>
       )}
