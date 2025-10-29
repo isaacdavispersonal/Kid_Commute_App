@@ -49,6 +49,16 @@ export default function DriverMessagesPage() {
     refetchInterval: 10000,
   });
 
+  // Get unread counts by sender
+  const { data: unreadCounts } = useQuery<{
+    messages: number;
+    announcements: number;
+    messageBySender: { [senderId: string]: number };
+  }>({
+    queryKey: ["/api/user/unread-counts"],
+    refetchInterval: 5000,
+  });
+
   // Get messages with selected parent
   const { data: messages, isLoading: messagesLoading } = useQuery<any[]>({
     queryKey: ["/api/driver/messages", selectedParent],
@@ -145,6 +155,26 @@ export default function DriverMessagesPage() {
       });
     },
   });
+
+  const markAsReadMutation = useMutation({
+    mutationFn: async (senderId: string) => {
+      return await apiRequest("POST", "/api/messages/mark-read", { senderId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
+    },
+  });
+
+  // Mark messages as read when viewing a conversation
+  useEffect(() => {
+    if (selectedParent && messages && messages.length > 0) {
+      // Check if there are any unread messages from this sender
+      const hasUnread = messages.some((msg: any) => !msg.isRead && msg.senderId === selectedParent);
+      if (hasUnread) {
+        markAsReadMutation.mutate(selectedParent);
+      }
+    }
+  }, [selectedParent, messages]);
 
   const handleSendMessage = () => {
     if (!newMessage.trim() || !selectedParent) return;
@@ -365,45 +395,59 @@ export default function DriverMessagesPage() {
           <CardContent>
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
               {filteredContacts.length > 0 ? (
-                filteredContacts.map((contact: any) => (
-                  <Button
-                    key={contact.id}
-                    variant={selectedParent === contact.id ? "default" : "outline"}
-                    className="w-full justify-start h-auto py-3"
-                    onClick={() => setSelectedParent(contact.id)}
-                    data-testid={`button-contact-${contact.id}`}
-                  >
-                    <div className="flex items-start gap-3 w-full">
-                      <Avatar className="h-8 w-8 mt-1">
-                        <AvatarFallback className={contact.isAdmin ? "bg-warning/10 text-warning text-xs" : "bg-primary/10 text-primary text-xs"}>
-                          <User className="h-4 w-4" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 text-left overflow-hidden">
-                        <p className="font-medium text-sm">
-                          {contact.firstName} {contact.lastName}
-                          {contact.isAdmin && (
-                            <Badge variant="outline" className="ml-2 text-xs border-warning/50 text-warning-foreground">
-                              Admin
-                            </Badge>
-                          )}
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {contact.children?.map((child: any) => (
-                            <Badge 
-                              key={child.id} 
-                              variant="secondary" 
-                              className="text-xs"
-                              data-testid={`badge-child-${child.id}`}
-                            >
-                              {child.firstName} {child.lastName}
-                            </Badge>
-                          ))}
+                filteredContacts.map((contact: any) => {
+                  const unreadCount = unreadCounts?.messageBySender?.[contact.id] || 0;
+                  return (
+                    <Button
+                      key={contact.id}
+                      variant={selectedParent === contact.id ? "default" : "outline"}
+                      className="w-full justify-start h-auto py-3"
+                      onClick={() => setSelectedParent(contact.id)}
+                      data-testid={`button-contact-${contact.id}`}
+                    >
+                      <div className="flex items-start gap-3 w-full">
+                        <Avatar className="h-8 w-8 mt-1">
+                          <AvatarFallback className={contact.isAdmin ? "bg-warning/10 text-warning text-xs" : "bg-primary/10 text-primary text-xs"}>
+                            <User className="h-4 w-4" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 text-left overflow-hidden">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-medium text-sm">
+                              {contact.firstName} {contact.lastName}
+                              {contact.isAdmin && (
+                                <Badge variant="outline" className="ml-2 text-xs border-warning/50 text-warning-foreground">
+                                  Admin
+                                </Badge>
+                              )}
+                            </p>
+                            {unreadCount > 0 && (
+                              <Badge 
+                                variant="destructive" 
+                                className="h-5 min-w-5 px-1 text-xs"
+                                data-testid={`badge-unread-${contact.id}`}
+                              >
+                                {unreadCount}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {contact.children?.map((child: any) => (
+                              <Badge 
+                                key={child.id} 
+                                variant="secondary" 
+                                className="text-xs"
+                                data-testid={`badge-child-${child.id}`}
+                              >
+                                {child.firstName} {child.lastName}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Button>
-                ))
+                    </Button>
+                  );
+                })
               ) : (
                 <div className="text-center py-8">
                   <p className="text-sm text-muted-foreground">

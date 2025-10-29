@@ -39,6 +39,16 @@ export default function ParentMessagesPage() {
     refetchInterval: 10000,
   });
 
+  // Get unread counts by sender
+  const { data: unreadCounts } = useQuery<{
+    messages: number;
+    announcements: number;
+    messageBySender: { [senderId: string]: number };
+  }>({
+    queryKey: ["/api/user/unread-counts"],
+    refetchInterval: 5000,
+  });
+
   // Get messages between parent and selected driver
   const { data: messages, isLoading: messagesLoading } = useQuery<any[]>({
     queryKey: ["/api/parent/messages", selectedDriver],
@@ -118,6 +128,25 @@ export default function ParentMessagesPage() {
       });
     },
   });
+
+  const markAsReadMutation = useMutation({
+    mutationFn: async (senderId: string) => {
+      return await apiRequest("POST", "/api/messages/mark-read", { senderId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
+    },
+  });
+
+  // Mark messages as read when viewing a conversation
+  useEffect(() => {
+    if (selectedDriver && messages && messages.length > 0) {
+      const hasUnread = messages.some((msg: any) => !msg.isRead && msg.senderId === selectedDriver);
+      if (hasUnread) {
+        markAsReadMutation.mutate(selectedDriver);
+      }
+    }
+  }, [selectedDriver, messages]);
 
   const handleSendMessage = () => {
     if (!newMessage.trim() || !selectedDriver) return;
