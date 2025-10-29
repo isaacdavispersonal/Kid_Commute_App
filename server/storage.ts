@@ -147,6 +147,7 @@ export interface IStorage {
   getAllIncidents(): Promise<Incident[]>;
   getRecentIncidents(limit: number): Promise<Incident[]>;
   createIncident(incident: InsertIncident): Promise<Incident>;
+  updateIncidentStatus(id: string, status: "pending" | "reviewed" | "resolved"): Promise<Incident>;
 
   // Vehicle inspection operations
   createVehicleInspection(inspection: InsertVehicleInspection): Promise<VehicleInspection>;
@@ -1274,6 +1275,15 @@ export class DatabaseStorage implements IStorage {
   async createIncident(incident: InsertIncident): Promise<Incident> {
     const [newIncident] = await db.insert(incidents).values(incident).returning();
     return newIncident;
+  }
+
+  async updateIncidentStatus(id: string, status: "pending" | "reviewed" | "resolved"): Promise<Incident> {
+    const [updatedIncident] = await db
+      .update(incidents)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(incidents.id, id))
+      .returning();
+    return updatedIncident;
   }
 
   // ============ Vehicle inspection operations ============
