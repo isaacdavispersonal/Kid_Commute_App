@@ -2201,11 +2201,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const parentId = req.user.claims.sub;
         const driverId = req.params.driverId;
         
-        // Verify driver is assigned to at least one of parent's children
-        const parentStudents = await storage.getStudentsByParent(parentId);
-        const hasAssignedDriver = parentStudents.some((student: any) => student.driverId === driverId);
+        // Verify driver is currently assigned to parent's children's routes
+        const assignedDrivers = await storage.getActiveDriversForParent(parentId);
+        const isDriverAssigned = assignedDrivers.some((driver: any) => driver.id === driverId);
         
-        if (!hasAssignedDriver) {
+        if (!isDriverAssigned) {
           return res.status(403).json({ message: "You can only message drivers assigned to your children" });
         }
         
@@ -2246,11 +2246,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Recipient ID required" });
         }
 
-        // Verify driver is assigned to at least one of parent's children
-        const parentStudents = await storage.getStudentsByParent(senderId);
-        const hasAssignedDriver = parentStudents.some((student: any) => student.driverId === recipientId);
+        // Verify driver is currently assigned to parent's children's routes
+        const assignedDrivers = await storage.getActiveDriversForParent(senderId);
+        const isDriverAssigned = assignedDrivers.some((driver: any) => driver.id === recipientId);
         
-        if (!hasAssignedDriver) {
+        if (!isDriverAssigned) {
           return res.status(403).json({ message: "You can only message drivers assigned to your children" });
         }
 
