@@ -528,15 +528,14 @@ export default function AdminSchedule() {
                     <FormLabel>Route (Optional)</FormLabel>
                     <Select 
                       onValueChange={(value) => field.onChange(value || null)} 
-                      value={field.value || ""}
+                      value={field.value ?? undefined}
                     >
                       <FormControl>
                         <SelectTrigger data-testid="select-route">
-                          <SelectValue placeholder="Select a route" />
+                          <SelectValue placeholder="Select a route (optional)" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
                         {routes?.map((route) => (
                           <SelectItem 
                             key={route.id} 
@@ -561,15 +560,14 @@ export default function AdminSchedule() {
                     <FormLabel>Vehicle (Optional)</FormLabel>
                     <Select 
                       onValueChange={(value) => field.onChange(value || null)} 
-                      value={field.value || ""}
+                      value={field.value ?? undefined}
                     >
                       <FormControl>
                         <SelectTrigger data-testid="select-vehicle">
-                          <SelectValue placeholder="Select a vehicle" />
+                          <SelectValue placeholder="Select a vehicle (optional)" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
                         {vehicles?.map((vehicle) => (
                           <SelectItem 
                             key={vehicle.id} 
