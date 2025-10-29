@@ -1,18 +1,18 @@
-// Parent messaging - send messages to assigned driver
+// Parent messaging - message drivers assigned to your children
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, MessageSquare, AlertCircle, User, Megaphone } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 
 export default function ParentMessagesPage() {
   const { toast } = useToast();
@@ -26,15 +26,10 @@ export default function ParentMessagesPage() {
     refetchInterval: 10000,
   });
 
-  // Get parent's children with route assignments
-  const { data: students, isLoading: studentsLoading } = useQuery({
-    queryKey: ["/api/parent/students"],
-  });
-
-  // Get driver info for selected student's route
-  const { data: driverInfo, isLoading: driverLoading } = useQuery({
-    queryKey: ["/api/parent/driver-info", selectedDriver],
-    enabled: !!selectedDriver,
+  // Get drivers currently assigned to parent's children's routes
+  const { data: assignedDrivers = [], isLoading: driversLoading } = useQuery({
+    queryKey: ["/api/parent/assigned-drivers"],
+    refetchInterval: 10000,
   });
 
   // Get messages between parent and selected driver
@@ -44,15 +39,12 @@ export default function ParentMessagesPage() {
     refetchInterval: 3000,
   });
 
-  // Auto-select first student's driver on load
+  // Auto-select first driver on load
   useEffect(() => {
-    if (students && students.length > 0 && !selectedDriver) {
-      const firstStudentWithRoute = students.find((s: any) => s.routeId && s.driverId);
-      if (firstStudentWithRoute) {
-        setSelectedDriver(firstStudentWithRoute.driverId);
-      }
+    if (assignedDrivers.length > 0 && !selectedDriver) {
+      setSelectedDriver(assignedDrivers[0].id);
     }
-  }, [students, selectedDriver]);
+  }, [assignedDrivers, selectedDriver]);
 
   // Listen for real-time messages via WebSocket
   useEffect(() => {
@@ -62,6 +54,7 @@ export default function ParentMessagesPage() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "new_message") {
+          queryClient.refetchQueries({ queryKey: ["/api/parent/assigned-drivers"] });
           queryClient.refetchQueries({ queryKey: ["/api/parent/messages", selectedDriver] });
         }
       } catch (error) {
@@ -113,14 +106,11 @@ export default function ParentMessagesPage() {
     sendMessageMutation.mutate(newMessage);
   };
 
-  if (studentsLoading) {
+  if (driversLoading) {
     return <MessagesSkeleton />;
   }
 
-  // Check if any children have assigned drivers
-  const studentsWithDrivers = students?.filter((s: any) => s.routeId && s.driverId) || [];
-
-  if (studentsWithDrivers.length === 0) {
+  if (assignedDrivers.length === 0) {
     return (
       <div className="space-y-6">
         <div>
@@ -135,8 +125,8 @@ export default function ParentMessagesPage() {
               <AlertCircle className="h-16 w-16 text-warning mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Driver Assigned</h3>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Your child has not been assigned to a route with a driver yet.
-                Once assigned, you'll be able to message their driver here.
+                Your children have not been assigned to routes with active drivers yet.
+                Once assigned, you'll be able to message their drivers here.
               </p>
             </div>
           </CardContent>
@@ -144,6 +134,8 @@ export default function ParentMessagesPage() {
       </div>
     );
   }
+
+  const selectedDriverData = assignedDrivers.find((d: any) => d.id === selectedDriver);
 
   return (
     <div className="space-y-6">
@@ -196,7 +188,12 @@ export default function ParentMessagesPage() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
-              Conversation with Driver
+              Conversation
+              {selectedDriverData && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  with {selectedDriverData.firstName} {selectedDriverData.lastName}
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -210,12 +207,11 @@ export default function ParentMessagesPage() {
                   messages.map((message: any) => {
                     const isOwn = message.isOwn;
                     const isAdmin = message.senderRole === "admin";
-                    const isDriver = message.senderRole === "driver";
                     
                     return (
                       <div
                         key={message.id}
-                        className={`flex ${(isOwn || isAdmin || isDriver) ? "justify-end" : "justify-start"}`}
+                        className={`flex ${(isOwn || isAdmin) ? "justify-end" : "justify-start"}`}
                         data-testid={`message-${message.id}`}
                       >
                         <div
@@ -283,53 +279,48 @@ export default function ParentMessagesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Your Driver</CardTitle>
+            <CardTitle className="text-lg">Your Drivers</CardTitle>
           </CardHeader>
           <CardContent>
-            {driverLoading ? (
-              <Skeleton className="h-20" />
-            ) : driverInfo ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 p-3 rounded-md bg-accent/50">
-                  <Avatar className="h-12 w-12">
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      <User className="h-6 w-6" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">
-                      {driverInfo.firstName} {driverInfo.lastName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Route Driver
-                    </p>
+            <div className="space-y-2">
+              {assignedDrivers.map((driver: any) => (
+                <Button
+                  key={driver.id}
+                  variant={selectedDriver === driver.id ? "default" : "outline"}
+                  className="w-full justify-start h-auto py-3"
+                  onClick={() => setSelectedDriver(driver.id)}
+                  data-testid={`button-driver-${driver.id}`}
+                >
+                  <div className="flex items-start gap-3 w-full">
+                    <Avatar className="h-8 w-8 mt-1">
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 text-left overflow-hidden">
+                      <p className="font-medium text-sm">
+                        {driver.firstName} {driver.lastName}
+                      </p>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        Route Driver
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {driver.children?.map((child: any) => (
+                          <Badge 
+                            key={child.id} 
+                            variant="secondary" 
+                            className="text-xs"
+                            data-testid={`badge-child-${child.id}`}
+                          >
+                            {child.firstName}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
-
-                {studentsWithDrivers.length > 1 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Switch Driver</p>
-                    {studentsWithDrivers.map((student: any) => (
-                      <Button
-                        key={student.id}
-                        variant={selectedDriver === student.driverId ? "default" : "outline"}
-                        size="sm"
-                        className="w-full justify-start"
-                        onClick={() => setSelectedDriver(student.driverId)}
-                        data-testid={`button-select-driver-${student.id}`}
-                      >
-                        <User className="h-4 w-4 mr-2" />
-                        {student.firstName}'s Driver
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No driver information available
-              </p>
-            )}
+                </Button>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
