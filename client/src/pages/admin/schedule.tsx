@@ -1,10 +1,9 @@
-// Admin monthly calendar schedule management with shift-based system
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, User, Clock } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, User, Clock, Edit } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -12,6 +11,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -67,7 +71,6 @@ interface Driver {
   role: string;
 }
 
-// Helper function to safely display driver names
 function getDriverDisplayName(driver: Driver | undefined): string {
   if (!driver) return "Unknown Driver";
   
@@ -128,10 +131,10 @@ const MONTH_NAMES = [
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const SHIFT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  MORNING: { label: "Morning", color: "bg-blue-500/10 text-blue-700 dark:text-blue-400" },
-  AFTERNOON: { label: "Afternoon", color: "bg-orange-500/10 text-orange-700 dark:text-orange-400" },
-  EXTRA: { label: "Extra", color: "bg-purple-500/10 text-purple-700 dark:text-purple-400" },
+const SHIFT_TYPE_LABELS: Record<string, { label: string; shortLabel: string; color: string }> = {
+  MORNING: { label: "Morning", shortLabel: "Mor", color: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20" },
+  AFTERNOON: { label: "Afternoon", shortLabel: "Aft", color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20" },
+  EXTRA: { label: "Extra", shortLabel: "Ext", color: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20" },
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -140,6 +143,12 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   COMPLETED: { label: "Completed", color: "bg-gray-500/10 text-gray-700 dark:text-gray-400" },
   MISSED: { label: "Missed", color: "bg-red-500/10 text-red-700 dark:text-red-400" },
 };
+
+interface DriverShiftsGroup {
+  driverId: string;
+  driverName: string;
+  shifts: Shift[];
+}
 
 export default function AdminSchedule() {
   const { toast } = useToast();
@@ -168,7 +177,6 @@ export default function AdminSchedule() {
     },
   });
 
-  // Query for entire month using date range
   const monthStart = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
   const monthEnd = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${new Date(currentYear, currentMonth + 1, 0).getDate()}`;
   
@@ -317,19 +325,42 @@ export default function AdminSchedule() {
     setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
   };
 
-  const getShiftsForDate = (date: Date): Shift[] => {
+  const getDriverShiftsForDate = (date: Date): DriverShiftsGroup[] => {
     if (date.getTime() === 0) return [];
     const dateStr = date.toISOString().split('T')[0];
-    const shifts = allShifts?.filter(s => s.date === dateStr) || [];
-    return shifts.sort((a, b) => {
-      const order = { MORNING: 0, AFTERNOON: 1, EXTRA: 2 };
-      return order[a.shiftType] - order[b.shiftType];
+    const dayShifts = allShifts?.filter(s => s.date === dateStr) || [];
+    
+    const groupedByDriver = dayShifts.reduce((acc, shift) => {
+      if (!acc[shift.driverId]) {
+        acc[shift.driverId] = [];
+      }
+      acc[shift.driverId].push(shift);
+      return acc;
+    }, {} as Record<string, Shift[]>);
+
+    return Object.entries(groupedByDriver).map(([driverId, shifts]) => {
+      const driver = drivers.find(d => d.id === driverId);
+      return {
+        driverId,
+        driverName: getDriverDisplayName(driver),
+        shifts: shifts.sort((a, b) => {
+          const order = { MORNING: 0, AFTERNOON: 1, EXTRA: 2 };
+          return order[a.shiftType] - order[b.shiftType];
+        }),
+      };
     });
   };
 
-  const getDriverName = (driverId: string) => {
-    const driver = drivers.find(d => d.id === driverId);
-    return getDriverDisplayName(driver);
+  const getRouteName = (routeId: string | null) => {
+    if (!routeId) return "No route";
+    const route = routes?.find(r => r.id === routeId);
+    return route?.name || "Unknown route";
+  };
+
+  const getVehicleName = (vehicleId: string | null) => {
+    if (!vehicleId) return "No vehicle";
+    const vehicle = vehicles?.find(v => v.id === vehicleId);
+    return vehicle ? `${vehicle.name} (${vehicle.plateNumber})` : "Unknown vehicle";
   };
 
   if (isLoading) {
@@ -343,13 +374,13 @@ export default function AdminSchedule() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold mb-1" data-testid="title-schedule">
             Shift Schedule
           </h1>
           <p className="text-sm text-muted-foreground">
-            Manage driver shifts by date - supports multiple shifts per day
+            Manage driver shifts by date - click on a driver to see their shift details
           </p>
         </div>
       </div>
@@ -385,73 +416,147 @@ export default function AdminSchedule() {
               {daysInMonth.map((date, index) => {
                 const isPlaceholder = date.getTime() === 0;
                 const dateStr = isPlaceholder ? "" : date.toISOString().split('T')[0];
-                const dayShifts = isPlaceholder ? [] : getShiftsForDate(date);
+                const driverGroups = isPlaceholder ? [] : getDriverShiftsForDate(date);
                 const isToday = !isPlaceholder && dateStr === new Date().toISOString().split('T')[0];
 
                 return (
                   <div
                     key={index}
-                    className={`min-h-[120px] p-1.5 rounded-md border ${
-                      isPlaceholder ? "bg-muted/20" : "bg-card hover-elevate"
+                    className={`min-h-[100px] p-2 rounded-md border ${
+                      isPlaceholder ? "bg-muted/20" : "bg-card"
                     } ${isToday ? "border-primary" : ""}`}
                     data-testid={isPlaceholder ? `placeholder-${index}` : `day-${dateStr}`}
                   >
                     {!isPlaceholder && (
                       <>
-                        <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center justify-between mb-2">
                           <span className={`text-sm font-medium ${isToday ? "text-primary" : ""}`}>
                             {date.getDate()}
                           </span>
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-5 w-5 p-0"
+                            className="h-6 w-6 p-0"
                             onClick={() => handleAddShift(dateStr)}
                             data-testid={`button-add-${dateStr}`}
                           >
-                            <Plus className="h-3 w-3" />
+                            <Plus className="h-3.5 w-3.5" />
                           </Button>
                         </div>
 
-                        <div className="space-y-1 max-h-[80px] overflow-y-auto">
-                          {dayShifts.map((shift) => (
-                            <div
-                              key={shift.id}
-                              className="text-xs p-1.5 rounded bg-accent/30 hover-elevate cursor-pointer"
-                              onClick={() => handleEditShift(shift)}
-                              data-testid={`shift-${shift.id}`}
-                            >
-                              <div className="flex items-start justify-between gap-1 mb-1">
-                                <Badge 
-                                  variant="secondary" 
-                                  className={`text-[10px] px-1 py-0 h-4 ${SHIFT_TYPE_LABELS[shift.shiftType].color}`}
+                        <div className="space-y-1.5">
+                          {driverGroups.map((group) => (
+                            <Popover key={group.driverId}>
+                              <PopoverTrigger asChild>
+                                <div
+                                  className="text-xs p-1.5 rounded-md bg-accent/40 hover-elevate cursor-pointer"
+                                  data-testid={`driver-group-${group.driverId}`}
                                 >
-                                  {SHIFT_TYPE_LABELS[shift.shiftType].label.substring(0, 3)}
-                                </Badge>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-3.5 w-3.5 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeleteDialog(shift);
-                                  }}
-                                  data-testid={`button-delete-${shift.id}`}
-                                >
-                                  <Trash2 className="h-2.5 w-2.5" />
-                                </Button>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <User className="h-2.5 w-2.5 flex-shrink-0" />
-                                <span className="font-medium truncate text-[10px]">
-                                  {getDriverName(shift.driverId).split(' ')[0]}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1 text-muted-foreground">
-                                <Clock className="h-2.5 w-2.5 flex-shrink-0" />
-                                <span className="text-[10px]">{shift.plannedStart}</span>
-                              </div>
-                            </div>
+                                  <div className="flex items-center gap-1 mb-1">
+                                    <User className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                    <span className="font-medium truncate text-[11px]">
+                                      {group.driverName}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground ml-auto">
+                                      ({group.shifts.length})
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-0.5">
+                                    {group.shifts.map((shift) => (
+                                      <Badge
+                                        key={shift.id}
+                                        variant="outline"
+                                        className={`text-[9px] px-1 py-0 h-4 border ${SHIFT_TYPE_LABELS[shift.shiftType].color}`}
+                                      >
+                                        {SHIFT_TYPE_LABELS[shift.shiftType].shortLabel}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80" align="start">
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <h4 className="font-semibold text-sm flex items-center gap-2">
+                                      <User className="h-4 w-4" />
+                                      {group.driverName}
+                                    </h4>
+                                    <Badge variant="secondary" className="text-xs">
+                                      {group.shifts.length} {group.shifts.length === 1 ? 'shift' : 'shifts'}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <div className="space-y-2">
+                                    {group.shifts.map((shift) => (
+                                      <div
+                                        key={shift.id}
+                                        className="p-2 rounded-md border bg-card space-y-1.5"
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <Badge 
+                                            variant="outline"
+                                            className={`text-xs ${SHIFT_TYPE_LABELS[shift.shiftType].color}`}
+                                          >
+                                            {SHIFT_TYPE_LABELS[shift.shiftType].label}
+                                          </Badge>
+                                          <div className="flex items-center gap-1">
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="h-6 w-6 p-0"
+                                              onClick={() => handleEditShift(shift)}
+                                              data-testid={`button-edit-${shift.id}`}
+                                            >
+                                              <Edit className="h-3 w-3" />
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                              onClick={() => setDeleteDialog(shift)}
+                                              data-testid={`button-delete-${shift.id}`}
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="text-xs space-y-1">
+                                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                                            <Clock className="h-3 w-3" />
+                                            <span>{shift.plannedStart} - {shift.plannedEnd}</span>
+                                          </div>
+                                          
+                                          <div className="text-muted-foreground">
+                                            Route: <span className="text-foreground">{getRouteName(shift.routeId)}</span>
+                                          </div>
+                                          
+                                          <div className="text-muted-foreground">
+                                            Vehicle: <span className="text-foreground">{getVehicleName(shift.vehicleId)}</span>
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-muted-foreground">Status:</span>
+                                            <Badge 
+                                              variant="secondary"
+                                              className={`text-[10px] ${STATUS_LABELS[shift.status].color}`}
+                                            >
+                                              {STATUS_LABELS[shift.status].label}
+                                            </Badge>
+                                          </div>
+                                          
+                                          {shift.notes && (
+                                            <div className="text-muted-foreground pt-1 border-t">
+                                              Notes: <span className="text-foreground italic">{shift.notes}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           ))}
                         </div>
                       </>
@@ -465,7 +570,7 @@ export default function AdminSchedule() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle data-testid="dialog-title">
               {editingShift ? "Edit Shift" : "New Shift"}
@@ -662,9 +767,10 @@ export default function AdminSchedule() {
                     <FormControl>
                       <Textarea
                         {...field}
-                        value={field.value || ""}
-                        onChange={(e) => field.onChange(e.target.value || null)}
-                        placeholder="Add any notes about this shift"
+                        value={field.value ?? ""}
+                        placeholder="Add any additional notes..."
+                        className="resize-none"
+                        rows={3}
                         data-testid="input-notes"
                       />
                     </FormControl>
@@ -687,7 +793,11 @@ export default function AdminSchedule() {
                   disabled={createMutation.isPending || updateMutation.isPending}
                   data-testid="button-submit"
                 >
-                  {editingShift ? "Update Shift" : "Create Shift"}
+                  {(createMutation.isPending || updateMutation.isPending)
+                    ? "Saving..."
+                    : editingShift
+                    ? "Update Shift"
+                    : "Create Shift"}
                 </Button>
               </div>
             </form>
@@ -700,14 +810,14 @@ export default function AdminSchedule() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Shift</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this {deleteDialog && SHIFT_TYPE_LABELS[deleteDialog.shiftType].label.toLowerCase()} shift on {deleteDialog && new Date(deleteDialog.date + 'T00:00:00').toLocaleDateString()}? This action cannot be undone.
+              Are you sure you want to delete this shift? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteDialog && deleteMutation.mutate(deleteDialog.id)}
-              className="bg-destructive hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-delete"
             >
               Delete
