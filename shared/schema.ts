@@ -474,6 +474,26 @@ export const insertAnnouncementSchema = createInsertSchema(announcements).omit({
 export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
 export type Announcement = typeof announcements.$inferSelect;
 
+// Announcement reads table - tracks which users have read which announcements
+export const announcementReads = pgTable("announcement_reads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  announcementId: varchar("announcement_id")
+    .notNull()
+    .references(() => announcements.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAnnouncementReadSchema = createInsertSchema(announcementReads).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAnnouncementRead = z.infer<typeof insertAnnouncementReadSchema>;
+export type AnnouncementRead = typeof announcementReads.$inferSelect;
+
 // ============ Incident Management Tables ============
 
 // Incident severity enum
