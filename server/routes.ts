@@ -101,6 +101,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get unread counts for current user
+  app.get("/api/user/unread-counts", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const messageCount = await storage.getUnreadMessageCount(userId);
+      const messageCounts = await storage.getUnreadCountsBySender(userId);
+      let announcementCount = 0;
+
+      if (user.role === "driver" || user.role === "parent") {
+        announcementCount = await storage.getUnreadAnnouncementCount(userId, user.role);
+      }
+
+      res.json({
+        messages: messageCount,
+        announcements: announcementCount,
+        messageBySender: messageCounts,
+      });
+    } catch (error) {
+      console.error("Error fetching unread counts:", error);
+      res.status(500).json({ message: "Failed to fetch unread counts" });
+    }
+  });
+
+  // Mark messages as read
+  app.post("/api/messages/mark-read", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { senderId } = req.body;
+
+      if (!senderId) {
+        return res.status(400).json({ message: "senderId is required" });
+      }
+
+      await storage.markMessagesAsRead(userId, senderId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
+      res.status(500).json({ message: "Failed to mark messages as read" });
+    }
+  });
+
+  // Mark announcement as read
+  app.post("/api/announcements/mark-read", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { announcementId } = req.body;
+
+      if (!announcementId) {
+        return res.status(400).json({ message: "announcementId is required" });
+      }
+
+      await storage.markAnnouncementAsRead(userId, announcementId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking announcement as read:", error);
+      res.status(500).json({ message: "Failed to mark announcement as read" });
+    }
+  });
+
   // ============ Admin routes ============
 
   // Get dashboard statistics
