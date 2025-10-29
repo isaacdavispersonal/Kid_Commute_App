@@ -32,7 +32,6 @@ import AdminUsers from "@/pages/admin/users";
 import AdminStudents from "@/pages/admin/students";
 import AdminDriverAssignments from "@/pages/admin/driver-assignments";
 import AdminAnnouncements from "@/pages/admin/announcements";
-import AdminTimeExceptions from "@/pages/admin/time-exceptions";
 import AdminTimeManagement from "@/pages/admin/time-management";
 
 import DriverDashboard from "@/pages/driver/dashboard";
@@ -140,7 +139,12 @@ function Router() {
                   <Route path="/admin/messages" component={AdminMessages} />
                   <Route path="/admin/announcements" component={AdminAnnouncements} />
                   <Route path="/admin/time-management" component={AdminTimeManagement} />
-                  <Route path="/admin/time-exceptions" component={AdminTimeExceptions} />
+                  <Route path="/admin/time-exceptions">
+                    {() => {
+                      window.location.href = "/admin/time-management";
+                      return null;
+                    }}
+                  </Route>
                 </>
               )}
               {userRole === "driver" && (

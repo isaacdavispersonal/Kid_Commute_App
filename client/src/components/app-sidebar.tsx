@@ -73,11 +73,6 @@ const adminMenuItems = [
     icon: Clock,
   },
   {
-    title: "Time Exceptions",
-    url: "/admin/time-exceptions",
-    icon: Clock,
-  },
-  {
     title: "Incidents",
     url: "/admin/incidents",
     icon: AlertTriangle,

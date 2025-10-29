@@ -1,11 +1,12 @@
-// Admin comprehensive time management dashboard
-import { useState } from "react";
+// Admin comprehensive time management dashboard with tabbed interface
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Clock, 
   Calendar, 
@@ -13,11 +14,12 @@ import {
   StopCircle, 
   Edit, 
   Filter,
-  Download,
   X,
   Check,
   User,
-  TrendingUp
+  TrendingUp,
+  AlertCircle,
+  CheckCircle
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -35,6 +37,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format, subDays } from "date-fns";
@@ -47,7 +51,11 @@ interface ClockEvent {
   timestamp: string;
   source: "USER" | "AUTO" | "ADMIN_EDIT";
   notes: string | null;
-  isResolved: boolean;
+  isResolved?: boolean;
+  resolved?: boolean;
+  resolvedAt?: string | null;
+  resolvedBy?: string | null;
+  resolvedNotes?: string | null;
 }
 
 interface EnrichedClockEvent extends ClockEvent {
@@ -78,22 +86,24 @@ function getDriverDisplayName(driver: Driver | undefined): string {
   } else if (lastName) {
     return lastName;
   } else {
-    // Fall back to email if no name is set
     return driver.email || "Unknown Driver";
   }
 }
 
 export default function AdminTimeManagement() {
   const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("overview");
   
-  // Filters
+  // Overview tab state
   const [selectedDriver, setSelectedDriver] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<"week" | "month" | "all">("week");
-  
-  // Edit dialog state
   const [editingEvent, setEditingEvent] = useState<EnrichedClockEvent | null>(null);
   const [editedTimestamp, setEditedTimestamp] = useState<string>("");
+  
+  // Exceptions tab state
+  const [selectedEvent, setSelectedEvent] = useState<EnrichedClockEvent | null>(null);
+  const [resolveNotes, setResolveNotes] = useState("");
 
   // Calculate date range
   const getDateRange = () => {
@@ -127,8 +137,8 @@ export default function AdminTimeManagement() {
     select: (users) => users.filter((u: any) => u.role === "driver"),
   });
 
-  // Fetch all clock events
-  const { data: clockEvents, isLoading } = useQuery<ClockEvent[]>({
+  // Fetch all clock events for overview
+  const { data: clockEvents, isLoading: isLoadingAll } = useQuery<ClockEvent[]>({
     queryKey: ["/api/admin/all-clock-events", range.startDate, range.endDate],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -141,6 +151,12 @@ export default function AdminTimeManagement() {
       }
       return response.json();
     },
+  });
+
+  // Fetch unresolved events for exceptions tab
+  const { data: unresolvedEvents, isLoading: isLoadingUnresolved } = useQuery<ClockEvent[]>({
+    queryKey: ["/api/admin/clock-events/unresolved"],
+    refetchInterval: 30000,
   });
 
   // Fetch shifts for enrichment
@@ -160,6 +176,7 @@ export default function AdminTimeManagement() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/all-clock-events"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/clock-events/unresolved"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/driver/shifts"] });
       toast({
         title: "Clock Event Updated",
@@ -177,24 +194,77 @@ export default function AdminTimeManagement() {
     },
   });
 
-  // Enrich events with driver and shift information
-  const enrichedEvents: EnrichedClockEvent[] = (clockEvents || []).map((event) => {
-    const driver = drivers?.find((d) => d.id === event.driverId);
-    const shift = shifts?.find((s: any) => s.id === event.shiftId);
-    
-    return {
-      ...event,
-      driverName: getDriverDisplayName(driver),
-      shiftDate: shift?.date || null,
-      shiftType: shift?.shiftType || null,
-    };
+  // Resolve event mutation
+  const resolveMutation = useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      return await apiRequest("PATCH", `/api/admin/clock-events/${id}/resolve`, { notes });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/clock-events/unresolved"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/all-clock-events"] });
+      setSelectedEvent(null);
+      setResolveNotes("");
+      toast({
+        title: "Event Resolved",
+        description: "Clock event has been marked as resolved",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to resolve clock event",
+        variant: "destructive",
+      });
+    },
   });
 
-  // Apply filters
-  const filteredEvents = enrichedEvents.filter((event) => {
+  // Auto-clockout mutation
+  const autoClockoutMutation = useMutation({
+    mutationFn: async (graceHours?: number) => {
+      return await apiRequest("POST", "/api/admin/auto-clockout", { graceHours });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/clock-events/unresolved"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/all-clock-events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
+      toast({
+        title: "Auto-Clockout Complete",
+        description: data.message || `Processed ${data.processed} orphaned shift(s)`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to run auto-clockout",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Enrich events with driver and shift information
+  const enrichEvents = (events: ClockEvent[]): EnrichedClockEvent[] => {
+    return (events || []).map((event) => {
+      const driver = drivers?.find((d) => d.id === event.driverId);
+      const shift = shifts?.find((s: any) => s.id === event.shiftId);
+      
+      return {
+        ...event,
+        driverName: getDriverDisplayName(driver),
+        shiftDate: shift?.date || null,
+        shiftType: shift?.shiftType || null,
+      };
+    });
+  };
+
+  const enrichedAllEvents = enrichEvents(clockEvents || []);
+  const enrichedUnresolvedEvents = enrichEvents(unresolvedEvents || []);
+
+  // Apply filters to overview tab
+  const filteredEvents = enrichedAllEvents.filter((event) => {
     if (selectedDriver !== "all" && event.driverId !== selectedDriver) return false;
-    if (statusFilter === "resolved" && !event.isResolved) return false;
-    if (statusFilter === "unresolved" && event.isResolved) return false;
+    const isResolved = event.isResolved ?? event.resolved ?? false;
+    if (statusFilter === "resolved" && !isResolved) return false;
+    if (statusFilter === "unresolved" && isResolved) return false;
     return true;
   });
 
@@ -203,7 +273,7 @@ export default function AdminTimeManagement() {
     totalEvents: filteredEvents.length,
     clockIns: filteredEvents.filter(e => e.type === "IN").length,
     clockOuts: filteredEvents.filter(e => e.type === "OUT").length,
-    unresolvedEvents: filteredEvents.filter(e => !e.isResolved).length,
+    unresolvedEvents: enrichedUnresolvedEvents.length,
   };
 
   const handleEditClick = (event: EnrichedClockEvent) => {
@@ -223,230 +293,417 @@ export default function AdminTimeManagement() {
     }
   };
 
+  const handleResolve = (event: EnrichedClockEvent) => {
+    setSelectedEvent(event);
+    setResolveNotes("");
+  };
+
+  const submitResolve = () => {
+    if (selectedEvent) {
+      resolveMutation.mutate({
+        id: selectedEvent.id,
+        notes: resolveNotes,
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold mb-1" data-testid="title-time-management">
-          Time Management Dashboard
+          Time Management
         </h1>
         <p className="text-sm text-muted-foreground">
-          View and manage all clock events across drivers
+          Manage clock events, review exceptions, and track driver hours
         </p>
       </div>
 
-      {/* Filters */}
-      <Card data-testid="card-filters">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Driver</Label>
-              <Select value={selectedDriver} onValueChange={setSelectedDriver}>
-                <SelectTrigger data-testid="select-driver">
-                  <SelectValue placeholder="All Drivers" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Drivers</SelectItem>
-                  {drivers?.map((driver) => (
-                    <SelectItem key={driver.id} value={driver.id}>
-                      {getDriverDisplayName(driver)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} data-testid="tabs-time-management">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="overview" data-testid="tab-overview">
+            <TrendingUp className="h-4 w-4 mr-2" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="exceptions" data-testid="tab-exceptions">
+            <AlertCircle className="h-4 w-4 mr-2" />
+            Exceptions
+            {stats.unresolvedEvents > 0 && (
+              <Badge variant="destructive" className="ml-2">
+                {stats.unresolvedEvents}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger data-testid="select-status">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="unresolved">Unresolved</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Date Range</Label>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant={dateRange === "week" ? "default" : "outline"}
-                  onClick={() => setDateRange("week")}
-                  className="flex-1"
-                  data-testid="button-range-week"
-                >
-                  Week
-                </Button>
-                <Button
-                  size="sm"
-                  variant={dateRange === "month" ? "default" : "outline"}
-                  onClick={() => setDateRange("month")}
-                  className="flex-1"
-                  data-testid="button-range-month"
-                >
-                  Month
-                </Button>
-                <Button
-                  size="sm"
-                  variant={dateRange === "all" ? "default" : "outline"}
-                  onClick={() => setDateRange("all")}
-                  className="flex-1"
-                  data-testid="button-range-all"
-                >
-                  All
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card data-testid="card-total-events">
-          <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Events</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-events">
-              {stats.totalEvents}
-            </div>
-            <p className="text-xs text-muted-foreground">clock events</p>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-clock-ins">
-          <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Clock Ins</CardTitle>
-            <PlayCircle className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600" data-testid="text-clock-ins">
-              {stats.clockIns}
-            </div>
-            <p className="text-xs text-muted-foreground">entries</p>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-clock-outs">
-          <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Clock Outs</CardTitle>
-            <StopCircle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600" data-testid="text-clock-outs">
-              {stats.clockOuts}
-            </div>
-            <p className="text-xs text-muted-foreground">entries</p>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-unresolved">
-          <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unresolved</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-unresolved">
-              {stats.unresolvedEvents}
-            </div>
-            <p className="text-xs text-muted-foreground">need attention</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Events List */}
-      <Card data-testid="card-events-list">
-        <CardHeader>
-          <CardTitle>Clock Events</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          ) : filteredEvents.length > 0 ? (
-            <div className="space-y-2">
-              {filteredEvents.map((event) => (
-                <div
-                  key={event.id}
-                  className="flex items-center justify-between p-3 bg-muted/30 rounded-md hover-elevate group"
-                  data-testid={`event-${event.id}`}
-                >
-                  <div className="flex items-center gap-3">
-                    {event.type === "IN" ? (
-                      <PlayCircle className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <StopCircle className="h-4 w-4 text-red-600" />
-                    )}
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{event.driverName}</span>
-                        <Badge variant={event.type === "IN" ? "default" : "secondary"}>
-                          {event.type}
-                        </Badge>
-                        {!event.isResolved && (
-                          <Badge variant="destructive" className="text-xs">
-                            Unresolved
-                          </Badge>
-                        )}
-                        {event.source === "AUTO" && (
-                          <Badge variant="outline" className="text-xs">
-                            Auto
-                          </Badge>
-                        )}
-                        {event.source === "ADMIN_EDIT" && (
-                          <Badge variant="outline" className="text-xs">
-                            Edited
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {new Date(event.timestamp).toLocaleString()}
-                        {event.shiftDate && event.shiftType && (
-                          <span className="ml-2">
-                            • {event.shiftDate} ({event.shiftType})
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => handleEditClick(event)}
-                    data-testid={`button-edit-${event.id}`}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Filters */}
+          <Card data-testid="card-filters">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Filters
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Driver</Label>
+                  <Select value={selectedDriver} onValueChange={setSelectedDriver}>
+                    <SelectTrigger data-testid="select-driver">
+                      <SelectValue placeholder="All Drivers" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Drivers</SelectItem>
+                      {drivers?.map((driver) => (
+                        <SelectItem key={driver.id} value={driver.id}>
+                          {getDriverDisplayName(driver)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground" data-testid="text-no-events">
-                No clock events found for the selected filters
+
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger data-testid="select-status">
+                      <SelectValue placeholder="All Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                      <SelectItem value="unresolved">Unresolved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Date Range</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant={dateRange === "week" ? "default" : "outline"}
+                      onClick={() => setDateRange("week")}
+                      className="flex-1"
+                      data-testid="button-range-week"
+                    >
+                      Week
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={dateRange === "month" ? "default" : "outline"}
+                      onClick={() => setDateRange("month")}
+                      className="flex-1"
+                      data-testid="button-range-month"
+                    >
+                      Month
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={dateRange === "all" ? "default" : "outline"}
+                      onClick={() => setDateRange("all")}
+                      className="flex-1"
+                      data-testid="button-range-all"
+                    >
+                      All
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card data-testid="card-total-events">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Events</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-total-events">
+                  {stats.totalEvents}
+                </div>
+                <p className="text-xs text-muted-foreground">clock events</p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-clock-ins">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Clock Ins</CardTitle>
+                <PlayCircle className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600" data-testid="text-clock-ins">
+                  {stats.clockIns}
+                </div>
+                <p className="text-xs text-muted-foreground">entries</p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-clock-outs">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Clock Outs</CardTitle>
+                <StopCircle className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600" data-testid="text-clock-outs">
+                  {stats.clockOuts}
+                </div>
+                <p className="text-xs text-muted-foreground">entries</p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-unresolved">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Unresolved</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-unresolved">
+                  {stats.unresolvedEvents}
+                </div>
+                <p className="text-xs text-muted-foreground">need attention</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Events List */}
+          <Card data-testid="card-events-list">
+            <CardHeader>
+              <CardTitle>Clock Events</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingAll ? (
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : filteredEvents.length > 0 ? (
+                <div className="space-y-2">
+                  {filteredEvents.map((event) => {
+                    const isResolved = event.isResolved ?? event.resolved ?? false;
+                    return (
+                      <div
+                        key={event.id}
+                        className="flex items-center justify-between p-3 bg-muted/30 rounded-md hover-elevate group"
+                        data-testid={`event-${event.id}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {event.type === "IN" ? (
+                            <PlayCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <StopCircle className="h-4 w-4 text-red-600" />
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{event.driverName}</span>
+                              <Badge variant={event.type === "IN" ? "default" : "secondary"}>
+                                {event.type}
+                              </Badge>
+                              {!isResolved && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Unresolved
+                                </Badge>
+                              )}
+                              {event.source === "AUTO" && (
+                                <Badge variant="outline" className="text-xs">
+                                  Auto
+                                </Badge>
+                              )}
+                              {event.source === "ADMIN_EDIT" && (
+                                <Badge variant="outline" className="text-xs">
+                                  Edited
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-muted-foreground mt-1">
+                              {new Date(event.timestamp).toLocaleString()}
+                              {event.shiftDate && event.shiftType && (
+                                <span className="ml-2">
+                                  • {event.shiftDate} ({event.shiftType})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleEditClick(event)}
+                          data-testid={`button-edit-${event.id}`}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground" data-testid="text-no-events">
+                    No clock events found for the selected filters
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Exceptions Tab */}
+        <TabsContent value="exceptions" className="space-y-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">Exceptions Queue</h2>
+              <p className="text-sm text-muted-foreground">
+                Review and resolve unresolved clock events
               </p>
             </div>
+            <Button
+              onClick={() => autoClockoutMutation.mutate(2)}
+              disabled={autoClockoutMutation.isPending}
+              data-testid="button-auto-clockout"
+            >
+              {autoClockoutMutation.isPending ? (
+                <>
+                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  Running...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Run Auto-Clockout
+                </>
+              )}
+            </Button>
+          </div>
+
+          {isLoadingUnresolved ? (
+            <div className="space-y-6">
+              <Skeleton className="h-48" />
+            </div>
+          ) : enrichedUnresolvedEvents.length === 0 ? (
+            <Card data-testid="card-no-exceptions">
+              <CardContent className="py-12 text-center">
+                <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                <h3 className="text-lg font-medium mb-2">All Clear!</h3>
+                <p className="text-sm text-muted-foreground">
+                  There are no unresolved clock events at this time.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Alert variant="destructive" data-testid="alert-unresolved-count">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>{enrichedUnresolvedEvents.length} Unresolved Event(s)</AlertTitle>
+                <AlertDescription>
+                  These clock events require admin attention. Review each one and mark as resolved after addressing.
+                </AlertDescription>
+              </Alert>
+
+              <div className="grid gap-4">
+                {enrichedUnresolvedEvents.map((event) => (
+                  <Card key={event.id} data-testid={`event-card-${event.id}`}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          {event.type === "IN" ? (
+                            <PlayCircle className="h-5 w-5 text-green-600" />
+                          ) : (
+                            <StopCircle className="h-5 w-5 text-red-600" />
+                          )}
+                          <CardTitle className="text-base">
+                            Clock {event.type === "IN" ? "In" : "Out"} Event
+                          </CardTitle>
+                          <Badge 
+                            variant="secondary" 
+                            className={
+                              event.source === "AUTO" ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" :
+                              event.source === "ADMIN_EDIT" ? "bg-blue-500/10 text-blue-700 dark:text-blue-400" :
+                              ""
+                            }
+                            data-testid={`badge-source-${event.id}`}
+                          >
+                            {event.source}
+                          </Badge>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleResolve(event)}
+                          data-testid={`button-resolve-${event.id}`}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Resolve
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground mb-1">Driver</p>
+                          <div className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            <span className="font-medium" data-testid={`text-driver-${event.id}`}>
+                              {event.driverName}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground mb-1">Time</p>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            <span data-testid={`text-time-${event.id}`}>
+                              {new Date(event.timestamp).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground mb-1">Shift Date</p>
+                          {event.shiftDate ? (
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              <span data-testid={`text-shift-date-${event.id}`}>
+                                {new Date(event.shiftDate + 'T00:00:00').toLocaleDateString()}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No shift linked</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground mb-1">Shift Type</p>
+                          {event.shiftType ? (
+                            <Badge variant="outline" data-testid={`badge-shift-type-${event.id}`}>
+                              {event.shiftType}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">N/A</span>
+                          )}
+                        </div>
+                      </div>
+                      {event.notes && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Notes</p>
+                          <p className="text-sm bg-muted p-2 rounded" data-testid={`text-notes-${event.id}`}>
+                            {event.notes}
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </>
           )}
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Edit Clock Event Dialog */}
       <Dialog open={editingEvent !== null} onOpenChange={() => setEditingEvent(null)}>
@@ -489,6 +746,63 @@ export default function AdminTimeManagement() {
             >
               <Check className="h-4 w-4 mr-2" />
               {editClockEventMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Resolve Event Dialog */}
+      <Dialog open={!!selectedEvent} onOpenChange={() => setSelectedEvent(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resolve Clock Event</DialogTitle>
+          </DialogHeader>
+          {selectedEvent && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm">
+                  <span className="font-medium">Driver:</span> {selectedEvent.driverName}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">Event:</span> Clock {selectedEvent.type}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">Time:</span> {new Date(selectedEvent.timestamp).toLocaleString()}
+                </p>
+                {selectedEvent.notes && (
+                  <div className="p-3 bg-muted rounded">
+                    <p className="text-xs text-muted-foreground mb-1">Event Notes:</p>
+                    <p className="text-sm">{selectedEvent.notes}</p>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="resolve-notes">Resolution Notes (Optional)</Label>
+                <Textarea
+                  id="resolve-notes"
+                  value={resolveNotes}
+                  onChange={(e) => setResolveNotes(e.target.value)}
+                  placeholder="Add notes about how this issue was resolved..."
+                  rows={4}
+                  data-testid="input-resolve-notes"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSelectedEvent(null)}
+              data-testid="button-cancel-resolve"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={submitResolve}
+              disabled={resolveMutation.isPending}
+              data-testid="button-confirm-resolve"
+            >
+              {resolveMutation.isPending ? "Resolving..." : "Mark as Resolved"}
             </Button>
           </DialogFooter>
         </DialogContent>
