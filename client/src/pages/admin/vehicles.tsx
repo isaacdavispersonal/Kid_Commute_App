@@ -54,10 +54,7 @@ export default function AdminVehicles() {
 
   const createVehicleMutation = useMutation({
     mutationFn: async (data: InsertVehicle) => {
-      return await apiRequest("/api/admin/vehicles", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      return await apiRequest("POST", "/api/admin/vehicles", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/vehicles"] });
