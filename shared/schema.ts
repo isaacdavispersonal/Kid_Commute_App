@@ -113,6 +113,7 @@ export const routes = pgTable("routes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   description: text("description"),
+  shiftType: varchar("shift_type", { length: 20 }), // MORNING, AFTERNOON, EXTRA (nullable for flexibility)
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

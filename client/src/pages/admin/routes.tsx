@@ -34,6 +34,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
 import { Plus, MapPin, Pencil, Trash2 } from "lucide-react";
@@ -62,6 +69,7 @@ export default function AdminRoutes() {
     defaultValues: {
       name: "",
       description: "",
+      shiftType: null,
       isActive: true,
     },
   });
@@ -71,6 +79,7 @@ export default function AdminRoutes() {
     defaultValues: {
       name: "",
       description: "",
+      shiftType: null,
       isActive: true,
     },
   });
@@ -155,6 +164,7 @@ export default function AdminRoutes() {
     editForm.reset({
       name: route.name,
       description: route.description || "",
+      shiftType: (route as any).shiftType || null,
       isActive: route.isActive,
     });
     setIsEditDialogOpen(true);
@@ -285,6 +295,32 @@ export default function AdminRoutes() {
                   )}
                 />
 
+                <FormField
+                  control={createForm.control}
+                  name="shiftType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Shift Type (Optional)</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || undefined}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-shift-type">
+                            <SelectValue placeholder="Select shift type (if applicable)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="MORNING">Morning</SelectItem>
+                          <SelectItem value="AFTERNOON">Afternoon</SelectItem>
+                          <SelectItem value="EXTRA">Extra</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="flex justify-end gap-2 pt-4">
                   <Button
                     type="button"
@@ -357,6 +393,32 @@ export default function AdminRoutes() {
                         value={field.value || ""}
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="shiftType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Shift Type (Optional)</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || undefined}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-shift-type">
+                          <SelectValue placeholder="Select shift type (if applicable)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="MORNING">Morning</SelectItem>
+                        <SelectItem value="AFTERNOON">Afternoon</SelectItem>
+                        <SelectItem value="EXTRA">Extra</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

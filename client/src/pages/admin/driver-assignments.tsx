@@ -63,7 +63,7 @@ interface EnrichedDriverAssignment {
   driverId: string;
   routeId: string;
   vehicleId: string;
-  dayOfWeek: number;
+  date: string;
   startTime: string;
   endTime: string;
   isActive: boolean;
@@ -111,18 +111,8 @@ interface Vehicle {
   plateNumber: string;
 }
 
-const DAYS_OF_WEEK = [
-  { value: 0, label: "Sunday" },
-  { value: 1, label: "Monday" },
-  { value: 2, label: "Tuesday" },
-  { value: 3, label: "Wednesday" },
-  { value: 4, label: "Thursday" },
-  { value: 5, label: "Friday" },
-  { value: 6, label: "Saturday" },
-];
-
 const formSchema = insertDriverAssignmentSchema.extend({
-  dayOfWeek: z.number().min(0).max(6),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
   startTime: z.string().min(1, "Start time is required"),
   endTime: z.string().min(1, "End time is required"),
 });
@@ -141,7 +131,7 @@ export default function AdminDriverAssignments() {
       driverId: "",
       routeId: "",
       vehicleId: "",
-      dayOfWeek: 1,
+      date: new Date().toISOString().split('T')[0],
       startTime: "07:00",
       endTime: "15:00",
       isActive: true,
@@ -236,7 +226,7 @@ export default function AdminDriverAssignments() {
         driverId: assignment.driverId,
         routeId: assignment.routeId,
         vehicleId: assignment.vehicleId,
-        dayOfWeek: assignment.dayOfWeek,
+        date: assignment.date,
         startTime: assignment.startTime,
         endTime: assignment.endTime,
         isActive: assignment.isActive,
@@ -247,7 +237,7 @@ export default function AdminDriverAssignments() {
         driverId: "",
         routeId: "",
         vehicleId: "",
-        dayOfWeek: 1,
+        date: new Date().toISOString().split('T')[0],
         startTime: "07:00",
         endTime: "15:00",
         isActive: true,
@@ -280,9 +270,6 @@ export default function AdminDriverAssignments() {
     }
   };
 
-  const getDayName = (day: number) => {
-    return DAYS_OF_WEEK.find((d) => d.value === day)?.label || "Unknown";
-  };
 
   return (
     <div className="space-y-6">
@@ -322,7 +309,7 @@ export default function AdminDriverAssignments() {
                   <TableHead>Driver</TableHead>
                   <TableHead>Route</TableHead>
                   <TableHead>Vehicle</TableHead>
-                  <TableHead>Day</TableHead>
+                  <TableHead>Date</TableHead>
                   <TableHead>Time</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -362,7 +349,7 @@ export default function AdminDriverAssignments() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                        <span>{getDayName(assignment.dayOfWeek)}</span>
+                        <span>{new Date(assignment.date).toLocaleDateString()}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -505,27 +492,17 @@ export default function AdminDriverAssignments() {
 
               <FormField
                 control={form.control}
-                name="dayOfWeek"
+                name="date"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Day of Week</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(parseInt(value))}
-                      value={field.value.toString()}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-day">
-                          <SelectValue placeholder="Select a day" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {DAYS_OF_WEEK.map((day) => (
-                          <SelectItem key={day.value} value={day.value.toString()}>
-                            {day.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Date</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        data-testid="input-date"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -623,7 +600,7 @@ export default function AdminDriverAssignments() {
             <AlertDialogDescription>
               Are you sure you want to delete the assignment for{" "}
               <span className="font-semibold">{deleteDialog?.driverName}</span> on{" "}
-              <span className="font-semibold">{deleteDialog && getDayName(deleteDialog.dayOfWeek)}</span>?
+              <span className="font-semibold">{deleteDialog && new Date(deleteDialog.date).toLocaleDateString()}</span>?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
