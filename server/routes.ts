@@ -2171,6 +2171,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get admins who have messaged this parent
+  app.get(
+    "/api/parent/admin-conversations",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        
+        // Get all admins
+        const admins = await storage.getUsersByRole("admin");
+        
+        // Filter admins who have messaged this parent
+        const adminsWithMessages = [];
+        for (const admin of admins) {
+          const messages = await storage.getMessagesBetweenUsers(parentId, admin.id);
+          if (messages.length > 0) {
+            adminsWithMessages.push({
+              ...admin,
+              lastMessage: messages[messages.length - 1],
+            });
+          }
+        }
+        
+        res.json(adminsWithMessages);
+      } catch (error) {
+        console.error("Error fetching admin conversations:", error);
+        res.status(500).json({ message: "Failed to fetch admin conversations" });
+      }
+    }
+  );
+
   // Get driver info for parent
   app.get(
     "/api/parent/driver-info/:driverId",
@@ -2246,12 +2278,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Recipient ID required" });
         }
 
-        // Verify driver is currently assigned to parent's children's routes
-        const assignedDrivers = await storage.getActiveDriversForParent(senderId);
-        const isDriverAssigned = assignedDrivers.some((driver: any) => driver.id === recipientId);
-        
-        if (!isDriverAssigned) {
-          return res.status(403).json({ message: "You can only message drivers assigned to your children" });
+        // Check if recipient is an admin - parents can always reply to admins
+        const recipient = await storage.getUser(recipientId);
+        const isAdmin = recipient?.role === "admin";
+
+        if (!isAdmin) {
+          // Verify driver is currently assigned to parent's children's routes
+          const assignedDrivers = await storage.getActiveDriversForParent(senderId);
+          const isDriverAssigned = assignedDrivers.some((driver: any) => driver.id === recipientId);
+          
+          if (!isDriverAssigned) {
+            return res.status(403).json({ message: "You can only message drivers assigned to your children" });
+          }
         }
 
         const message = await storage.createMessage({
@@ -2297,6 +2335,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error fetching messageable parents:", error);
         res.status(500).json({ message: "Failed to fetch messageable parents" });
+      }
+    }
+  );
+
+  // Get admins who have messaged this driver
+  app.get(
+    "/api/driver/admin-conversations",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        
+        // Get all admins
+        const admins = await storage.getUsersByRole("admin");
+        
+        // Filter admins who have messaged this driver
+        const adminsWithMessages = [];
+        for (const admin of admins) {
+          const messages = await storage.getMessagesBetweenUsers(driverId, admin.id);
+          if (messages.length > 0) {
+            adminsWithMessages.push({
+              ...admin,
+              lastMessage: messages[messages.length - 1],
+            });
+          }
+        }
+        
+        res.json(adminsWithMessages);
+      } catch (error) {
+        console.error("Error fetching admin conversations:", error);
+        res.status(500).json({ message: "Failed to fetch admin conversations" });
       }
     }
   );
@@ -2364,12 +2434,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Recipient ID required" });
         }
 
-        // Verify driver can message this parent (parent's child is on driver's route)
-        const messageableParents = await storage.getMessageableParentsForDriver(senderId);
-        const canMessage = messageableParents.some((parent: any) => parent.id === recipientId);
-        
-        if (!canMessage) {
-          return res.status(403).json({ message: "You can only message parents whose children are on your assigned routes" });
+        // Check if recipient is an admin - drivers can always reply to admins
+        const recipient = await storage.getUser(recipientId);
+        const isAdmin = recipient?.role === "admin";
+
+        if (!isAdmin) {
+          // Verify driver can message this parent (parent's child is on driver's route)
+          const messageableParents = await storage.getMessageableParentsForDriver(senderId);
+          const canMessage = messageableParents.some((parent: any) => parent.id === recipientId);
+          
+          if (!canMessage) {
+            return res.status(403).json({ message: "You can only message parents whose children are on your assigned routes" });
+          }
         }
 
         const message = await storage.createMessage({
