@@ -1145,46 +1145,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAdminMessageSummaries(adminId: string): Promise<any[]> {
-    // Use a SQL query to efficiently get message summaries for all conversations
-    // This aggregates data in a single query instead of iterating through users
-    const summaries = await db
-      .select({
-        otherUserId: sql<string>`
-          CASE 
-            WHEN ${messages.senderId} = ${adminId} THEN ${messages.recipientId}
-            ELSE ${messages.senderId}
-          END
-        `,
-        lastMessageTime: sql<Date>`MAX(${messages.createdAt})`,
-        messageCount: sql<number>`COUNT(*)`,
-      })
+    // Get all unique user IDs that have conversations with this admin
+    const sentTo = await db
+      .selectDistinct({ userId: messages.recipientId })
       .from(messages)
-      .where(
-        or(
-          eq(messages.senderId, adminId),
-          eq(messages.recipientId, adminId)
-        )
-      )
-      .groupBy(sql`
-        CASE 
-          WHEN ${messages.senderId} = ${adminId} THEN ${messages.recipientId}
-          ELSE ${messages.senderId}
-        END
-      `);
+      .where(eq(messages.senderId, adminId));
+    
+    const receivedFrom = await db
+      .selectDistinct({ userId: messages.senderId })
+      .from(messages)
+      .where(eq(messages.recipientId, adminId));
 
-    // Now fetch user details for each conversation
+    // Combine and deduplicate user IDs
+    const allUserIds = new Set<string>();
+    sentTo.forEach(({ userId }) => allUserIds.add(userId));
+    receivedFrom.forEach(({ userId }) => allUserIds.add(userId));
+
+    // Build summaries for each user
     const result = [];
-    for (const summary of summaries) {
-      const user = await this.getUser(summary.otherUserId);
-      if (user && user.id !== adminId) {
-        result.push({
-          userId: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          lastMessageTime: summary.lastMessageTime,
-          messageCount: Number(summary.messageCount),
-        });
+    for (const userId of allUserIds) {
+      const msgs = await this.getMessagesBetweenUsers(adminId, userId);
+      if (msgs.length > 0) {
+        const user = await this.getUser(userId);
+        if (user) {
+          const lastMsg = msgs[msgs.length - 1];
+          result.push({
+            userId: user.id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            lastMessageTime: lastMsg.createdAt,
+            messageCount: msgs.length,
+          });
+        }
       }
     }
 
