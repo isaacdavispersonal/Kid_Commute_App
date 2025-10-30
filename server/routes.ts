@@ -3062,7 +3062,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const announcements = await storage.getAnnouncementsByRole("driver");
+        const userId = req.user.claims.sub;
+        const announcements = await storage.getNonDismissedAnnouncementsByRole(userId, "driver");
         
         // Add admin details to each announcement
         const announcementsWithDetails = await Promise.all(
@@ -3090,7 +3091,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const announcements = await storage.getAnnouncementsByRole("parent");
+        const userId = req.user.claims.sub;
+        const announcements = await storage.getNonDismissedAnnouncementsByRole(userId, "parent");
         
         // Add admin details to each announcement
         const announcementsWithDetails = await Promise.all(
@@ -3107,6 +3109,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error fetching announcements:", error);
         res.status(500).json({ message: "Failed to fetch announcements" });
+      }
+    }
+  );
+
+  // Get dismissed announcements for drivers
+  app.get(
+    "/api/driver/announcements/dismissed",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const userId = req.user.claims.sub;
+        const announcements = await storage.getDismissedAnnouncementsByRole(userId, "driver");
+        
+        // Add admin details to each announcement
+        const announcementsWithDetails = await Promise.all(
+          announcements.map(async (announcement) => {
+            const admin = await storage.getUser(announcement.adminId);
+            return {
+              ...announcement,
+              adminName: admin ? `${admin.firstName} ${admin.lastName}` : "Admin",
+            };
+          })
+        );
+
+        res.json(announcementsWithDetails);
+      } catch (error) {
+        console.error("Error fetching dismissed announcements:", error);
+        res.status(500).json({ message: "Failed to fetch dismissed announcements" });
+      }
+    }
+  );
+
+  // Get dismissed announcements for parents
+  app.get(
+    "/api/parent/announcements/dismissed",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const userId = req.user.claims.sub;
+        const announcements = await storage.getDismissedAnnouncementsByRole(userId, "parent");
+        
+        // Add admin details to each announcement
+        const announcementsWithDetails = await Promise.all(
+          announcements.map(async (announcement) => {
+            const admin = await storage.getUser(announcement.adminId);
+            return {
+              ...announcement,
+              adminName: admin ? `${admin.firstName} ${admin.lastName}` : "Admin",
+            };
+          })
+        );
+
+        res.json(announcementsWithDetails);
+      } catch (error) {
+        console.error("Error fetching dismissed announcements:", error);
+        res.status(500).json({ message: "Failed to fetch dismissed announcements" });
       }
     }
   );
