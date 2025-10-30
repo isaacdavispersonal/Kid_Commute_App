@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
   Clock, 
   Calendar, 
@@ -19,7 +20,8 @@ import {
   User,
   TrendingUp,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  ChevronDown
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -100,6 +102,7 @@ export default function AdminTimeManagement() {
   const [dateRange, setDateRange] = useState<"week" | "month" | "all">("week");
   const [editingEvent, setEditingEvent] = useState<EnrichedClockEvent | null>(null);
   const [editedTimestamp, setEditedTimestamp] = useState<string>("");
+  const [collapsedDrivers, setCollapsedDrivers] = useState<Set<string>>(new Set());
   
   // Exceptions tab state
   const [selectedEvent, setSelectedEvent] = useState<EnrichedClockEvent | null>(null);
@@ -471,10 +474,10 @@ export default function AdminTimeManagement() {
             </Card>
           </div>
 
-          {/* Events List */}
+          {/* Events List - Grouped by Driver */}
           <Card data-testid="card-events-list">
             <CardHeader>
-              <CardTitle>Clock Events</CardTitle>
+              <CardTitle>Clock Events by Driver</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoadingAll ? (
@@ -484,65 +487,127 @@ export default function AdminTimeManagement() {
                   ))}
                 </div>
               ) : filteredEvents.length > 0 ? (
-                <div className="space-y-2">
-                  {filteredEvents.map((event) => {
-                    const isResolved = event.isResolved ?? event.resolved ?? false;
-                    return (
-                      <div
-                        key={event.id}
-                        className="flex items-center justify-between p-3 bg-muted/30 rounded-md hover-elevate group"
-                        data-testid={`event-${event.id}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {event.type === "IN" ? (
-                            <PlayCircle className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <StopCircle className="h-4 w-4 text-red-600" />
-                          )}
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{event.driverName}</span>
-                              <Badge variant={event.type === "IN" ? "default" : "secondary"}>
-                                {event.type}
-                              </Badge>
-                              {!isResolved && (
-                                <Badge variant="destructive" className="text-xs">
-                                  Unresolved
-                                </Badge>
-                              )}
-                              {event.source === "AUTO" && (
-                                <Badge variant="outline" className="text-xs">
-                                  Auto
-                                </Badge>
-                              )}
-                              {event.source === "ADMIN_EDIT" && (
-                                <Badge variant="outline" className="text-xs">
-                                  Edited
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-muted-foreground mt-1">
-                              {new Date(event.timestamp).toLocaleString()}
-                              {event.shiftDate && event.shiftType && (
-                                <span className="ml-2">
-                                  • {event.shiftDate} ({event.shiftType})
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => handleEditClick(event)}
-                          data-testid={`button-edit-${event.id}`}
+                <div className="space-y-3">
+                  {(() => {
+                    // Group events by driver
+                    const groupedByDriver = filteredEvents.reduce((acc, event) => {
+                      const driverId = event.driverId;
+                      if (!acc[driverId]) {
+                        acc[driverId] = {
+                          driverName: event.driverName,
+                          events: [],
+                        };
+                      }
+                      acc[driverId].events.push(event);
+                      return acc;
+                    }, {} as Record<string, { driverName: string; events: EnrichedClockEvent[] }>);
+
+                    return Object.entries(groupedByDriver).map(([driverId, group]) => {
+                      const isOpen = !collapsedDrivers.has(driverId);
+                      const toggleOpen = () => {
+                        setCollapsedDrivers(prev => {
+                          const next = new Set(prev);
+                          if (next.has(driverId)) {
+                            next.delete(driverId);
+                          } else {
+                            next.add(driverId);
+                          }
+                          return next;
+                        });
+                      };
+                      const unresolvedCount = group.events.filter(
+                        e => !(e.isResolved ?? e.resolved ?? false)
+                      ).length;
+                      
+                      return (
+                        <Collapsible 
+                          key={driverId} 
+                          open={isOpen} 
+                          onOpenChange={toggleOpen}
+                          className="border rounded-md"
                         >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    );
-                  })}
+                          <CollapsibleTrigger className="flex items-center justify-between w-full p-3 hover-elevate" data-testid={`driver-group-${driverId}`}>
+                            <div className="flex items-center gap-3">
+                              <User className="h-5 w-5 text-muted-foreground" />
+                              <div className="text-left">
+                                <div className="font-semibold">{group.driverName}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  {group.events.length} {group.events.length === 1 ? 'event' : 'events'}
+                                  {unresolvedCount > 0 && (
+                                    <Badge variant="destructive" className="ml-2 text-xs">
+                                      {unresolvedCount} unresolved
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'transform rotate-180' : ''}`} />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="px-3 pb-3 space-y-2 border-t pt-2">
+                              {group.events.map((event) => {
+                                const isResolved = event.isResolved ?? event.resolved ?? false;
+                                return (
+                                  <div
+                                    key={event.id}
+                                    className="flex items-center justify-between p-2 bg-muted/30 rounded hover-elevate group text-sm"
+                                    data-testid={`event-${event.id}`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      {event.type === "IN" ? (
+                                        <PlayCircle className="h-3.5 w-3.5 text-green-600" />
+                                      ) : (
+                                        <StopCircle className="h-3.5 w-3.5 text-red-600" />
+                                      )}
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant={event.type === "IN" ? "default" : "secondary"} className="text-[10px]">
+                                            {event.type}
+                                          </Badge>
+                                          {!isResolved && (
+                                            <Badge variant="destructive" className="text-[10px]">
+                                              Unresolved
+                                            </Badge>
+                                          )}
+                                          {event.source === "AUTO" && (
+                                            <Badge variant="outline" className="text-[10px]">
+                                              Auto
+                                            </Badge>
+                                          )}
+                                          {event.source === "ADMIN_EDIT" && (
+                                            <Badge variant="outline" className="text-[10px]">
+                                              Edited
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground mt-0.5">
+                                          {new Date(event.timestamp).toLocaleString()}
+                                          {event.shiftDate && event.shiftType && (
+                                            <span className="ml-2">
+                                              • {event.shiftDate} ({event.shiftType})
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={() => handleEditClick(event)}
+                                      data-testid={`button-edit-${event.id}`}
+                                    >
+                                      <Edit className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      );
+                    });
+                  })()}
                 </div>
               ) : (
                 <div className="text-center py-12">

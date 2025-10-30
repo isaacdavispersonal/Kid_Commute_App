@@ -45,6 +45,7 @@ interface Incident {
   title: string;
   description: string;
   severity: string;
+  status: "pending" | "reviewed" | "resolved";
   createdAt: string;
 }
 
@@ -166,25 +167,78 @@ export default function AdminDashboard() {
                 ))}
               </div>
             ) : recentIncidents && recentIncidents.length > 0 ? (
-              <div className="space-y-3">
-                {recentIncidents.slice(0, 5).map((incident: any) => (
-                  <div
-                    key={incident.id}
-                    className="p-3 rounded-md bg-accent/50 hover-elevate"
-                    data-testid={`incident-item-${incident.id}`}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="font-medium text-sm">{incident.title}</p>
-                      <StatusBadge status={incident.severity} />
+              <div className="space-y-4">
+                {/* Pending Incidents */}
+                {(() => {
+                  const pendingIncidents = recentIncidents.filter(
+                    (i: Incident) => i.status === "pending" || i.status === "reviewed"
+                  );
+                  
+                  if (pendingIncidents.length === 0) return null;
+                  
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold">Pending</h4>
+                        <StatusBadge status="pending" />
+                      </div>
+                      <div className="space-y-2">
+                        {pendingIncidents.map((incident: Incident) => (
+                          <div
+                            key={incident.id}
+                            className="p-3 rounded-md bg-accent/50 hover-elevate"
+                            data-testid={`incident-item-${incident.id}`}
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <p className="font-medium text-sm">{incident.title}</p>
+                              <StatusBadge status={incident.severity} />
+                            </div>
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {incident.description}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(incident.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                      {incident.description}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(incident.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })()}
+                
+                {/* Resolved Incidents - Compact View */}
+                {(() => {
+                  const resolvedIncidents = recentIncidents.filter(
+                    (i: Incident) => i.status === "resolved"
+                  );
+                  
+                  if (resolvedIncidents.length === 0) return null;
+                  
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-muted-foreground">Resolved</h4>
+                        <StatusBadge status="resolved" />
+                      </div>
+                      <div className="space-y-1">
+                        {resolvedIncidents.map((incident: Incident) => (
+                          <div
+                            key={incident.id}
+                            className="p-2 rounded bg-muted/30 hover-elevate text-xs"
+                            data-testid={`incident-item-${incident.id}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium truncate">{incident.title}</span>
+                              <span className="text-muted-foreground flex-shrink-0">
+                                {new Date(incident.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-8">
