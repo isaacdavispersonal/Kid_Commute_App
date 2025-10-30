@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, User, Clock, Edit, Sun, Sunset, Star } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, User, Clock, Edit, Sun, Sunset, Star, CalendarPlus, Copy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -45,6 +45,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface Shift {
   id: string;
@@ -102,6 +104,22 @@ const formSchema = insertShiftSchema.extend({
 });
 
 type FormData = z.infer<typeof formSchema>;
+
+const bulkScheduleSchema = z.object({
+  driverIds: z.array(z.string()).min(1, "Select at least one driver"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid start date"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid end date"),
+  daysOfWeek: z.array(z.number()).min(1, "Select at least one day of the week"),
+  shiftType: z.enum(["MORNING", "AFTERNOON", "EXTRA"]),
+  routeId: z.string().nullable(),
+  vehicleId: z.string().nullable(),
+  plannedStart: z.string().min(1, "Start time is required"),
+  plannedEnd: z.string().min(1, "End time is required"),
+  status: z.enum(["SCHEDULED", "ACTIVE", "COMPLETED", "MISSED"]),
+  notes: z.string().nullable(),
+});
+
+type BulkScheduleData = z.infer<typeof bulkScheduleSchema>;
 
 function getDaysInMonth(year: number, month: number): Date[] {
   const firstDay = new Date(year, month, 1);
@@ -161,6 +179,9 @@ export default function AdminSchedule() {
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<Shift | null>(null);
   const [viewDayDialog, setViewDayDialog] = useState<string | null>(null);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [selectedDriverIds, setSelectedDriverIds] = useState<string[]>([]);
+  const [selectedDaysOfWeek, setSelectedDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]); // Mon-Fri by default
 
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
@@ -174,6 +195,23 @@ export default function AdminSchedule() {
       vehicleId: null,
       date: "",
       shiftType: "MORNING",
+      plannedStart: "07:00",
+      plannedEnd: "15:00",
+      status: "SCHEDULED",
+      notes: null,
+    },
+  });
+
+  const bulkForm = useForm<BulkScheduleData>({
+    resolver: zodResolver(bulkScheduleSchema),
+    defaultValues: {
+      driverIds: [],
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      daysOfWeek: [1, 2, 3, 4, 5], // Mon-Fri
+      shiftType: "MORNING",
+      routeId: null,
+      vehicleId: null,
       plannedStart: "07:00",
       plannedEnd: "15:00",
       status: "SCHEDULED",
@@ -272,6 +310,29 @@ export default function AdminSchedule() {
     },
   });
 
+  const bulkCreateMutation = useMutation({
+    mutationFn: async (data: BulkScheduleData) => {
+      return await apiRequest("POST", "/api/admin/shifts/bulk", data);
+    },
+    onSuccess: (response: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
+      setBulkDialogOpen(false);
+      bulkForm.reset();
+      setSelectedDriverIds([]);
+      toast({
+        title: "Success",
+        description: `Created ${response.count || 0} shifts successfully`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create shifts",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAddShift = (date: string) => {
     setSelectedDate(date);
     setEditingShift(null);
@@ -319,6 +380,48 @@ export default function AdminSchedule() {
     } else {
       createMutation.mutate(data);
     }
+  };
+
+  const handleOpenBulkDialog = () => {
+    setSelectedDriverIds([]);
+    bulkForm.reset({
+      driverIds: [],
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      daysOfWeek: [1, 2, 3, 4, 5],
+      shiftType: "MORNING",
+      routeId: null,
+      vehicleId: null,
+      plannedStart: "07:00",
+      plannedEnd: "15:00",
+      status: "SCHEDULED",
+      notes: null,
+    });
+    setBulkDialogOpen(true);
+  };
+
+  const onBulkSubmit = (data: BulkScheduleData) => {
+    const formData = {
+      ...data,
+      driverIds: selectedDriverIds,
+    };
+    bulkCreateMutation.mutate(formData);
+  };
+
+  const toggleDriverSelection = (driverId: string) => {
+    setSelectedDriverIds(prev =>
+      prev.includes(driverId)
+        ? prev.filter(id => id !== driverId)
+        : [...prev, driverId]
+    );
+  };
+
+  const toggleDayOfWeek = (day: number) => {
+    setSelectedDaysOfWeek(prev =>
+      prev.includes(day)
+        ? prev.filter(d => d !== day)
+        : [...prev, day].sort()
+    );
   };
 
   const nextMonth = () => {
@@ -408,6 +511,14 @@ export default function AdminSchedule() {
             Manage driver shifts - click on any day to see all scheduled drivers
           </p>
         </div>
+        <Button
+          onClick={handleOpenBulkDialog}
+          className="gap-2"
+          data-testid="button-bulk-schedule"
+        >
+          <CalendarPlus className="h-4 w-4" />
+          Bulk Schedule
+        </Button>
       </div>
 
       <Card className="overflow-hidden">
@@ -885,6 +996,261 @@ export default function AdminSchedule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Schedule Dialog */}
+      <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle data-testid="dialog-bulk-title">Bulk Schedule Shifts</DialogTitle>
+          </DialogHeader>
+
+          <Form {...bulkForm}>
+            <form onSubmit={bulkForm.handleSubmit(onBulkSubmit)} className="space-y-6">
+              {/* Driver Selection */}
+              <div className="space-y-3">
+                <Label>Select Drivers</Label>
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                  {drivers.map((driver) => (
+                    <div key={driver.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`driver-${driver.id}`}
+                        checked={selectedDriverIds.includes(driver.id)}
+                        onCheckedChange={() => toggleDriverSelection(driver.id)}
+                        data-testid={`checkbox-driver-${driver.id}`}
+                      />
+                      <label
+                        htmlFor={`driver-${driver.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        {getDriverDisplayName(driver)}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {selectedDriverIds.length === 0 && (
+                  <p className="text-xs text-destructive">Please select at least one driver</p>
+                )}
+              </div>
+
+              {/* Date Range */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={bulkForm.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-start-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={bulkForm.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-end-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Days of Week */}
+              <div className="space-y-3">
+                <Label>Days of Week</Label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { day: 0, label: "Sun" },
+                    { day: 1, label: "Mon" },
+                    { day: 2, label: "Tue" },
+                    { day: 3, label: "Wed" },
+                    { day: 4, label: "Thu" },
+                    { day: 5, label: "Fri" },
+                    { day: 6, label: "Sat" },
+                  ].map(({ day, label }) => (
+                    <Button
+                      key={day}
+                      type="button"
+                      variant={selectedDaysOfWeek.includes(day) ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => toggleDayOfWeek(day)}
+                      data-testid={`button-day-${day}`}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                {selectedDaysOfWeek.length === 0 && (
+                  <p className="text-xs text-destructive">Please select at least one day</p>
+                )}
+              </div>
+
+              {/* Shift Details */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={bulkForm.control}
+                  name="shiftType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Shift Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-bulk-shift-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="MORNING">Morning</SelectItem>
+                          <SelectItem value="AFTERNOON">Afternoon</SelectItem>
+                          <SelectItem value="EXTRA">Extra</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={bulkForm.control}
+                  name="routeId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Route (Optional)</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                        value={field.value || "none"}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-bulk-route">
+                            <SelectValue placeholder="Select route" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">No route</SelectItem>
+                          {routes?.map((route) => (
+                            <SelectItem key={route.id} value={route.id}>
+                              {route.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={bulkForm.control}
+                name="vehicleId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vehicle (Optional)</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-bulk-vehicle">
+                          <SelectValue placeholder="Select vehicle" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">No vehicle</SelectItem>
+                        {vehicles?.map((vehicle) => (
+                          <SelectItem key={vehicle.id} value={vehicle.id}>
+                            {vehicle.name} ({vehicle.plateNumber})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Time Range */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={bulkForm.control}
+                  name="plannedStart"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Time</FormLabel>
+                      <FormControl>
+                        <Input type="time" {...field} data-testid="input-bulk-start-time" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={bulkForm.control}
+                  name="plannedEnd"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Time</FormLabel>
+                      <FormControl>
+                        <Input type="time" {...field} data-testid="input-bulk-end-time" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={bulkForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        value={field.value || ""}
+                        placeholder="Add any notes about these shifts"
+                        rows={3}
+                        data-testid="input-bulk-notes"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setBulkDialogOpen(false)}
+                  data-testid="button-bulk-cancel"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={bulkCreateMutation.isPending || selectedDriverIds.length === 0 || selectedDaysOfWeek.length === 0}
+                  data-testid="button-bulk-submit"
+                >
+                  {bulkCreateMutation.isPending
+                    ? "Creating..."
+                    : "Create Shifts"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
