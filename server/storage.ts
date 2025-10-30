@@ -1600,18 +1600,18 @@ export class DatabaseStorage implements IStorage {
   // Route Announcement Methods
   async isDriverAssignedToRoute(driverId: string, routeId: string): Promise<boolean> {
     // Check if driver has any shifts on this route
-    const shifts = await db
+    const result = await db
       .select()
-      .from(dbShifts)
+      .from(shifts)
       .where(
         and(
-          eq(dbShifts.driverId, driverId),
-          eq(dbShifts.routeId, routeId)
+          eq(shifts.driverId, driverId),
+          eq(shifts.routeId, routeId)
         )
       )
       .limit(1);
 
-    return shifts.length > 0;
+    return result.length > 0;
   }
 
   async createRouteAnnouncement(announcement: InsertRouteAnnouncement): Promise<RouteAnnouncement> {
