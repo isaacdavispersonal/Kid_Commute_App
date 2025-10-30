@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Send, MessageSquare, User, AlertCircle, Megaphone, Search } from "lucide-react";
+import { Send, MessageSquare, User, AlertCircle, Megaphone, Search, X, Plus } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +29,9 @@ export default function DriverMessagesPage() {
   const [newMessage, setNewMessage] = useState("");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showRouteAnnouncementForm, setShowRouteAnnouncementForm] = useState(false);
+  const [routeAnnouncementMessage, setRouteAnnouncementMessage] = useState("");
+  const [selectedRouteForAnnouncement, setSelectedRouteForAnnouncement] = useState<string>("");
   const { socket } = useWebSocket();
 
   // Get announcements from admin
@@ -183,6 +186,65 @@ export default function DriverMessagesPage() {
     },
   });
 
+  const dismissAnnouncementMutation = useMutation({
+    mutationFn: async (announcementId: string) => {
+      return await apiRequest("POST", `/api/announcements/${announcementId}/dismiss`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/driver/announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
+      toast({
+        title: "Announcement Dismissed",
+        description: "This announcement has been removed from your view",
+      });
+    },
+  });
+
+  // Get driver's routes for route announcements
+  const { data: driverRoutes = [] } = useQuery<any[]>({
+    queryKey: ["/api/driver/shifts"],
+    select: (shifts: any[]) => {
+      // Extract unique routes from shifts
+      const routesMap = new Map();
+      shifts.forEach((shift: any) => {
+        if (shift.route && !routesMap.has(shift.route.id)) {
+          routesMap.set(shift.route.id, shift.route);
+        }
+      });
+      return Array.from(routesMap.values());
+    },
+  });
+
+  // Get route announcements created by this driver
+  const { data: routeAnnouncements = [] } = useQuery<any[]>({
+    queryKey: ["/api/route-announcements/driver"],
+    refetchInterval: 10000,
+  });
+
+  const createRouteAnnouncementMutation = useMutation({
+    mutationFn: async ({ routeId, message }: { routeId: string; message: string }) => {
+      return await apiRequest("POST", "/api/route-announcements", { routeId, message });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/route-announcements/driver"] });
+      setRouteAnnouncementMessage("");
+      setSelectedRouteForAnnouncement("");
+      setShowRouteAnnouncementForm(false);
+      toast({
+        title: "Route Announcement Sent",
+        description: "All parents on this route have been notified",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to send route announcement",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Mark messages as read when viewing a conversation
   useEffect(() => {
     if (selectedParent && messages && messages.length > 0) {
@@ -198,6 +260,19 @@ export default function DriverMessagesPage() {
     if (unreadAnnouncementIds.includes(announcementId)) {
       markAnnouncementAsReadMutation.mutate(announcementId);
     }
+  };
+
+  const handleDismissAnnouncement = (e: React.MouseEvent, announcementId: string) => {
+    e.stopPropagation();
+    dismissAnnouncementMutation.mutate(announcementId);
+  };
+
+  const handleCreateRouteAnnouncement = () => {
+    if (!routeAnnouncementMessage.trim() || !selectedRouteForAnnouncement) return;
+    createRouteAnnouncementMutation.mutate({
+      routeId: selectedRouteForAnnouncement,
+      message: routeAnnouncementMessage,
+    });
   };
 
   const handleSendMessage = () => {
@@ -249,13 +324,13 @@ export default function DriverMessagesPage() {
         </p>
       </div>
 
-      {/* Announcements Section */}
+      {/* Admin Announcements Section */}
       {announcements.length > 0 && (
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Megaphone className="h-5 w-5" />
-              Announcements
+              Admin Announcements
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -265,10 +340,19 @@ export default function DriverMessagesPage() {
                 <div
                   key={announcement.id}
                   onClick={() => handleAnnouncementClick(announcement.id)}
-                  className="bg-background/60 rounded-md p-4 space-y-2 hover-elevate cursor-pointer"
+                  className="bg-background/60 rounded-md p-4 space-y-2 hover-elevate cursor-pointer relative"
                   data-testid={`announcement-${announcement.id}`}
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="absolute top-2 right-2 h-6 w-6"
+                    onClick={(e) => handleDismissAnnouncement(e, announcement.id)}
+                    data-testid={`button-dismiss-announcement-${announcement.id}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  <div className="flex items-start justify-between gap-2 pr-8">
                     <div className="flex items-center gap-2 flex-1">
                       <h3 className="font-semibold text-sm" data-testid="announcement-title">
                         {announcement.title}
@@ -300,6 +384,102 @@ export default function DriverMessagesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Route Announcements Section */}
+      <Card className="border-accent/30 bg-accent/5">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Megaphone className="h-5 w-5" />
+              Route Announcements
+            </CardTitle>
+            <Button
+              size="sm"
+              onClick={() => setShowRouteAnnouncementForm(!showRouteAnnouncementForm)}
+              data-testid="button-toggle-route-announcement-form"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              {showRouteAnnouncementForm ? "Cancel" : "New Announcement"}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {showRouteAnnouncementForm && (
+            <Card className="border-accent">
+              <CardContent className="pt-6 space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Select Route</label>
+                  <select
+                    className="w-full border rounded-md p-2 bg-background"
+                    value={selectedRouteForAnnouncement}
+                    onChange={(e) => setSelectedRouteForAnnouncement(e.target.value)}
+                    data-testid="select-route-for-announcement"
+                  >
+                    <option value="">Choose a route...</option>
+                    {driverRoutes.map((route: any) => (
+                      <option key={route.id} value={route.id}>
+                        {route.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Message</label>
+                  <Textarea
+                    placeholder="Type your announcement message to all parents on this route..."
+                    value={routeAnnouncementMessage}
+                    onChange={(e) => setRouteAnnouncementMessage(e.target.value)}
+                    rows={3}
+                    data-testid="input-route-announcement-message"
+                  />
+                </div>
+                <Button
+                  onClick={handleCreateRouteAnnouncement}
+                  disabled={!routeAnnouncementMessage.trim() || !selectedRouteForAnnouncement || createRouteAnnouncementMutation.isPending}
+                  className="w-full"
+                  data-testid="button-send-route-announcement"
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Send to All Parents on Route
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {routeAnnouncements.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">Your sent announcements:</p>
+              {routeAnnouncements.map((announcement: any) => (
+                <div
+                  key={announcement.id}
+                  className="bg-background/60 rounded-md p-4 space-y-2"
+                  data-testid={`route-announcement-${announcement.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1">
+                      <Badge variant="secondary" className="text-xs">
+                        {announcement.routeName}
+                      </Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(announcement.createdAt), { addSuffix: true })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {announcement.message}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            !showRouteAnnouncementForm && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No route announcements yet. Click "New Announcement" to send a message to all parents on a route.
+              </p>
+            )
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">

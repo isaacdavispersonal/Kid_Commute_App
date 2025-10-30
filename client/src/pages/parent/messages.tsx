@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, MessageSquare, AlertCircle, User, Megaphone } from "lucide-react";
+import { Send, MessageSquare, AlertCircle, User, Megaphone, X } from "lucide-react";
 import { useMemo } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect } from "react";
@@ -156,6 +156,40 @@ export default function ParentMessagesPage() {
     },
   });
 
+  const dismissAnnouncementMutation = useMutation({
+    mutationFn: async (announcementId: string) => {
+      return await apiRequest("POST", `/api/announcements/${announcementId}/dismiss`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
+      toast({
+        title: "Announcement Dismissed",
+        description: "This announcement has been removed from your view",
+      });
+    },
+  });
+
+  // Get route announcements for this parent
+  const { data: routeAnnouncements = [] } = useQuery<any[]>({
+    queryKey: ["/api/route-announcements/parent"],
+    refetchInterval: 10000,
+  });
+
+  const dismissRouteAnnouncementMutation = useMutation({
+    mutationFn: async (routeAnnouncementId: string) => {
+      return await apiRequest("POST", `/api/route-announcements/${routeAnnouncementId}/dismiss`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/route-announcements/parent"] });
+      toast({
+        title: "Route Announcement Dismissed",
+        description: "This route announcement has been removed from your view",
+      });
+    },
+  });
+
   // Mark messages as read when viewing a conversation
   useEffect(() => {
     if (selectedDriver && messages && messages.length > 0) {
@@ -170,6 +204,16 @@ export default function ParentMessagesPage() {
     if (unreadAnnouncementIds.includes(announcementId)) {
       markAnnouncementAsReadMutation.mutate(announcementId);
     }
+  };
+
+  const handleDismissAnnouncement = (e: React.MouseEvent, announcementId: string) => {
+    e.stopPropagation();
+    dismissAnnouncementMutation.mutate(announcementId);
+  };
+
+  const handleDismissRouteAnnouncement = (e: React.MouseEvent, routeAnnouncementId: string) => {
+    e.stopPropagation();
+    dismissRouteAnnouncementMutation.mutate(routeAnnouncementId);
   };
 
   const handleSendMessage = () => {
@@ -217,13 +261,13 @@ export default function ParentMessagesPage() {
         </p>
       </div>
 
-      {/* Announcements Section */}
+      {/* Admin Announcements Section */}
       {announcements.length > 0 && (
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Megaphone className="h-5 w-5" />
-              Announcements
+              Admin Announcements
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -233,10 +277,19 @@ export default function ParentMessagesPage() {
                 <div
                   key={announcement.id}
                   onClick={() => handleAnnouncementClick(announcement.id)}
-                  className="bg-background/60 rounded-md p-4 space-y-2 hover-elevate cursor-pointer"
+                  className="bg-background/60 rounded-md p-4 space-y-2 hover-elevate cursor-pointer relative"
                   data-testid={`announcement-${announcement.id}`}
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="absolute top-2 right-2 h-6 w-6"
+                    onClick={(e) => handleDismissAnnouncement(e, announcement.id)}
+                    data-testid={`button-dismiss-announcement-${announcement.id}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  <div className="flex items-start justify-between gap-2 pr-8">
                     <div className="flex items-center gap-2 flex-1">
                       <h3 className="font-semibold text-sm" data-testid="announcement-title">
                         {announcement.title}
@@ -265,6 +318,54 @@ export default function ParentMessagesPage() {
                 </div>
               );
             })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Route Announcements Section */}
+      {routeAnnouncements.length > 0 && (
+        <Card className="border-accent/30 bg-accent/5">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Megaphone className="h-5 w-5" />
+              Route Announcements
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {routeAnnouncements.map((announcement: any) => (
+              <div
+                key={announcement.id}
+                className="bg-background/60 rounded-md p-4 space-y-2 relative"
+                data-testid={`route-announcement-${announcement.id}`}
+              >
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="absolute top-2 right-2 h-6 w-6"
+                  onClick={(e) => handleDismissRouteAnnouncement(e, announcement.id)}
+                  data-testid={`button-dismiss-route-announcement-${announcement.id}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <div className="flex items-start justify-between gap-2 pr-8">
+                  <div className="flex items-center gap-2 flex-1">
+                    <Badge variant="secondary" className="text-xs">
+                      {announcement.routeName}
+                    </Badge>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDistanceToNow(new Date(announcement.createdAt), { addSuffix: true })}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {announcement.message}
+                </p>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <User className="h-3 w-3" />
+                  <span>From: {announcement.driverName}</span>
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}

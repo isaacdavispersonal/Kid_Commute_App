@@ -3111,6 +3111,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Dismiss an admin announcement
+  app.post(
+    "/api/announcements/:id/dismiss",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const userId = req.user.claims.sub;
+        const announcementId = req.params.id;
+        await storage.dismissAnnouncement(userId, announcementId);
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error dismissing announcement:", error);
+        res.status(500).json({ message: "Failed to dismiss announcement" });
+      }
+    }
+  );
+
+  // Create a route announcement (driver only)
+  app.post(
+    "/api/route-announcements",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { routeId, message } = req.body;
+
+        if (!routeId || !message) {
+          return res.status(400).json({ message: "Route ID and message are required" });
+        }
+
+        // Verify driver is assigned to this route
+        const isAssigned = await storage.isDriverAssignedToRoute(driverId, routeId);
+        if (!isAssigned) {
+          return res.status(403).json({ message: "You are not assigned to this route" });
+        }
+
+        const announcement = await storage.createRouteAnnouncement({
+          routeId,
+          driverId,
+          message,
+        });
+
+        res.json(announcement);
+      } catch (error) {
+        console.error("Error creating route announcement:", error);
+        res.status(500).json({ message: "Failed to create route announcement" });
+      }
+    }
+  );
+
+  // Get route announcements for driver
+  app.get(
+    "/api/route-announcements/driver",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const announcements = await storage.getRouteAnnouncementsForDriver(driverId);
+        res.json(announcements);
+      } catch (error) {
+        console.error("Error fetching driver route announcements:", error);
+        res.status(500).json({ message: "Failed to fetch route announcements" });
+      }
+    }
+  );
+
+  // Get route announcements for parent
+  app.get(
+    "/api/route-announcements/parent",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        const announcements = await storage.getRouteAnnouncementsForParent(parentId);
+        res.json(announcements);
+      } catch (error) {
+        console.error("Error fetching parent route announcements:", error);
+        res.status(500).json({ message: "Failed to fetch route announcements" });
+      }
+    }
+  );
+
+  // Mark route announcement as read
+  app.post(
+    "/api/route-announcements/:id/read",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const userId = req.user.claims.sub;
+        const routeAnnouncementId = req.params.id;
+        await storage.markRouteAnnouncementAsRead(userId, routeAnnouncementId);
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error marking route announcement as read:", error);
+        res.status(500).json({ message: "Failed to mark route announcement as read" });
+      }
+    }
+  );
+
+  // Dismiss a route announcement
+  app.post(
+    "/api/route-announcements/:id/dismiss",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const userId = req.user.claims.sub;
+        const routeAnnouncementId = req.params.id;
+        await storage.dismissRouteAnnouncement(userId, routeAnnouncementId);
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error dismissing route announcement:", error);
+        res.status(500).json({ message: "Failed to dismiss route announcement" });
+      }
+    }
+  );
+
   // Create HTTP server
   const httpServer = createServer(app);
 

@@ -162,6 +162,7 @@ export interface IStorage {
   getUnreadAnnouncementIds(userId: string, role: "driver" | "parent"): Promise<string[]>;
   
   // Route announcement operations
+  isDriverAssignedToRoute(driverId: string, routeId: string): Promise<boolean>;
   createRouteAnnouncement(announcement: InsertRouteAnnouncement): Promise<RouteAnnouncement>;
   getRouteAnnouncementsForParent(parentId: string): Promise<any[]>;
   getRouteAnnouncementsForDriver(driverId: string): Promise<any[]>;
@@ -1563,6 +1564,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Route Announcement Methods
+  async isDriverAssignedToRoute(driverId: string, routeId: string): Promise<boolean> {
+    // Check if driver has any shifts on this route
+    const shifts = await db
+      .select()
+      .from(dbShifts)
+      .where(
+        and(
+          eq(dbShifts.driverId, driverId),
+          eq(dbShifts.routeId, routeId)
+        )
+      )
+      .limit(1);
+
+    return shifts.length > 0;
+  }
+
   async createRouteAnnouncement(announcement: InsertRouteAnnouncement): Promise<RouteAnnouncement> {
     const [newAnnouncement] = await db
       .insert(routeAnnouncements)
