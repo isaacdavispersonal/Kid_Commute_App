@@ -40,6 +40,12 @@ export default function DriverMessagesPage() {
     refetchInterval: 10000,
   });
 
+  // Get dismissed announcements
+  const { data: dismissedAnnouncements = [] } = useQuery<any[]>({
+    queryKey: ["/api/driver/announcements/dismissed"],
+    refetchInterval: 10000,
+  });
+
   // Get unread announcement IDs
   const { data: unreadAnnouncementData } = useQuery<{ unreadIds: string[] }>({
     queryKey: ["/api/user/unread-announcements"],
@@ -47,6 +53,7 @@ export default function DriverMessagesPage() {
   });
 
   const unreadAnnouncementIds = unreadAnnouncementData?.unreadIds || [];
+  const [showDismissedAnnouncements, setShowDismissedAnnouncements] = useState(false);
 
   // Get all parents whose children are on driver's routes
   const { data: messageableParents = [], isLoading: parentsLoading } = useQuery<any[]>({
@@ -192,11 +199,12 @@ export default function DriverMessagesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/driver/announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/driver/announcements/dismissed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user/unread-announcements"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
       toast({
-        title: "Announcement Dismissed",
-        description: "This announcement has been removed from your view",
+        title: "Announcement Moved to Archive",
+        description: "You can view this announcement in the 'Previous Announcements' section",
       });
     },
   });
@@ -382,6 +390,58 @@ export default function DriverMessagesPage() {
               );
             })}
           </CardContent>
+        </Card>
+      )}
+
+      {/* Previous (Dismissed) Announcements Section */}
+      {dismissedAnnouncements.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Megaphone className="h-5 w-5 text-muted-foreground" />
+                Previous Announcements
+                <Badge variant="secondary" className="ml-2">
+                  {dismissedAnnouncements.length}
+                </Badge>
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowDismissedAnnouncements(!showDismissedAnnouncements)}
+                data-testid="button-toggle-dismissed-announcements"
+              >
+                {showDismissedAnnouncements ? "Hide" : "Show"}
+              </Button>
+            </div>
+          </CardHeader>
+          {showDismissedAnnouncements && (
+            <CardContent className="space-y-3">
+              {dismissedAnnouncements.map((announcement: any) => (
+                <div
+                  key={announcement.id}
+                  className="bg-background/60 rounded-md p-4 space-y-2 opacity-70"
+                  data-testid={`dismissed-announcement-${announcement.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-sm" data-testid="announcement-title">
+                      {announcement.title}
+                    </h3>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(announcement.createdAt), { addSuffix: true })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground" data-testid="announcement-content">
+                    {announcement.content}
+                  </p>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <User className="h-3 w-3" />
+                    <span>From: {announcement.adminName}</span>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          )}
         </Card>
       )}
 
