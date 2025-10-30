@@ -130,6 +130,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get unread announcement IDs for current user
+  app.get("/api/user/unread-announcements", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      let unreadIds: string[] = [];
+
+      if (user.role === "driver" || user.role === "parent") {
+        unreadIds = await storage.getUnreadAnnouncementIds(userId, user.role);
+      }
+
+      res.json({ unreadIds });
+    } catch (error) {
+      console.error("Error fetching unread announcements:", error);
+      res.status(500).json({ message: "Failed to fetch unread announcements" });
+    }
+  });
+
   // Mark messages as read
   app.post("/api/messages/mark-read", isAuthenticated, async (req: any, res) => {
     try {

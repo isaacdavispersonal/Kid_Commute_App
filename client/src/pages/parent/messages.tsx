@@ -27,6 +27,14 @@ export default function ParentMessagesPage() {
     refetchInterval: 10000,
   });
 
+  // Get unread announcement IDs
+  const { data: unreadAnnouncementData } = useQuery<{ unreadIds: string[] }>({
+    queryKey: ["/api/user/unread-announcements"],
+    refetchInterval: 5000,
+  });
+
+  const unreadAnnouncementIds = unreadAnnouncementData?.unreadIds || [];
+
   // Get drivers currently assigned to parent's children's routes
   const { data: assignedDrivers = [], isLoading: driversLoading } = useQuery<any[]>({
     queryKey: ["/api/parent/assigned-drivers"],
@@ -138,6 +146,16 @@ export default function ParentMessagesPage() {
     },
   });
 
+  const markAnnouncementAsReadMutation = useMutation({
+    mutationFn: async (announcementId: string) => {
+      return await apiRequest("POST", "/api/announcements/mark-read", { announcementId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-announcements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
+    },
+  });
+
   // Mark messages as read when viewing a conversation
   useEffect(() => {
     if (selectedDriver && messages && messages.length > 0) {
@@ -147,6 +165,12 @@ export default function ParentMessagesPage() {
       }
     }
   }, [selectedDriver, messages]);
+
+  const handleAnnouncementClick = (announcementId: string) => {
+    if (unreadAnnouncementIds.includes(announcementId)) {
+      markAnnouncementAsReadMutation.mutate(announcementId);
+    }
+  };
 
   const handleSendMessage = () => {
     if (!newMessage.trim() || !selectedDriver) return;
@@ -203,29 +227,44 @@ export default function ParentMessagesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {announcements.map((announcement: any) => (
-              <div
-                key={announcement.id}
-                className="bg-background/60 rounded-md p-4 space-y-2"
-                data-testid={`announcement-${announcement.id}`}
-              >
-                <div className="flex items-start justify-between">
-                  <h3 className="font-semibold text-sm" data-testid="announcement-title">
-                    {announcement.title}
-                  </h3>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(announcement.createdAt), { addSuffix: true })}
-                  </span>
+            {announcements.map((announcement: any) => {
+              const isUnread = unreadAnnouncementIds.includes(announcement.id);
+              return (
+                <div
+                  key={announcement.id}
+                  onClick={() => handleAnnouncementClick(announcement.id)}
+                  className="bg-background/60 rounded-md p-4 space-y-2 hover-elevate cursor-pointer"
+                  data-testid={`announcement-${announcement.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1">
+                      <h3 className="font-semibold text-sm" data-testid="announcement-title">
+                        {announcement.title}
+                      </h3>
+                      {isUnread && (
+                        <Badge 
+                          variant="destructive" 
+                          className="h-5 px-1.5 text-xs"
+                          data-testid={`badge-unread-announcement-${announcement.id}`}
+                        >
+                          New
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(announcement.createdAt), { addSuffix: true })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground" data-testid="announcement-content">
+                    {announcement.content}
+                  </p>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <User className="h-3 w-3" />
+                    <span>From: {announcement.adminName}</span>
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground" data-testid="announcement-content">
-                  {announcement.content}
-                </p>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <User className="h-3 w-3" />
-                  <span>From: {announcement.adminName}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}

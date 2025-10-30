@@ -150,6 +150,7 @@ export interface IStorage {
   getAllAnnouncements(): Promise<Announcement[]>;
   markAnnouncementAsRead(userId: string, announcementId: string): Promise<void>;
   getUnreadAnnouncementCount(userId: string, role: "driver" | "parent"): Promise<number>;
+  getUnreadAnnouncementIds(userId: string, role: "driver" | "parent"): Promise<string[]>;
 
   // Incident operations
   getAllIncidents(): Promise<any[]>;
@@ -1484,6 +1485,31 @@ export class DatabaseStorage implements IStorage {
 
     const readIds = new Set(readAnnouncements.map(r => r.announcementId));
     return announcementIds.filter(id => !readIds.has(id)).length;
+  }
+
+  async getUnreadAnnouncementIds(userId: string, role: "driver" | "parent"): Promise<string[]> {
+    // Get all announcements for this role
+    const allAnnouncements = await db
+      .select({ id: announcements.id })
+      .from(announcements)
+      .where(eq(announcements.targetRole, role));
+
+    const announcementIds = allAnnouncements.map(a => a.id);
+    if (announcementIds.length === 0) return [];
+
+    // Get announcements this user has read
+    const readAnnouncements = await db
+      .select({ announcementId: announcementReads.announcementId })
+      .from(announcementReads)
+      .where(
+        and(
+          eq(announcementReads.userId, userId),
+          or(...announcementIds.map(id => eq(announcementReads.announcementId, id)))
+        )
+      );
+
+    const readIds = new Set(readAnnouncements.map(r => r.announcementId));
+    return announcementIds.filter(id => !readIds.has(id));
   }
 }
 
