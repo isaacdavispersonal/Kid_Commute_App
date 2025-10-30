@@ -494,6 +494,88 @@ export const insertAnnouncementReadSchema = createInsertSchema(announcementReads
 export type InsertAnnouncementRead = z.infer<typeof insertAnnouncementReadSchema>;
 export type AnnouncementRead = typeof announcementReads.$inferSelect;
 
+// Announcement dismissals table - tracks which users have dismissed which announcements
+export const announcementDismissals = pgTable("announcement_dismissals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  announcementId: varchar("announcement_id")
+    .notNull()
+    .references(() => announcements.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAnnouncementDismissalSchema = createInsertSchema(announcementDismissals).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAnnouncementDismissal = z.infer<typeof insertAnnouncementDismissalSchema>;
+export type AnnouncementDismissal = typeof announcementDismissals.$inferSelect;
+
+// Route announcements table - announcements from drivers to parents on specific routes
+export const routeAnnouncements = pgTable("route_announcements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  routeId: varchar("route_id")
+    .notNull()
+    .references(() => routes.id, { onDelete: "cascade" }),
+  title: varchar("title").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertRouteAnnouncementSchema = createInsertSchema(routeAnnouncements).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertRouteAnnouncement = z.infer<typeof insertRouteAnnouncementSchema>;
+export type RouteAnnouncement = typeof routeAnnouncements.$inferSelect;
+
+// Route announcement reads table - tracks which parents have read which route announcements
+export const routeAnnouncementReads = pgTable("route_announcement_reads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  routeAnnouncementId: varchar("route_announcement_id")
+    .notNull()
+    .references(() => routeAnnouncements.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertRouteAnnouncementReadSchema = createInsertSchema(routeAnnouncementReads).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertRouteAnnouncementRead = z.infer<typeof insertRouteAnnouncementReadSchema>;
+export type RouteAnnouncementRead = typeof routeAnnouncementReads.$inferSelect;
+
+// Route announcement dismissals table - tracks which parents have dismissed which route announcements
+export const routeAnnouncementDismissals = pgTable("route_announcement_dismissals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  routeAnnouncementId: varchar("route_announcement_id")
+    .notNull()
+    .references(() => routeAnnouncements.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertRouteAnnouncementDismissalSchema = createInsertSchema(routeAnnouncementDismissals).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertRouteAnnouncementDismissal = z.infer<typeof insertRouteAnnouncementDismissalSchema>;
+export type RouteAnnouncementDismissal = typeof routeAnnouncementDismissals.$inferSelect;
+
 // ============ Incident Management Tables ============
 
 // Incident severity enum

@@ -12,6 +12,10 @@ import {
   messages,
   announcements,
   announcementReads,
+  announcementDismissals,
+  routeAnnouncements,
+  routeAnnouncementReads,
+  routeAnnouncementDismissals,
   incidents,
   vehicleInspections,
   households,
@@ -43,6 +47,10 @@ import {
   type InsertAnnouncement,
   type AnnouncementRead,
   type InsertAnnouncementRead,
+  type RouteAnnouncement,
+  type InsertRouteAnnouncement,
+  type RouteAnnouncementRead,
+  type InsertRouteAnnouncementRead,
   type Incident,
   type InsertIncident,
   type VehicleInspection,
@@ -149,8 +157,17 @@ export interface IStorage {
   getAnnouncementsByRole(role: "driver" | "parent"): Promise<Announcement[]>;
   getAllAnnouncements(): Promise<Announcement[]>;
   markAnnouncementAsRead(userId: string, announcementId: string): Promise<void>;
+  dismissAnnouncement(userId: string, announcementId: string): Promise<void>;
   getUnreadAnnouncementCount(userId: string, role: "driver" | "parent"): Promise<number>;
   getUnreadAnnouncementIds(userId: string, role: "driver" | "parent"): Promise<string[]>;
+  
+  // Route announcement operations
+  createRouteAnnouncement(announcement: InsertRouteAnnouncement): Promise<RouteAnnouncement>;
+  getRouteAnnouncementsForParent(parentId: string): Promise<any[]>;
+  getRouteAnnouncementsForDriver(driverId: string): Promise<any[]>;
+  markRouteAnnouncementAsRead(userId: string, routeAnnouncementId: string): Promise<void>;
+  dismissRouteAnnouncement(userId: string, routeAnnouncementId: string): Promise<void>;
+  getUnreadRouteAnnouncementIds(userId: string): Promise<string[]>;
 
   // Incident operations
   getAllIncidents(): Promise<any[]>;
@@ -1487,6 +1504,27 @@ export class DatabaseStorage implements IStorage {
     return announcementIds.filter(id => !readIds.has(id)).length;
   }
 
+  async dismissAnnouncement(userId: string, announcementId: string): Promise<void> {
+    // Check if already dismissed
+    const existing = await db
+      .select()
+      .from(announcementDismissals)
+      .where(
+        and(
+          eq(announcementDismissals.userId, userId),
+          eq(announcementDismissals.announcementId, announcementId)
+        )
+      )
+      .limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(announcementDismissals).values({
+        userId,
+        announcementId,
+      });
+    }
+  }
+
   async getUnreadAnnouncementIds(userId: string, role: "driver" | "parent"): Promise<string[]> {
     // Get all announcements for this role
     const allAnnouncements = await db
@@ -1497,6 +1535,18 @@ export class DatabaseStorage implements IStorage {
     const announcementIds = allAnnouncements.map(a => a.id);
     if (announcementIds.length === 0) return [];
 
+    // Get announcements this user has dismissed
+    const dismissedAnnouncements = await db
+      .select({ announcementId: announcementDismissals.announcementId })
+      .from(announcementDismissals)
+      .where(eq(announcementDismissals.userId, userId));
+
+    const dismissedIds = dismissedAnnouncements.map(d => d.announcementId);
+    
+    // Filter out dismissed announcements
+    const nonDismissedIds = announcementIds.filter(id => !dismissedIds.includes(id));
+    if (nonDismissedIds.length === 0) return nonDismissedIds;
+
     // Get announcements this user has read
     const readAnnouncements = await db
       .select({ announcementId: announcementReads.announcementId })
@@ -1504,11 +1554,167 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(announcementReads.userId, userId),
-          or(...announcementIds.map(id => eq(announcementReads.announcementId, id)))
+          or(...nonDismissedIds.map(id => eq(announcementReads.announcementId, id)))
         )
       );
 
     const readIds = new Set(readAnnouncements.map(r => r.announcementId));
+    return nonDismissedIds.filter(id => !readIds.has(id));
+  }
+
+  // Route Announcement Methods
+  async createRouteAnnouncement(announcement: InsertRouteAnnouncement): Promise<RouteAnnouncement> {
+    const [newAnnouncement] = await db
+      .insert(routeAnnouncements)
+      .values(announcement)
+      .returning();
+    return newAnnouncement;
+  }
+
+  async getRouteAnnouncementsForParent(parentId: string): Promise<any[]> {
+    // Get all households this parent belongs to
+    const parentHouseholds = await db
+      .select({ householdId: householdMembers.householdId })
+      .from(householdMembers)
+      .where(eq(householdMembers.userId, parentId));
+
+    if (parentHouseholds.length === 0) return [];
+
+    // Get all students in these households
+    const householdIds = parentHouseholds.map(h => h.householdId);
+    const studentsInHouseholds = await db
+      .select({ assignedRouteId: students.assignedRouteId })
+      .from(students)
+      .where(
+        or(...householdIds.map(hid => eq(students.householdId, hid)))
+      );
+
+    const uniqueRouteIds = Array.from(new Set(studentsInHouseholds.map(s => s.assignedRouteId).filter(id => id !== null)));
+    if (uniqueRouteIds.length === 0) return [];
+
+    // Get all route announcements for these routes
+    const announcements = await db
+      .select()
+      .from(routeAnnouncements)
+      .where(
+        or(...uniqueRouteIds.map(routeId => eq(routeAnnouncements.routeId, routeId!)))
+      )
+      .orderBy(desc(routeAnnouncements.createdAt));
+
+    // Add driver and route details
+    const announcementsWithDetails = await Promise.all(
+      announcements.map(async (announcement) => {
+        const driver = await this.getUser(announcement.driverId);
+        const route = await this.getRoute(announcement.routeId);
+        
+        // Check if dismissed
+        const dismissal = await db
+          .select()
+          .from(routeAnnouncementDismissals)
+          .where(
+            and(
+              eq(routeAnnouncementDismissals.userId, parentId),
+              eq(routeAnnouncementDismissals.routeAnnouncementId, announcement.id)
+            )
+          )
+          .limit(1);
+
+        // Skip if dismissed
+        if (dismissal.length > 0) return null;
+
+        return {
+          ...announcement,
+          driverName: driver ? `${driver.firstName} ${driver.lastName}` : "Unknown Driver",
+          routeName: route?.name || "Unknown Route",
+        };
+      })
+    );
+
+    return announcementsWithDetails.filter(a => a !== null);
+  }
+
+  async getRouteAnnouncementsForDriver(driverId: string): Promise<any[]> {
+    const announcements = await db
+      .select()
+      .from(routeAnnouncements)
+      .where(eq(routeAnnouncements.driverId, driverId))
+      .orderBy(desc(routeAnnouncements.createdAt));
+
+    // Add route details
+    const announcementsWithDetails = await Promise.all(
+      announcements.map(async (announcement) => {
+        const route = await this.getRoute(announcement.routeId);
+        return {
+          ...announcement,
+          routeName: route?.name || "Unknown Route",
+        };
+      })
+    );
+
+    return announcementsWithDetails;
+  }
+
+  async markRouteAnnouncementAsRead(userId: string, routeAnnouncementId: string): Promise<void> {
+    // Check if already marked as read
+    const existing = await db
+      .select()
+      .from(routeAnnouncementReads)
+      .where(
+        and(
+          eq(routeAnnouncementReads.userId, userId),
+          eq(routeAnnouncementReads.routeAnnouncementId, routeAnnouncementId)
+        )
+      )
+      .limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(routeAnnouncementReads).values({
+        userId,
+        routeAnnouncementId,
+      });
+    }
+  }
+
+  async dismissRouteAnnouncement(userId: string, routeAnnouncementId: string): Promise<void> {
+    // Check if already dismissed
+    const existing = await db
+      .select()
+      .from(routeAnnouncementDismissals)
+      .where(
+        and(
+          eq(routeAnnouncementDismissals.userId, userId),
+          eq(routeAnnouncementDismissals.routeAnnouncementId, routeAnnouncementId)
+        )
+      )
+      .limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(routeAnnouncementDismissals).values({
+        userId,
+        routeAnnouncementId,
+      });
+    }
+  }
+
+  async getUnreadRouteAnnouncementIds(userId: string): Promise<string[]> {
+    // Get all route announcements visible to this parent
+    const allAnnouncements = await this.getRouteAnnouncementsForParent(userId);
+    const announcementIds = allAnnouncements.map(a => a!.id);
+    
+    if (announcementIds.length === 0) return [];
+
+    // Get announcements this user has read
+    const readAnnouncements = await db
+      .select({ routeAnnouncementId: routeAnnouncementReads.routeAnnouncementId })
+      .from(routeAnnouncementReads)
+      .where(
+        and(
+          eq(routeAnnouncementReads.userId, userId),
+          or(...announcementIds.map(id => eq(routeAnnouncementReads.routeAnnouncementId, id)))
+        )
+      );
+
+    const readIds = new Set(readAnnouncements.map(r => r.routeAnnouncementId));
     return announcementIds.filter(id => !readIds.has(id));
   }
 }
