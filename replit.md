@@ -32,6 +32,8 @@ Preferred communication style: Simple, everyday language.
 - **Route-Based Messaging System**: Drivers message parents on their current routes; parents message drivers assigned to their children's routes. Messaging is strictly scoped by route assignments.
 - **Admin Direct Messaging System**: Admins can message any driver, parent, or other admin directly. Drivers and parents can reply to admin messages without route restrictions.
 - **Unread Notification System**: Real-time tracking of unread messages and announcements with badges, automatic mark-as-read, and backend storage for read statuses.
+- **Announcement Dismissal System**: Users can dismiss announcements separately from read status. Dismissed announcements are filtered from display for all user roles while maintaining read tracking for notification counts.
+- **Route Announcement System**: Drivers can broadcast announcements to all parents whose children are on their assigned routes. Route announcements are scoped by route assignment with authorization checks to prevent cross-route access. Parents view route announcements from drivers assigned to their children's routes with dismiss and read tracking.
 - **Incident Management System**: Drivers report incidents (severity, location, description); admins review, filter, and resolve incidents.
 - **Session Management**: PostgreSQL-backed sessions using `connect-pg-simple` with a 7-day TTL and secure cookies.
 
