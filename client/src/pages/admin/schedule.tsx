@@ -665,66 +665,82 @@ export default function AdminSchedule() {
                         
                         <div className="grid gap-3 sm:grid-cols-2">
                           {driverGroups.map((group) => (
-                            group.shifts.map((shift) => (
-                              <div
-                                key={shift.id}
-                                className="p-3 rounded-md border bg-card space-y-2"
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    <User className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                                    <span className="font-medium text-sm truncate">{group.driverName}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1 flex-shrink-0">
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 w-7 p-0"
-                                      onClick={() => handleEditShift(shift)}
-                                      data-testid={`button-edit-${shift.id}`}
-                                    >
-                                      <Edit className="h-3.5 w-3.5" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                      onClick={() => setDeleteDialog(shift)}
-                                      data-testid={`button-delete-${shift.id}`}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                </div>
-                                
-                                <div className="text-xs space-y-1 text-muted-foreground">
-                                  <div className="flex items-center gap-1.5">
-                                    <Clock className="h-3 w-3" />
-                                    <span className="text-foreground">{shift.plannedStart} - {shift.plannedEnd}</span>
-                                  </div>
-                                  
-                                  <div>Route: <span className="text-foreground">{getRouteName(shift.routeId)}</span></div>
-                                  
-                                  <div>Vehicle: <span className="text-foreground">{getVehicleName(shift.vehicleId)}</span></div>
-                                  
-                                  <div className="flex items-center gap-1.5">
-                                    Status:
-                                    <Badge 
-                                      variant="secondary"
-                                      className={`text-[10px] ${STATUS_LABELS[shift.status].color}`}
-                                    >
-                                      {STATUS_LABELS[shift.status].label}
-                                    </Badge>
-                                  </div>
-                                  
-                                  {shift.notes && (
-                                    <div className="pt-1 border-t">
-                                      Notes: <span className="text-foreground italic">{shift.notes}</span>
-                                    </div>
-                                  )}
-                                </div>
+                            <div
+                              key={group.driverId}
+                              className="p-3 rounded-md border bg-card space-y-3"
+                            >
+                              {/* Driver Header */}
+                              <div className="flex items-center gap-2 pb-2 border-b">
+                                <User className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                <span className="font-medium text-sm flex-1">{group.driverName}</span>
+                                {group.shifts.length > 1 && (
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    {group.shifts.length} shifts
+                                  </Badge>
+                                )}
                               </div>
-                            ))
+                              
+                              {/* All shifts for this driver */}
+                              <div className="space-y-2">
+                                {group.shifts.map((shift) => (
+                                  <div 
+                                    key={shift.id}
+                                    className="text-xs space-y-1.5 p-2 rounded bg-accent/30"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                                        <Clock className="h-3 w-3" />
+                                        <span className="text-foreground font-medium">{shift.plannedStart} - {shift.plannedEnd}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1 flex-shrink-0">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-6 w-6 p-0"
+                                          onClick={() => handleEditShift(shift)}
+                                          data-testid={`button-edit-${shift.id}`}
+                                        >
+                                          <Edit className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                          onClick={() => setDeleteDialog(shift)}
+                                          data-testid={`button-delete-${shift.id}`}
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="text-muted-foreground">
+                                      Route: <span className="text-foreground">{getRouteName(shift.routeId)}</span>
+                                    </div>
+                                    
+                                    <div className="text-muted-foreground">
+                                      Vehicle: <span className="text-foreground">{getVehicleName(shift.vehicleId)}</span>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                                      Status:
+                                      <Badge 
+                                        variant="secondary"
+                                        className={`text-[10px] ${STATUS_LABELS[shift.status].color}`}
+                                      >
+                                        {STATUS_LABELS[shift.status].label}
+                                      </Badge>
+                                    </div>
+                                    
+                                    {shift.notes && (
+                                      <div className="pt-1.5 border-t text-muted-foreground">
+                                        Notes: <span className="text-foreground italic">{shift.notes}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
