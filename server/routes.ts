@@ -2916,6 +2916,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get message summaries for all users (for Recent tab)
+  app.get(
+    "/api/admin/message-summaries",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const adminId = req.user.claims.sub;
+        const summaries = await storage.getAdminMessageSummaries(adminId);
+        res.json(summaries);
+      } catch (error) {
+        console.error("Error fetching message summaries:", error);
+        res.status(500).json({ message: "Failed to fetch message summaries" });
+      }
+    }
+  );
+
   // Get all conversations between drivers and parents
   app.get(
     "/api/admin/all-conversations",

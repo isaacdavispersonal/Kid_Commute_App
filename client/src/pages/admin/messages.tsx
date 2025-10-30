@@ -24,6 +24,7 @@ export default function AdminMessagesPage() {
   const [driverSearch, setDriverSearch] = useState("");
   const [parentSearch, setParentSearch] = useState("");
   const [adminSearch, setAdminSearch] = useState("");
+  const [showArchive, setShowArchive] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -46,6 +47,12 @@ export default function AdminMessagesPage() {
   // Get all admins (excluding current user)
   const { data: admins = [], isLoading: adminsLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/all-admins"],
+  });
+
+  // Get message summaries for Recent tab
+  const { data: messageSummaries = [], isLoading: summariesLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/message-summaries"],
+    refetchInterval: 5000,
   });
 
   // Get messages for selected conversation
@@ -205,6 +212,77 @@ export default function AdminMessagesPage() {
     `${admin.firstName} ${admin.lastName}`.toLowerCase().includes(adminSearch.toLowerCase())
   );
 
+  // Helper function to get last message time from messages array
+  const getLastMessageTime = (messages: any[]) => {
+    if (!messages || messages.length === 0) return null;
+    const lastMessage = messages[messages.length - 1];
+    return lastMessage?.createdAt ? new Date(lastMessage.createdAt) : null;
+  };
+
+  // Helper function to check if conversation is recent (within 7 days)
+  const isRecent = (date: Date | null) => {
+    if (!date) return false;
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    return date > sevenDaysAgo;
+  };
+
+  // Helper function to format time ago
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Build unified recent conversations list from message summaries
+  type UnifiedConversation = {
+    id: string;
+    name: string;
+    role: string;
+    lastMessageTime: Date | null;
+    unreadCount: number;
+    hasMessages: boolean;
+  };
+
+  const buildRecentConversations = (): UnifiedConversation[] => {
+    return messageSummaries.map((summary: any) => ({
+      id: summary.userId,
+      name: `${summary.firstName} ${summary.lastName}`,
+      role: summary.role,
+      lastMessageTime: summary.lastMessageTime ? new Date(summary.lastMessageTime) : null,
+      unreadCount: unreadCounts?.messageBySender?.[summary.userId] || 0,
+      hasMessages: summary.messageCount > 0,
+    })).sort((a, b) => {
+      // Unread messages always come first
+      if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+      if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
+      
+      // Then sort by last message time
+      if (!a.lastMessageTime && !b.lastMessageTime) return 0;
+      if (!a.lastMessageTime) return 1;
+      if (!b.lastMessageTime) return -1;
+      return b.lastMessageTime.getTime() - a.lastMessageTime.getTime();
+    });
+  };
+
+  const recentConversations = buildRecentConversations();
+  const activeConversations = recentConversations.filter(c => 
+    c.hasMessages && c.lastMessageTime && isRecent(c.lastMessageTime)
+  );
+  const archivedConversations = recentConversations.filter(c => 
+    c.hasMessages && c.lastMessageTime && !isRecent(c.lastMessageTime)
+  );
+  const unreadConversations = activeConversations.filter(c => c.unreadCount > 0);
+  const readConversations = activeConversations.filter(c => c.unreadCount === 0);
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -234,25 +312,211 @@ export default function AdminMessagesPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="conversations" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs defaultValue="recent" className="w-full">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="recent" data-testid="tab-recent">
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Recent
+            {unreadConversations.length > 0 && (
+              <Badge variant="destructive" className="ml-2 h-5 min-w-5 px-1 text-xs">
+                {unreadConversations.length}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="conversations" data-testid="tab-conversations">
             <Users className="h-4 w-4 mr-2" />
-            View Conversations
+            View All
           </TabsTrigger>
           <TabsTrigger value="message-drivers" data-testid="tab-message-drivers">
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Message Drivers
+            <User className="h-4 w-4 mr-2" />
+            Drivers
           </TabsTrigger>
           <TabsTrigger value="message-parents" data-testid="tab-message-parents">
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Message Parents
+            <User className="h-4 w-4 mr-2" />
+            Parents
           </TabsTrigger>
           <TabsTrigger value="message-admins" data-testid="tab-message-admins">
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Message Admins
+            <User className="h-4 w-4 mr-2" />
+            Admins
           </TabsTrigger>
         </TabsList>
+
+        {/* Recent Tab - Shows all active conversations sorted by activity */}
+        <TabsContent value="recent">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Active Conversations</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Direct messages across all roles, sorted by recent activity
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Unread Messages Section */}
+                {unreadConversations.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <h4 className="text-sm font-semibold">Unread</h4>
+                      <Badge variant="destructive" className="h-5">
+                        {unreadConversations.length}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {unreadConversations.map((conv) => (
+                        <Button
+                          key={conv.id}
+                          variant="outline"
+                          className="w-full justify-start h-auto py-3 border-l-4 border-l-destructive"
+                          onClick={() => {
+                            if (conv.role === "driver") setSelectedDriver(conv.id);
+                            else if (conv.role === "parent") setSelectedParent(conv.id);
+                            else if (conv.role === "admin") setSelectedAdmin(conv.id);
+                          }}
+                          data-testid={`button-recent-${conv.id}`}
+                        >
+                          <div className="flex items-center gap-3 w-full">
+                            <Avatar className="h-9 w-9 flex-shrink-0">
+                              <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                {conv.name.split(" ").map(n => n[0]).join("")}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 text-left min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-semibold text-sm truncate">{conv.name}</p>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  {conv.lastMessageTime && (
+                                    <span className="text-xs font-medium text-destructive">
+                                      {formatTimeAgo(conv.lastMessageTime)}
+                                    </span>
+                                  )}
+                                  <Badge variant="destructive" className="h-5 min-w-5 px-1 text-xs">
+                                    {conv.unreadCount}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <p className="text-xs text-muted-foreground capitalize">{conv.role}</p>
+                            </div>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Read Messages Section */}
+                {readConversations.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <h4 className="text-sm font-semibold text-muted-foreground">Read</h4>
+                      <Badge variant="secondary" className="h-5">
+                        {readConversations.length}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {readConversations.map((conv) => (
+                        <Button
+                          key={conv.id}
+                          variant="outline"
+                          className="w-full justify-start h-auto py-2.5"
+                          onClick={() => {
+                            if (conv.role === "driver") setSelectedDriver(conv.id);
+                            else if (conv.role === "parent") setSelectedParent(conv.id);
+                            else if (conv.role === "admin") setSelectedAdmin(conv.id);
+                          }}
+                          data-testid={`button-recent-read-${conv.id}`}
+                        >
+                          <div className="flex items-center gap-3 w-full">
+                            <Avatar className="h-8 w-8 flex-shrink-0">
+                              <AvatarFallback className="bg-muted text-muted-foreground text-xs">
+                                {conv.name.split(" ").map(n => n[0]).join("")}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 text-left min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-medium text-sm truncate">{conv.name}</p>
+                                {conv.lastMessageTime && (
+                                  <span className="text-xs text-muted-foreground flex-shrink-0">
+                                    {formatTimeAgo(conv.lastMessageTime)}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground capitalize">{conv.role}</p>
+                            </div>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Archived Conversations Section */}
+                {archivedConversations.length > 0 && (
+                  <div>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setShowArchive(!showArchive)}
+                      className="w-full justify-start mb-3"
+                      data-testid="button-toggle-archive"
+                    >
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-muted-foreground">Archived (7+ days old)</h4>
+                        <Badge variant="secondary" className="h-5">
+                          {archivedConversations.length}
+                        </Badge>
+                      </div>
+                    </Button>
+                    {showArchive && (
+                      <div className="space-y-1">
+                        {archivedConversations.map((conv) => (
+                          <Button
+                            key={conv.id}
+                            variant="ghost"
+                            className="w-full justify-start h-auto py-2 text-muted-foreground"
+                            onClick={() => {
+                              if (conv.role === "driver") setSelectedDriver(conv.id);
+                              else if (conv.role === "parent") setSelectedParent(conv.id);
+                              else if (conv.role === "admin") setSelectedAdmin(conv.id);
+                            }}
+                            data-testid={`button-archived-${conv.id}`}
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <Avatar className="h-7 w-7 flex-shrink-0 opacity-70">
+                                <AvatarFallback className="bg-muted text-muted-foreground text-xs">
+                                  {conv.name.split(" ").map(n => n[0]).join("")}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 text-left min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-xs font-medium truncate">{conv.name}</p>
+                                  {conv.lastMessageTime && (
+                                    <span className="text-xs flex-shrink-0">
+                                      {conv.lastMessageTime.toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {activeConversations.length === 0 && archivedConversations.length === 0 && (
+                  <div className="text-center py-12">
+                    <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-semibold mb-2">No Active Conversations</h3>
+                    <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                      Start messaging drivers, parents, or admins from the tabs above
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* View Conversations Tab */}
         <TabsContent value="conversations">

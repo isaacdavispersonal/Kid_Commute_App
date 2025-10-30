@@ -1144,6 +1144,53 @@ export class DatabaseStorage implements IStorage {
     return counts;
   }
 
+  async getAdminMessageSummaries(adminId: string): Promise<any[]> {
+    // Use a SQL query to efficiently get message summaries for all conversations
+    // This aggregates data in a single query instead of iterating through users
+    const summaries = await db
+      .select({
+        otherUserId: sql<string>`
+          CASE 
+            WHEN ${messages.senderId} = ${adminId} THEN ${messages.recipientId}
+            ELSE ${messages.senderId}
+          END
+        `,
+        lastMessageTime: sql<Date>`MAX(${messages.createdAt})`,
+        messageCount: sql<number>`COUNT(*)`,
+      })
+      .from(messages)
+      .where(
+        or(
+          eq(messages.senderId, adminId),
+          eq(messages.recipientId, adminId)
+        )
+      )
+      .groupBy(sql`
+        CASE 
+          WHEN ${messages.senderId} = ${adminId} THEN ${messages.recipientId}
+          ELSE ${messages.senderId}
+        END
+      `);
+
+    // Now fetch user details for each conversation
+    const result = [];
+    for (const summary of summaries) {
+      const user = await this.getUser(summary.otherUserId);
+      if (user && user.id !== adminId) {
+        result.push({
+          userId: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          lastMessageTime: summary.lastMessageTime,
+          messageCount: Number(summary.messageCount),
+        });
+      }
+    }
+
+    return result;
+  }
+
   // Get parents whose children are on routes this driver is assigned to
   async getMessageableParentsForDriver(driverId: string): Promise<any[]> {
     // Get driver's active routes from driver assignments
