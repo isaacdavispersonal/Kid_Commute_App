@@ -331,50 +331,64 @@ export default function ParentMessagesPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {allContacts.map((contact: any) => (
-                <Button
-                  key={contact.id}
-                  variant={selectedDriver === contact.id ? "default" : "outline"}
-                  className="w-full justify-start h-auto py-3"
-                  onClick={() => setSelectedDriver(contact.id)}
-                  data-testid={`button-contact-${contact.id}`}
-                >
-                  <div className="flex items-start gap-3 w-full">
-                    <Avatar className="h-8 w-8 mt-1">
-                      <AvatarFallback className={contact.isAdmin ? "bg-warning/10 text-warning text-xs" : "bg-primary/10 text-primary text-xs"}>
-                        <User className="h-4 w-4" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 text-left overflow-hidden">
-                      <p className="font-medium text-sm">
-                        {contact.firstName} {contact.lastName}
-                        {contact.isAdmin && (
-                          <Badge variant="outline" className="ml-2 text-xs border-warning/50 text-warning-foreground">
-                            Admin
-                          </Badge>
+              {allContacts.map((contact: any) => {
+                const unreadCount = unreadCounts?.messageBySender?.[contact.id] || 0;
+                return (
+                  <Button
+                    key={contact.id}
+                    variant={selectedDriver === contact.id ? "default" : "outline"}
+                    className="w-full justify-start h-auto py-3"
+                    onClick={() => setSelectedDriver(contact.id)}
+                    data-testid={`button-contact-${contact.id}`}
+                  >
+                    <div className="flex items-start gap-3 w-full">
+                      <Avatar className="h-8 w-8 mt-1">
+                        <AvatarFallback className={contact.isAdmin ? "bg-warning/10 text-warning text-xs" : "bg-primary/10 text-primary text-xs"}>
+                          <User className="h-4 w-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 text-left overflow-hidden">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-sm">
+                            {contact.firstName} {contact.lastName}
+                            {contact.isAdmin && (
+                              <Badge variant="outline" className="ml-2 text-xs border-warning/50 text-warning-foreground">
+                                Admin
+                              </Badge>
+                            )}
+                          </p>
+                          {unreadCount > 0 && (
+                            <Badge 
+                              variant="destructive" 
+                              className="h-5 min-w-5 px-1 text-xs"
+                              data-testid={`badge-unread-${contact.id}`}
+                            >
+                              {unreadCount}
+                            </Badge>
+                          )}
+                        </div>
+                        {!contact.isAdmin && (
+                          <p className="text-xs text-muted-foreground mb-1">
+                            Route Driver
+                          </p>
                         )}
-                      </p>
-                      {!contact.isAdmin && (
-                        <p className="text-xs text-muted-foreground mb-1">
-                          Route Driver
-                        </p>
-                      )}
-                      <div className="flex flex-wrap gap-1">
-                        {contact.children?.map((child: any) => (
-                          <Badge 
-                            key={child.id} 
-                            variant="secondary" 
-                            className="text-xs"
-                            data-testid={`badge-child-${child.id}`}
-                          >
-                            {child.firstName}
-                          </Badge>
-                        ))}
+                        <div className="flex flex-wrap gap-1">
+                          {contact.children?.map((child: any) => (
+                            <Badge 
+                              key={child.id} 
+                              variant="secondary" 
+                              className="text-xs"
+                              data-testid={`badge-child-${child.id}`}
+                            >
+                              {child.firstName}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Button>
-              ))}
+                  </Button>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
