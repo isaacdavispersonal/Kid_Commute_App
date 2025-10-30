@@ -1201,6 +1201,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Bulk create shifts
+  app.post(
+    "/api/admin/shifts/bulk",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { z } = await import("zod");
+        const { insertShiftSchema } = await import("@shared/schema");
+        
+        // Validate bulk request
+        const bulkSchema = z.object({
+          driverIds: z.array(z.string()).min(1, "At least one driver required"),
+          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          daysOfWeek: z.array(z.number().min(0).max(6)).min(1, "At least one day required"),
+          shiftType: z.enum(["MORNING", "AFTERNOON", "EXTRA"]),
+          routeId: z.string().nullable(),
+          vehicleId: z.string().nullable(),
+          plannedStart: z.string(),
+          plannedEnd: z.string(),
+          status: z.enum(["SCHEDULED", "ACTIVE", "COMPLETED", "CANCELLED"]),
+          notes: z.string().nullable(),
+        });
+
+        const bulkData = bulkSchema.parse(req.body);
+        
+        // Validate all drivers exist and are drivers
+        for (const driverId of bulkData.driverIds) {
+          const driver = await storage.getUser(driverId);
+          if (!driver || driver.role !== "driver") {
+            return res.status(400).json({ message: `Invalid driver: ${driverId}` });
+          }
+        }
+        
+        // Validate route exists (if provided)
+        if (bulkData.routeId) {
+          const route = await storage.getRoute(bulkData.routeId);
+          if (!route) {
+            return res.status(400).json({ message: "Route not found" });
+          }
+        }
+        
+        // Validate vehicle exists (if provided)
+        if (bulkData.vehicleId) {
+          const vehicle = await storage.getVehicle(bulkData.vehicleId);
+          if (!vehicle) {
+            return res.status(400).json({ message: "Vehicle not found" });
+          }
+        }
+        
+        // Validate date range
+        const startDate = new Date(bulkData.startDate);
+        const endDate = new Date(bulkData.endDate);
+        if (startDate > endDate) {
+          return res.status(400).json({ message: "Start date must be before end date" });
+        }
+        
+        // Generate all dates in range that match selected days of week
+        const dates: string[] = [];
+        const current = new Date(startDate);
+        while (current <= endDate) {
+          const dayOfWeek = current.getDay();
+          if (bulkData.daysOfWeek.includes(dayOfWeek)) {
+            dates.push(current.toISOString().split('T')[0]);
+          }
+          current.setDate(current.getDate() + 1);
+        }
+        
+        // Create shifts for each driver on each matching date
+        const createdShifts = [];
+        for (const driverId of bulkData.driverIds) {
+          for (const date of dates) {
+            const shiftData = {
+              driverId,
+              date,
+              shiftType: bulkData.shiftType,
+              routeId: bulkData.routeId,
+              vehicleId: bulkData.vehicleId,
+              plannedStart: bulkData.plannedStart,
+              plannedEnd: bulkData.plannedEnd,
+              status: bulkData.status,
+              notes: bulkData.notes,
+            };
+            
+            const shift = await storage.createShift(shiftData);
+            createdShifts.push(shift);
+          }
+        }
+        
+        res.json({ 
+          count: createdShifts.length,
+          shifts: createdShifts 
+        });
+      } catch (error: any) {
+        console.error("Error creating bulk shifts:", error);
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to create bulk shifts" });
+      }
+    }
+  );
+
   // Update shift
   app.patch(
     "/api/admin/shifts/:id",
