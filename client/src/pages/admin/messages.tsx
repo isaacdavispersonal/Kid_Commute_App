@@ -76,6 +76,16 @@ export default function AdminMessagesPage() {
     refetchInterval: 3000,
   });
 
+  // Get unread counts by sender
+  const { data: unreadCounts } = useQuery<{
+    messages: number;
+    announcements: number;
+    messageBySender: { [senderId: string]: number };
+  }>({
+    queryKey: ["/api/user/unread-counts"],
+    refetchInterval: 5000,
+  });
+
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async ({ recipientId, content }: { recipientId: string; content: string }) => {
@@ -394,33 +404,47 @@ export default function AdminMessagesPage() {
                           No drivers found
                         </p>
                       ) : (
-                        filteredDrivers.map((driver: any) => (
-                          <Button
-                            key={driver.id}
-                            variant={selectedDriver === driver.id ? "default" : "outline"}
-                            className="w-full justify-start h-auto py-3"
-                            onClick={() => setSelectedDriver(driver.id)}
-                            data-testid={`button-driver-${driver.id}`}
-                          >
-                            <div className="flex items-center gap-3 w-full">
-                              <Avatar className="h-8 w-8 flex-shrink-0">
-                                <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                  {driver.firstName?.[0]}{driver.lastName?.[0]}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 text-left">
-                                <p className="font-medium text-sm">
-                                  {driver.firstName} {driver.lastName}
-                                </p>
-                                {driver.phoneNumber && (
-                                  <p className="text-xs text-muted-foreground">
-                                    {driver.phoneNumber}
-                                  </p>
-                                )}
+                        filteredDrivers.map((driver: any) => {
+                          const unreadCount = unreadCounts?.messageBySender?.[driver.id] || 0;
+                          return (
+                            <Button
+                              key={driver.id}
+                              variant={selectedDriver === driver.id ? "default" : "outline"}
+                              className="w-full justify-start h-auto py-3"
+                              onClick={() => setSelectedDriver(driver.id)}
+                              data-testid={`button-driver-${driver.id}`}
+                            >
+                              <div className="flex items-center gap-3 w-full">
+                                <Avatar className="h-8 w-8 flex-shrink-0">
+                                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                    {driver.firstName?.[0]}{driver.lastName?.[0]}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 text-left">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="font-medium text-sm">
+                                      {driver.firstName} {driver.lastName}
+                                    </p>
+                                    {unreadCount > 0 && (
+                                      <Badge 
+                                        variant="destructive" 
+                                        className="h-5 min-w-5 px-1 text-xs"
+                                        data-testid={`badge-unread-driver-${driver.id}`}
+                                      >
+                                        {unreadCount}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {driver.phoneNumber && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {driver.phoneNumber}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </Button>
-                        ))
+                            </Button>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -490,33 +514,47 @@ export default function AdminMessagesPage() {
                           No parents found
                         </p>
                       ) : (
-                        filteredParents.map((parent: any) => (
-                          <Button
-                            key={parent.id}
-                            variant={selectedParent === parent.id ? "default" : "outline"}
-                            className="w-full justify-start h-auto py-3"
-                            onClick={() => setSelectedParent(parent.id)}
-                            data-testid={`button-parent-${parent.id}`}
-                          >
-                            <div className="flex items-center gap-3 w-full">
-                              <Avatar className="h-8 w-8 flex-shrink-0">
-                                <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                  {parent.firstName?.[0]}{parent.lastName?.[0]}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 text-left">
-                                <p className="font-medium text-sm">
-                                  {parent.firstName} {parent.lastName}
-                                </p>
-                                {parent.phoneNumber && (
-                                  <p className="text-xs text-muted-foreground">
-                                    {parent.phoneNumber}
-                                  </p>
-                                )}
+                        filteredParents.map((parent: any) => {
+                          const unreadCount = unreadCounts?.messageBySender?.[parent.id] || 0;
+                          return (
+                            <Button
+                              key={parent.id}
+                              variant={selectedParent === parent.id ? "default" : "outline"}
+                              className="w-full justify-start h-auto py-3"
+                              onClick={() => setSelectedParent(parent.id)}
+                              data-testid={`button-parent-${parent.id}`}
+                            >
+                              <div className="flex items-center gap-3 w-full">
+                                <Avatar className="h-8 w-8 flex-shrink-0">
+                                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                    {parent.firstName?.[0]}{parent.lastName?.[0]}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 text-left">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="font-medium text-sm">
+                                      {parent.firstName} {parent.lastName}
+                                    </p>
+                                    {unreadCount > 0 && (
+                                      <Badge 
+                                        variant="destructive" 
+                                        className="h-5 min-w-5 px-1 text-xs"
+                                        data-testid={`badge-unread-parent-${parent.id}`}
+                                      >
+                                        {unreadCount}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {parent.phoneNumber && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {parent.phoneNumber}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </Button>
-                        ))
+                            </Button>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -582,33 +620,47 @@ export default function AdminMessagesPage() {
                           <p className="text-sm text-muted-foreground">No admins found</p>
                         </div>
                       ) : (
-                        filteredAdmins.map((admin: any) => (
-                          <Button
-                            key={admin.id}
-                            variant={selectedAdmin === admin.id ? "default" : "outline"}
-                            className="w-full justify-start h-auto py-3"
-                            onClick={() => setSelectedAdmin(admin.id)}
-                            data-testid={`button-admin-${admin.id}`}
-                          >
-                            <div className="flex items-center gap-3 w-full">
-                              <Avatar className="h-8 w-8 flex-shrink-0">
-                                <AvatarFallback className="bg-warning/10 text-warning text-xs">
-                                  {admin.firstName?.[0]}{admin.lastName?.[0]}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 text-left">
-                                <p className="font-medium text-sm">
-                                  {admin.firstName} {admin.lastName}
-                                </p>
-                                {admin.phoneNumber && (
-                                  <p className="text-xs text-muted-foreground">
-                                    {admin.phoneNumber}
-                                  </p>
-                                )}
+                        filteredAdmins.map((admin: any) => {
+                          const unreadCount = unreadCounts?.messageBySender?.[admin.id] || 0;
+                          return (
+                            <Button
+                              key={admin.id}
+                              variant={selectedAdmin === admin.id ? "default" : "outline"}
+                              className="w-full justify-start h-auto py-3"
+                              onClick={() => setSelectedAdmin(admin.id)}
+                              data-testid={`button-admin-${admin.id}`}
+                            >
+                              <div className="flex items-center gap-3 w-full">
+                                <Avatar className="h-8 w-8 flex-shrink-0">
+                                  <AvatarFallback className="bg-warning/10 text-warning text-xs">
+                                    {admin.firstName?.[0]}{admin.lastName?.[0]}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 text-left">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="font-medium text-sm">
+                                      {admin.firstName} {admin.lastName}
+                                    </p>
+                                    {unreadCount > 0 && (
+                                      <Badge 
+                                        variant="destructive" 
+                                        className="h-5 min-w-5 px-1 text-xs"
+                                        data-testid={`badge-unread-admin-${admin.id}`}
+                                      >
+                                        {unreadCount}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {admin.phoneNumber && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {admin.phoneNumber}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </Button>
-                        ))
+                            </Button>
+                          );
+                        })
                       )}
                     </div>
                   </div>
