@@ -153,8 +153,10 @@ export interface IStorage {
   getUnreadCountsBySender(userId: string): Promise<{ [senderId: string]: number }>;
 
   // Announcement operations
-  createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement>;
+  createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement[]>;
   getAnnouncementsByRole(role: "driver" | "parent"): Promise<Announcement[]>;
+  getNonDismissedAnnouncementsByRole(userId: string, role: "driver" | "parent"): Promise<Announcement[]>;
+  getDismissedAnnouncementsByRole(userId: string, role: "driver" | "parent"): Promise<Announcement[]>;
   getAllAnnouncements(): Promise<Announcement[]>;
   markAnnouncementAsRead(userId: string, announcementId: string): Promise<void>;
   dismissAnnouncement(userId: string, announcementId: string): Promise<void>;
@@ -1450,6 +1452,38 @@ export class DatabaseStorage implements IStorage {
       .from(announcements)
       .where(eq(announcements.targetRole, role))
       .orderBy(desc(announcements.createdAt));
+  }
+
+  async getNonDismissedAnnouncementsByRole(userId: string, role: "driver" | "parent"): Promise<Announcement[]> {
+    // Get all announcements for this role
+    const allAnnouncements = await this.getAnnouncementsByRole(role);
+    
+    // Get dismissed announcement IDs for this user
+    const dismissedRecords = await db
+      .select({ announcementId: announcementDismissals.announcementId })
+      .from(announcementDismissals)
+      .where(eq(announcementDismissals.userId, userId));
+    
+    const dismissedIds = new Set(dismissedRecords.map(r => r.announcementId));
+    
+    // Filter out dismissed announcements
+    return allAnnouncements.filter(a => !dismissedIds.has(a.id));
+  }
+
+  async getDismissedAnnouncementsByRole(userId: string, role: "driver" | "parent"): Promise<Announcement[]> {
+    // Get all announcements for this role
+    const allAnnouncements = await this.getAnnouncementsByRole(role);
+    
+    // Get dismissed announcement IDs for this user
+    const dismissedRecords = await db
+      .select({ announcementId: announcementDismissals.announcementId })
+      .from(announcementDismissals)
+      .where(eq(announcementDismissals.userId, userId));
+    
+    const dismissedIds = new Set(dismissedRecords.map(r => r.announcementId));
+    
+    // Return only dismissed announcements
+    return allAnnouncements.filter(a => dismissedIds.has(a.id));
   }
 
   async getAllAnnouncements(): Promise<Announcement[]> {
