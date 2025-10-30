@@ -1222,7 +1222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           vehicleId: z.string().nullable(),
           plannedStart: z.string(),
           plannedEnd: z.string(),
-          status: z.enum(["SCHEDULED", "ACTIVE", "COMPLETED", "CANCELLED"]),
+          status: z.enum(["SCHEDULED", "ACTIVE", "COMPLETED", "MISSED"]).optional().default("SCHEDULED"),
           notes: z.string().nullable(),
         });
 

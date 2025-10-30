@@ -115,7 +115,6 @@ const bulkScheduleSchema = z.object({
   vehicleId: z.string().nullable(),
   plannedStart: z.string().min(1, "Start time is required"),
   plannedEnd: z.string().min(1, "End time is required"),
-  status: z.enum(["SCHEDULED", "ACTIVE", "COMPLETED", "MISSED"]),
   notes: z.string().nullable(),
 });
 
@@ -214,7 +213,6 @@ export default function AdminSchedule() {
       vehicleId: null,
       plannedStart: "07:00",
       plannedEnd: "15:00",
-      status: "SCHEDULED",
       notes: null,
     },
   });
@@ -319,6 +317,7 @@ export default function AdminSchedule() {
       setBulkDialogOpen(false);
       bulkForm.reset();
       setSelectedDriverIds([]);
+      setSelectedDaysOfWeek([1, 2, 3, 4, 5]);
       toast({
         title: "Success",
         description: `Created ${response.count || 0} shifts successfully`,
@@ -384,6 +383,7 @@ export default function AdminSchedule() {
 
   const handleOpenBulkDialog = () => {
     setSelectedDriverIds([]);
+    setSelectedDaysOfWeek([1, 2, 3, 4, 5]);
     bulkForm.reset({
       driverIds: [],
       startDate: new Date().toISOString().split('T')[0],
@@ -394,34 +394,33 @@ export default function AdminSchedule() {
       vehicleId: null,
       plannedStart: "07:00",
       plannedEnd: "15:00",
-      status: "SCHEDULED",
       notes: null,
     });
     setBulkDialogOpen(true);
   };
 
   const onBulkSubmit = (data: BulkScheduleData) => {
-    const formData = {
-      ...data,
-      driverIds: selectedDriverIds,
-    };
-    bulkCreateMutation.mutate(formData);
+    bulkCreateMutation.mutate(data);
   };
 
   const toggleDriverSelection = (driverId: string) => {
-    setSelectedDriverIds(prev =>
-      prev.includes(driverId)
-        ? prev.filter(id => id !== driverId)
-        : [...prev, driverId]
-    );
+    const newSelection = selectedDriverIds.includes(driverId)
+      ? selectedDriverIds.filter(id => id !== driverId)
+      : [...selectedDriverIds, driverId];
+    
+    setSelectedDriverIds(newSelection);
+    bulkForm.setValue("driverIds", newSelection);
+    bulkForm.trigger("driverIds");
   };
 
   const toggleDayOfWeek = (day: number) => {
-    setSelectedDaysOfWeek(prev =>
-      prev.includes(day)
-        ? prev.filter(d => d !== day)
-        : [...prev, day].sort()
-    );
+    const newSelection = selectedDaysOfWeek.includes(day)
+      ? selectedDaysOfWeek.filter(d => d !== day)
+      : [...selectedDaysOfWeek, day].sort();
+    
+    setSelectedDaysOfWeek(newSelection);
+    bulkForm.setValue("daysOfWeek", newSelection);
+    bulkForm.trigger("daysOfWeek");
   };
 
   const nextMonth = () => {
