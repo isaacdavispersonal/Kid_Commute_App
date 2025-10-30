@@ -2758,6 +2758,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get all admins (excluding current user) for admin-to-admin messaging
+  app.get(
+    "/api/admin/all-admins",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const currentUserId = req.user.claims.sub;
+        const admins = await storage.getUsersByRole("admin");
+        // Filter out the current user
+        const otherAdmins = admins.filter((admin: any) => admin.id !== currentUserId);
+        res.json(otherAdmins);
+      } catch (error) {
+        console.error("Error fetching admins:", error);
+        res.status(500).json({ message: "Failed to fetch admins" });
+      }
+    }
+  );
+
   // Get direct messages between admin and specific user
   app.get(
     "/api/admin/direct-messages/:userId",

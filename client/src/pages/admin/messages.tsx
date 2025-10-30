@@ -17,10 +17,13 @@ export default function AdminMessagesPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
+  const [selectedAdmin, setSelectedAdmin] = useState<string | null>(null);
   const [driverMessage, setDriverMessage] = useState("");
   const [parentMessage, setParentMessage] = useState("");
+  const [adminMessage, setAdminMessage] = useState("");
   const [driverSearch, setDriverSearch] = useState("");
   const [parentSearch, setParentSearch] = useState("");
+  const [adminSearch, setAdminSearch] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -38,6 +41,11 @@ export default function AdminMessagesPage() {
   // Get all parents
   const { data: parents = [], isLoading: parentsLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/all-parents"],
+  });
+
+  // Get all admins (excluding current user)
+  const { data: admins = [], isLoading: adminsLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/all-admins"],
   });
 
   // Get messages for selected conversation
@@ -58,6 +66,13 @@ export default function AdminMessagesPage() {
   const { data: parentMessages = [], isLoading: parentMessagesLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/direct-messages", selectedParent],
     enabled: !!selectedParent,
+    refetchInterval: 3000,
+  });
+
+  // Get direct messages with selected admin
+  const { data: adminMessages = [], isLoading: adminMessagesLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/direct-messages", selectedAdmin],
+    enabled: !!selectedAdmin,
     refetchInterval: 3000,
   });
 
@@ -82,6 +97,46 @@ export default function AdminMessagesPage() {
     },
   });
 
+  // Mark messages as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: async (senderId: string) => {
+      return await apiRequest("POST", "/api/messages/mark-read", { senderId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
+    },
+  });
+
+  // Mark driver messages as read when viewing
+  useEffect(() => {
+    if (selectedDriver && driverMessages && driverMessages.length > 0) {
+      const hasUnread = driverMessages.some((msg: any) => !msg.isRead && msg.senderId === selectedDriver);
+      if (hasUnread) {
+        markAsReadMutation.mutate(selectedDriver);
+      }
+    }
+  }, [selectedDriver, driverMessages]);
+
+  // Mark parent messages as read when viewing
+  useEffect(() => {
+    if (selectedParent && parentMessages && parentMessages.length > 0) {
+      const hasUnread = parentMessages.some((msg: any) => !msg.isRead && msg.senderId === selectedParent);
+      if (hasUnread) {
+        markAsReadMutation.mutate(selectedParent);
+      }
+    }
+  }, [selectedParent, parentMessages]);
+
+  // Mark admin messages as read when viewing
+  useEffect(() => {
+    if (selectedAdmin && adminMessages && adminMessages.length > 0) {
+      const hasUnread = adminMessages.some((msg: any) => !msg.isRead && msg.senderId === selectedAdmin);
+      if (hasUnread) {
+        markAsReadMutation.mutate(selectedAdmin);
+      }
+    }
+  }, [selectedAdmin, adminMessages]);
+
   // Auto-select first conversation
   useEffect(() => {
     if (conversations && conversations.length > 0 && !selectedConversation) {
@@ -92,7 +147,7 @@ export default function AdminMessagesPage() {
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversationMessages, driverMessages, parentMessages]);
+  }, [conversationMessages, driverMessages, parentMessages, adminMessages]);
 
   // Handle sending message to driver
   const handleSendDriverMessage = async () => {
@@ -116,13 +171,28 @@ export default function AdminMessagesPage() {
     setParentMessage("");
   };
 
-  // Filter drivers and parents by search
+  // Handle sending message to admin
+  const handleSendAdminMessage = async () => {
+    if (!selectedAdmin || !adminMessage.trim()) return;
+    
+    await sendMessageMutation.mutateAsync({
+      recipientId: selectedAdmin,
+      content: adminMessage.trim(),
+    });
+    setAdminMessage("");
+  };
+
+  // Filter drivers, parents, and admins by search
   const filteredDrivers = drivers.filter((driver: any) =>
     `${driver.firstName} ${driver.lastName}`.toLowerCase().includes(driverSearch.toLowerCase())
   );
 
   const filteredParents = parents.filter((parent: any) =>
     `${parent.firstName} ${parent.lastName}`.toLowerCase().includes(parentSearch.toLowerCase())
+  );
+
+  const filteredAdmins = admins.filter((admin: any) =>
+    `${admin.firstName} ${admin.lastName}`.toLowerCase().includes(adminSearch.toLowerCase())
   );
 
   return (
@@ -155,7 +225,7 @@ export default function AdminMessagesPage() {
       </div>
 
       <Tabs defaultValue="conversations" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="conversations" data-testid="tab-conversations">
             <Users className="h-4 w-4 mr-2" />
             View Conversations
@@ -167,6 +237,10 @@ export default function AdminMessagesPage() {
           <TabsTrigger value="message-parents" data-testid="tab-message-parents">
             <MessageSquare className="h-4 w-4 mr-2" />
             Message Parents
+          </TabsTrigger>
+          <TabsTrigger value="message-admins" data-testid="tab-message-admins">
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Message Admins
           </TabsTrigger>
         </TabsList>
 
@@ -437,6 +511,98 @@ export default function AdminMessagesPage() {
                                 {parent.phoneNumber && (
                                   <p className="text-xs text-muted-foreground">
                                     {parent.phoneNumber}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </Button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Message Admins Tab */}
+        <TabsContent value="message-admins">
+          {adminsLoading ? (
+            <MessagesSkeleton />
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-lg">Messages</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedAdmin ? (
+                    <DirectMessageView
+                      messages={adminMessages}
+                      isLoading={adminMessagesLoading}
+                      messageText={adminMessage}
+                      setMessageText={setAdminMessage}
+                      onSend={handleSendAdminMessage}
+                      isPending={sendMessageMutation.isPending}
+                      messagesEndRef={messagesEndRef}
+                      recipientRole="admin"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-[400px]">
+                      <p className="text-sm text-muted-foreground">
+                        Select an admin to message
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Admins</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search admins..."
+                        value={adminSearch}
+                        onChange={(e) => setAdminSearch(e.target.value)}
+                        className="pl-9"
+                        data-testid="input-search-admins"
+                      />
+                    </div>
+
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                      {filteredAdmins.length === 0 ? (
+                        <div className="text-center py-8">
+                          <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-sm text-muted-foreground">No admins found</p>
+                        </div>
+                      ) : (
+                        filteredAdmins.map((admin: any) => (
+                          <Button
+                            key={admin.id}
+                            variant={selectedAdmin === admin.id ? "default" : "outline"}
+                            className="w-full justify-start h-auto py-3"
+                            onClick={() => setSelectedAdmin(admin.id)}
+                            data-testid={`button-admin-${admin.id}`}
+                          >
+                            <div className="flex items-center gap-3 w-full">
+                              <Avatar className="h-8 w-8 flex-shrink-0">
+                                <AvatarFallback className="bg-warning/10 text-warning text-xs">
+                                  {admin.firstName?.[0]}{admin.lastName?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 text-left">
+                                <p className="font-medium text-sm">
+                                  {admin.firstName} {admin.lastName}
+                                </p>
+                                {admin.phoneNumber && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {admin.phoneNumber}
                                   </p>
                                 )}
                               </div>
