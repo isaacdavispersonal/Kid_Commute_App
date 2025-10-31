@@ -56,16 +56,23 @@ function updateUserSession(
 }
 
 async function upsertUser(claims: any) {
-  // Check if user exists to preserve their role
+  // Check if user exists to preserve their custom profile data
   const existingUser = await storage.getUser(claims["sub"]);
   
   const userData: any = {
     id: claims["sub"],
     email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
   };
+  
+  // Only set firstName/lastName from OIDC if user hasn't customized them
+  // This preserves user-edited profile data
+  if (!existingUser || !existingUser.firstName) {
+    userData.firstName = claims["first_name"];
+  }
+  if (!existingUser || !existingUser.lastName) {
+    userData.lastName = claims["last_name"];
+  }
   
   // Set role from OIDC claims if provided (for testing), otherwise use default or preserve existing
   if (claims["role"] && ["admin", "driver", "parent"].includes(claims["role"])) {
