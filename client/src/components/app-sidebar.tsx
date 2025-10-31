@@ -173,6 +173,7 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
   const { data: unreadCounts } = useQuery<{
     messages: number;
     announcements: number;
+    notifications: number;
   }>({
     queryKey: ["/api/user/unread-counts"],
     refetchInterval: 10000, // Refresh every 10 seconds
@@ -185,7 +186,7 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
       ? driverMenuItems
       : parentMenuItems;
 
-  const totalUnread = (unreadCounts?.messages || 0) + (unreadCounts?.announcements || 0);
+  const totalUnread = (unreadCounts?.messages || 0) + (unreadCounts?.announcements || 0) + (unreadCounts?.notifications || 0);
 
   return (
     <Sidebar>

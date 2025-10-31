@@ -46,6 +46,12 @@ export default function DriverMessagesPage() {
     refetchInterval: 10000,
   });
 
+  // Get driver notifications (admin interventions)
+  const { data: driverNotifications = [] } = useQuery<any[]>({
+    queryKey: ["/api/driver/notifications"],
+    refetchInterval: 5000,
+  });
+
   // Get unread announcement IDs
   const { data: unreadAnnouncementData } = useQuery<{ unreadIds: string[] }>({
     queryKey: ["/api/user/unread-announcements"],
@@ -71,6 +77,7 @@ export default function DriverMessagesPage() {
   const { data: unreadCounts } = useQuery<{
     messages: number;
     announcements: number;
+    notifications: number;
     messageBySender: { [senderId: string]: number };
   }>({
     queryKey: ["/api/user/unread-counts"],
@@ -209,6 +216,26 @@ export default function DriverMessagesPage() {
     },
   });
 
+  const dismissNotificationMutation = useMutation({
+    mutationFn: async (notificationId: string) => {
+      return await apiRequest("POST", `/api/driver/notifications/${notificationId}/dismiss`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/driver/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
+      toast({
+        title: "Notification Dismissed",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to dismiss notification",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Get driver's routes for route announcements
   const { data: driverRoutes = [] } = useQuery<any[]>({
     queryKey: ["/api/driver/shifts"],
@@ -275,6 +302,16 @@ export default function DriverMessagesPage() {
     dismissAnnouncementMutation.mutate(announcementId);
   };
 
+  const handleDismissNotification = (notificationId: string) => {
+    dismissNotificationMutation.mutate(notificationId);
+  };
+
+  const handleViewConversation = (parentId: string) => {
+    setSelectedParent(parentId);
+    // Scroll to top of messages
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleCreateRouteAnnouncement = () => {
     if (!routeAnnouncementMessage.trim() || !selectedRouteForAnnouncement) return;
     createRouteAnnouncementMutation.mutate({
@@ -331,6 +368,61 @@ export default function DriverMessagesPage() {
           Message parents of children on your routes
         </p>
       </div>
+
+      {/* Admin Intervention Notifications Section */}
+      {driverNotifications.length > 0 && (
+        <Card className="border-orange-500/30 bg-orange-500/5">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-orange-500" />
+              Admin Intervention Notifications
+              <Badge variant="destructive" className="ml-2">
+                {driverNotifications.length}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {driverNotifications.map((notification: any) => (
+              <div
+                key={notification.id}
+                className="bg-background/60 rounded-md p-4 space-y-3"
+                data-testid={`notification-${notification.id}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">
+                      Admin <span className="font-semibold">{notification.adminName}</span> intervened in your conversation with{" "}
+                      <span className="font-semibold">{notification.parentName}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => handleViewConversation(notification.parentId)}
+                    data-testid={`button-view-conversation-${notification.id}`}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-1" />
+                    View Conversation
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDismissNotification(notification.id)}
+                    data-testid={`button-dismiss-notification-${notification.id}`}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Admin Announcements Section */}
       {announcements.length > 0 && (

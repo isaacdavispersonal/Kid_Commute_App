@@ -114,14 +114,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const messageCount = await storage.getUnreadMessageCount(userId);
       const messageCounts = await storage.getUnreadCountsBySender(userId);
       let announcementCount = 0;
+      let notificationCount = 0;
 
       if (user.role === "driver" || user.role === "parent") {
         announcementCount = await storage.getUnreadAnnouncementCount(userId, user.role);
       }
 
+      // Get driver notification count for drivers only
+      if (user.role === "driver") {
+        notificationCount = await storage.getUnreadDriverNotificationCount(userId);
+      }
+
       res.json({
         messages: messageCount,
         announcements: announcementCount,
+        notifications: notificationCount,
         messageBySender: messageCounts,
       });
     } catch (error) {
