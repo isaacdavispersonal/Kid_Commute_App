@@ -38,6 +38,7 @@ Preferred communication style: Simple, everyday language.
 - **Route Announcement System**: Drivers can broadcast announcements to all parents whose children are on their assigned routes. Route announcements are scoped by route assignment with authorization checks to prevent cross-route access. Parents view route announcements from drivers assigned to their children's routes with dismiss and read tracking.
 - **Incident Management System**: Drivers report incidents (severity, location, description); admins review, filter, and resolve incidents. Admin view groups incidents by Pending/Resolved status with collapsible sections.
 - **Driver Assignment System**: Admins assign drivers to routes with vehicles and schedules. Admin view groups assignments by driver with collapsible sections. Driver reassignment is done through the edit dialog to keep the list view clean and consolidate all editing actions.
+- **Parent Student Management**: Parents can edit their children's information including names, demographics (height, race, gender), emergency contacts, medical notes, and guardian phone numbers. EditStudentDialog provides a comprehensive form with validation via updateStudentSchema. Parents can add/remove guardian phone numbers (minimum one required). Authorization is household-based via phone number matching.
 - **Session Management**: PostgreSQL-backed sessions using `connect-pg-simple` with a 7-day TTL and secure cookies.
 
 ## External Dependencies
