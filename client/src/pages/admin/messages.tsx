@@ -21,6 +21,7 @@ export default function AdminMessagesPage() {
   const [driverMessage, setDriverMessage] = useState("");
   const [parentMessage, setParentMessage] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
+  const [conversationMessage, setConversationMessage] = useState("");
   const [driverSearch, setDriverSearch] = useState("");
   const [parentSearch, setParentSearch] = useState("");
   const [adminSearch, setAdminSearch] = useState("");
@@ -161,6 +162,11 @@ export default function AdminMessagesPage() {
     }
   }, [conversations, selectedConversation]);
 
+  // Clear conversation message when switching conversations
+  useEffect(() => {
+    setConversationMessage("");
+  }, [selectedConversation]);
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -197,6 +203,47 @@ export default function AdminMessagesPage() {
       content: adminMessage.trim(),
     });
     setAdminMessage("");
+  };
+
+  // Handle sending message in conversation (to both driver and parent)
+  const handleSendConversationMessage = async () => {
+    if (!selectedConversation || !conversationMessage.trim()) return;
+    
+    // Find the selected conversation to get driver and parent IDs
+    const conversation = conversations.find((c: any) => c.conversationKey === selectedConversation);
+    if (!conversation) return;
+    
+    try {
+      // Send messages to both driver and parent without individual toasts
+      await Promise.all([
+        apiRequest("POST", "/api/admin/send-message", {
+          recipientId: conversation.driverId,
+          content: conversationMessage.trim(),
+        }),
+        apiRequest("POST", "/api/admin/send-message", {
+          recipientId: conversation.parentId,
+          content: conversationMessage.trim(),
+        }),
+      ]);
+      
+      // Refresh conversation messages and direct message queries
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/conversation-messages", selectedConversation] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/direct-messages"] });
+      
+      // Show single success toast
+      toast({
+        title: "Message sent",
+        description: "Your intervention message was delivered to both the driver and parent.",
+      });
+      
+      setConversationMessage("");
+    } catch (error) {
+      toast({
+        title: "Failed to send message",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Filter drivers, parents, and admins by search
@@ -550,7 +597,10 @@ export default function AdminMessagesPage() {
                       messages={conversationMessages}
                       isLoading={conversationMessagesLoading}
                       messagesEndRef={messagesEndRef}
-                      readOnly
+                      messageText={conversationMessage}
+                      setMessageText={setConversationMessage}
+                      onSend={handleSendConversationMessage}
+                      isPending={sendMessageMutation.isPending}
                     />
                   ) : (
                     <div className="h-[500px] flex items-center justify-center">
@@ -938,18 +988,31 @@ export default function AdminMessagesPage() {
   );
 }
 
-// Component for viewing conversations (read-only)
+// Component for viewing conversations with admin intervention
 function ConversationView({
   messages,
   isLoading,
   messagesEndRef,
-  readOnly,
+  messageText,
+  setMessageText,
+  onSend,
+  isPending,
 }: {
   messages: any[];
   isLoading: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement>;
-  readOnly?: boolean;
+  messageText?: string;
+  setMessageText?: (text: string) => void;
+  onSend?: () => void;
+  isPending?: boolean;
 }) {
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey && onSend) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="h-[400px] overflow-y-auto space-y-3 p-4 bg-accent/30 rounded-md">
@@ -1005,13 +1068,33 @@ function ConversationView({
         )}
       </div>
 
-      {readOnly && (
-        <div className="p-3 bg-info/10 rounded-md border border-info/20">
-          <p className="text-xs text-muted-foreground text-center">
-            <AlertCircle className="h-3 w-3 inline mr-2" />
-            View-only mode. Use the tabs above to send direct messages.
-          </p>
-        </div>
+      {messageText !== undefined && setMessageText && onSend && (
+        <>
+          <div className="p-3 bg-warning/10 rounded-md border border-warning/20">
+            <p className="text-xs text-muted-foreground flex items-center gap-2">
+              <AlertCircle className="h-3 w-3" />
+              Your message will be sent to both the driver and parent in this conversation
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Textarea
+              placeholder="Intervene in this conversation..."
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              onKeyDown={handleKeyPress}
+              className="resize-none"
+              rows={3}
+              data-testid="textarea-conversation-message"
+            />
+            <Button
+              onClick={onSend}
+              disabled={!messageText.trim() || isPending}
+              data-testid="button-send-conversation-message"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </>
       )}
     </div>
   );
