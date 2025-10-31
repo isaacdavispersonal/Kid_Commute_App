@@ -1078,7 +1078,7 @@ function ConversationView({
           </div>
           <div className="flex gap-2">
             <Textarea
-              placeholder="Intervene in this conversation..."
+              placeholder="Send message to both driver and parent..."
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               onKeyDown={handleKeyPress}

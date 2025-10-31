@@ -1078,6 +1078,8 @@ export class DatabaseStorage implements IStorage {
 
         conversationMap.set(key, {
           conversationKey: key,
+          driverId: driver?.id || "",
+          parentId: parent?.id || "",
           driverName: driver ? `${driver.firstName || ""} ${driver.lastName || ""}`.trim() || driver.email : "Unknown",
           parentName: parent ? `${parent.firstName || ""} ${parent.lastName || ""}`.trim() || parent.email : "Unknown",
           lastMessagePreview: msg.content.substring(0, 50) + (msg.content.length > 50 ? "..." : ""),
