@@ -10,6 +10,7 @@ import {
   clockEvents,
   timeEntries,
   messages,
+  driverNotifications,
   announcements,
   announcementReads,
   announcementDismissals,
@@ -43,6 +44,8 @@ import {
   type InsertTimeEntry,
   type Message,
   type InsertMessage,
+  type DriverNotification,
+  type InsertDriverNotification,
   type Announcement,
   type InsertAnnouncement,
   type AnnouncementRead,
@@ -151,6 +154,12 @@ export interface IStorage {
   markMessagesAsRead(recipientId: string, senderId: string): Promise<void>;
   getUnreadMessageCount(userId: string): Promise<number>;
   getUnreadCountsBySender(userId: string): Promise<{ [senderId: string]: number }>;
+
+  // Driver notification operations
+  createDriverNotification(notification: InsertDriverNotification): Promise<DriverNotification>;
+  getDriverNotifications(driverId: string): Promise<any[]>;
+  dismissDriverNotification(notificationId: string): Promise<void>;
+  getUnreadDriverNotificationCount(driverId: string): Promise<number>;
 
   // Announcement operations
   createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement[]>;
@@ -1144,6 +1153,64 @@ export class DatabaseStorage implements IStorage {
       counts[result.senderId] = Number(result.count);
     }
     return counts;
+  }
+
+  // ============ Driver Notification operations ============
+
+  async createDriverNotification(notification: InsertDriverNotification): Promise<DriverNotification> {
+    const [newNotification] = await db.insert(driverNotifications).values(notification).returning();
+    return newNotification;
+  }
+
+  async getDriverNotifications(driverId: string): Promise<any[]> {
+    const notifications = await db
+      .select()
+      .from(driverNotifications)
+      .where(eq(driverNotifications.driverId, driverId))
+      .orderBy(desc(driverNotifications.createdAt));
+
+    // Enrich with parent and admin details
+    const enriched = await Promise.all(
+      notifications.map(async (notification) => {
+        const parent = await this.getUser(notification.parentId);
+        const message = await db
+          .select()
+          .from(messages)
+          .where(eq(messages.id, notification.messageId))
+          .limit(1);
+        
+        const admin = message[0]?.senderId ? await this.getUser(message[0].senderId) : null;
+
+        return {
+          ...notification,
+          parentName: parent ? `${parent.firstName} ${parent.lastName}` : "Unknown",
+          adminName: admin ? `${admin.firstName} ${admin.lastName}` : "Admin",
+          createdAt: notification.createdAt,
+        };
+      })
+    );
+
+    return enriched;
+  }
+
+  async dismissDriverNotification(notificationId: string): Promise<void> {
+    await db
+      .update(driverNotifications)
+      .set({ isDismissed: true })
+      .where(eq(driverNotifications.id, notificationId));
+  }
+
+  async getUnreadDriverNotificationCount(driverId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(driverNotifications)
+      .where(
+        and(
+          eq(driverNotifications.driverId, driverId),
+          eq(driverNotifications.isDismissed, false)
+        )
+      );
+    return Number(result[0]?.count || 0);
   }
 
   async getAdminMessageSummaries(adminId: string): Promise<any[]> {

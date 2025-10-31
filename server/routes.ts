@@ -3023,6 +3023,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Send intervention message in driver-parent conversation
+  app.post(
+    "/api/admin/send-conversation-message",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const adminId = req.user.claims.sub;
+        const { content, conversationId, driverId, parentId } = req.body;
+
+        if (!content || !conversationId || !driverId || !parentId) {
+          return res.status(400).json({ 
+            message: "Content, conversation ID, driver ID, and parent ID are required" 
+          });
+        }
+
+        // Create forwarded message to parent only
+        const message = await storage.createMessage({
+          senderId: adminId,
+          recipientId: parentId,
+          content,
+          forwardedFromConversationId: conversationId,
+          forwardedByAdminId: adminId,
+        });
+
+        // Create notification for driver
+        await storage.createDriverNotification({
+          driverId,
+          conversationId,
+          messageId: message.id,
+          parentId,
+        });
+
+        // Broadcast via WebSocket if available
+        if (wss) {
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(
+                JSON.stringify({
+                  type: "new_message",
+                  message,
+                })
+              );
+            }
+          });
+        }
+
+        res.json(message);
+      } catch (error) {
+        console.error("Error sending conversation message:", error);
+        res.status(500).json({ message: "Failed to send message" });
+      }
+    }
+  );
+
   // ============ Announcement routes ============
 
   // Create announcement

@@ -205,7 +205,7 @@ export default function AdminMessagesPage() {
     setAdminMessage("");
   };
 
-  // Handle sending message in conversation (to both driver and parent)
+  // Handle sending message in conversation (to parent only, with driver notification)
   const handleSendConversationMessage = async () => {
     if (!selectedConversation || !conversationMessage.trim()) return;
     
@@ -214,26 +214,22 @@ export default function AdminMessagesPage() {
     if (!conversation) return;
     
     try {
-      // Send messages to both driver and parent without individual toasts
-      await Promise.all([
-        apiRequest("POST", "/api/admin/send-message", {
-          recipientId: conversation.driverId,
-          content: conversationMessage.trim(),
-        }),
-        apiRequest("POST", "/api/admin/send-message", {
-          recipientId: conversation.parentId,
-          content: conversationMessage.trim(),
-        }),
-      ]);
+      // Send intervention message (to parent only, creates driver notification)
+      await apiRequest("POST", "/api/admin/send-conversation-message", {
+        content: conversationMessage.trim(),
+        conversationId: conversation.conversationKey,
+        driverId: conversation.driverId,
+        parentId: conversation.parentId,
+      });
       
       // Refresh conversation messages and direct message queries
       queryClient.invalidateQueries({ queryKey: ["/api/admin/conversation-messages", selectedConversation] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/direct-messages"] });
       
-      // Show single success toast
+      // Show success toast
       toast({
         title: "Message sent",
-        description: "Your intervention message was delivered to both the driver and parent.",
+        description: "Your message was sent to the parent, and the driver was notified.",
       });
       
       setConversationMessage("");

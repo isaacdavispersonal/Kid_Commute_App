@@ -443,6 +443,8 @@ export const messages = pgTable("messages", {
     .references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   isRead: boolean("is_read").notNull().default(false),
+  forwardedFromConversationId: varchar("forwarded_from_conversation_id"),
+  forwardedByAdminId: varchar("forwarded_by_admin_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -453,6 +455,31 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
 
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
+
+// Driver notifications table - alerts drivers when admin responds on their behalf
+export const driverNotifications = pgTable("driver_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  conversationId: varchar("conversation_id").notNull(),
+  messageId: varchar("message_id")
+    .notNull()
+    .references(() => messages.id, { onDelete: "cascade" }),
+  parentId: varchar("parent_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  isDismissed: boolean("is_dismissed").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertDriverNotificationSchema = createInsertSchema(driverNotifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertDriverNotification = z.infer<typeof insertDriverNotificationSchema>;
+export type DriverNotification = typeof driverNotifications.$inferSelect;
 
 // Announcements table - broadcast messages from admins
 export const announcements = pgTable("announcements", {
