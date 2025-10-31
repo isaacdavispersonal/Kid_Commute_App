@@ -66,7 +66,6 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
       gender: student.gender || "",
       heightInches: student.heightInches || undefined,
       race: student.race || "",
-      photoUrl: student.photoUrl || "",
       medicalNotes: student.medicalNotes || "",
       specialNeeds: student.specialNeeds || "",
       emergencyContactName: student.emergencyContactName || "",
@@ -323,20 +322,6 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="photoUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Photo URL</FormLabel>
-                  <FormControl>
-                    <Input {...field} value={field.value || ""} type="url" placeholder="https://example.com/photo.jpg" data-testid="input-photo-url" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}
