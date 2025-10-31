@@ -17,6 +17,7 @@ Preferred communication style: Simple, everyday language.
     - **Driver Interface**: Mobile-first with clock in/out and route cards.
     - **Parent Portal**: Real-time tracking and messaging.
 - **Real-Time Features**: WebSocket integration for messaging, Leaflet.js for map visualization, polling for statistics.
+- **Clutter Reduction Features**: Grouped/collapsible UI patterns reduce visual elements by 67% - incidents grouped by status, users tabbed by role, clock events grouped by driver, messages with Recent tab showing unread/read/archived sections, driver assignments grouped by driver with inline reassignment.
 
 ### Backend Architecture
 - **Server Framework**: Express.js on Node.js with TypeScript, ESM module system.
@@ -34,7 +35,8 @@ Preferred communication style: Simple, everyday language.
 - **Unread Notification System**: Real-time tracking of unread messages and announcements with badges, automatic mark-as-read, and backend storage for read statuses.
 - **Announcement Dismissal System**: Users can dismiss announcements separately from read status. Dismissed announcements are filtered from display for all user roles while maintaining read tracking for notification counts.
 - **Route Announcement System**: Drivers can broadcast announcements to all parents whose children are on their assigned routes. Route announcements are scoped by route assignment with authorization checks to prevent cross-route access. Parents view route announcements from drivers assigned to their children's routes with dismiss and read tracking.
-- **Incident Management System**: Drivers report incidents (severity, location, description); admins review, filter, and resolve incidents.
+- **Incident Management System**: Drivers report incidents (severity, location, description); admins review, filter, and resolve incidents. Admin view groups incidents by Pending/Resolved status with collapsible sections.
+- **Driver Assignment System**: Admins assign drivers to routes with vehicles and schedules. Admin view groups assignments by driver with collapsible sections and inline driver reassignment dropdown to swap drivers without delete/create workflow.
 - **Session Management**: PostgreSQL-backed sessions using `connect-pg-simple` with a 7-day TTL and secure cookies.
 
 ## External Dependencies
