@@ -455,6 +455,7 @@ export default function ParentMessagesPage() {
                   messages.map((message: any) => {
                     const isOwn = message.isOwn;
                     const isAdmin = message.senderRole === "admin";
+                    const isForwarded = !!message.forwardedByAdminName;
                     
                     return (
                       <div
@@ -472,9 +473,16 @@ export default function ParentMessagesPage() {
                           }`}
                         >
                           {isAdmin && (
-                            <p className="text-xs font-medium text-warning-foreground mb-1">
-                              Admin Support
-                            </p>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-xs font-medium text-warning-foreground">
+                                Admin Support
+                              </p>
+                              {isForwarded && (
+                                <Badge variant="outline" className="text-xs h-5 px-1.5 bg-warning/30 border-warning">
+                                  Forwarded
+                                </Badge>
+                              )}
+                            </div>
                           )}
                           <p className="text-sm">{message.content}</p>
                           <p

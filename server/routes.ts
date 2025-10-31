@@ -2518,11 +2518,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const messagesWithDetails = await Promise.all(
           messages.map(async (msg) => {
             const sender = await storage.getUser(msg.senderId);
+            let forwardedByAdminName = null;
+            
+            // If message was forwarded by admin, get admin name
+            if (msg.forwardedByAdminId) {
+              const admin = await storage.getUser(msg.forwardedByAdminId);
+              forwardedByAdminName = admin ? `${admin.firstName} ${admin.lastName}` : "Admin";
+            }
+            
             return {
               ...msg,
               isOwn: msg.senderId === parentId,
               senderRole: sender?.role || "unknown",
               senderName: sender ? `${sender.firstName} ${sender.lastName}` : "Unknown",
+              forwardedByAdminName,
             };
           })
         );
@@ -2826,6 +2835,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error fetching admin contacts:", error);
         res.status(500).json({ message: "Failed to fetch admin contacts" });
+      }
+    }
+  );
+
+  // Get driver notifications
+  app.get(
+    "/api/driver/notifications",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const notifications = await storage.getDriverNotifications(driverId);
+        res.json(notifications);
+      } catch (error) {
+        console.error("Error fetching driver notifications:", error);
+        res.status(500).json({ message: "Failed to fetch notifications" });
+      }
+    }
+  );
+
+  // Dismiss driver notification
+  app.post(
+    "/api/driver/notifications/:id/dismiss",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const notificationId = req.params.id;
+        await storage.dismissDriverNotification(notificationId, driverId);
+        res.json({ message: "Notification dismissed" });
+      } catch (error: any) {
+        if (error.name === "NotFoundError") {
+          return res.status(404).json({ message: "Notification not found or access denied" });
+        }
+        console.error("Error dismissing notification:", error);
+        res.status(500).json({ message: "Failed to dismiss notification" });
       }
     }
   );

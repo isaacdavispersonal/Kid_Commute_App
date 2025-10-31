@@ -158,7 +158,7 @@ export interface IStorage {
   // Driver notification operations
   createDriverNotification(notification: InsertDriverNotification): Promise<DriverNotification>;
   getDriverNotifications(driverId: string): Promise<any[]>;
-  dismissDriverNotification(notificationId: string): Promise<void>;
+  dismissDriverNotification(notificationId: string, driverId: string): Promise<void>;
   getUnreadDriverNotificationCount(driverId: string): Promise<number>;
 
   // Announcement operations
@@ -1193,11 +1193,22 @@ export class DatabaseStorage implements IStorage {
     return enriched;
   }
 
-  async dismissDriverNotification(notificationId: string): Promise<void> {
-    await db
+  async dismissDriverNotification(notificationId: string, driverId: string): Promise<void> {
+    // Verify ownership before dismissing
+    const [updated] = await db
       .update(driverNotifications)
       .set({ isDismissed: true })
-      .where(eq(driverNotifications.id, notificationId));
+      .where(
+        and(
+          eq(driverNotifications.id, notificationId),
+          eq(driverNotifications.driverId, driverId)
+        )
+      )
+      .returning();
+    
+    if (!updated) {
+      throw new NotFoundError("Notification not found or access denied");
+    }
   }
 
   async getUnreadDriverNotificationCount(driverId: string): Promise<number> {
