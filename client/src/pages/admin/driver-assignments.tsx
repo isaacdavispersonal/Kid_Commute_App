@@ -61,7 +61,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, CalendarDays, Clock, User, Route, Car, ChevronDown, ChevronRight, UserCheck } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarDays, Clock, User, Route, Car, ChevronRight } from "lucide-react";
 
 interface EnrichedDriverAssignment {
   id: string;
@@ -275,29 +275,6 @@ export default function AdminDriverAssignments() {
     }
   };
 
-  const reassignMutation = useMutation({
-    mutationFn: async ({ assignmentId, newDriverId }: { assignmentId: string; newDriverId: string }) => {
-      return await apiRequest("PATCH", `/api/admin/driver-assignments/${assignmentId}`, { driverId: newDriverId });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
-      toast({
-        title: "Success",
-        description: "Driver reassigned successfully",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to reassign driver",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleDriverReassign = (assignmentId: string, newDriverId: string) => {
-    reassignMutation.mutate({ assignmentId, newDriverId });
-  };
 
   // Group assignments by driver
   const groupedAssignments = assignments?.reduce((acc, assignment) => {
@@ -372,7 +349,6 @@ export default function AdminDriverAssignments() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Reassign To</TableHead>
                               <TableHead>Route</TableHead>
                               <TableHead>Vehicle</TableHead>
                               <TableHead>Date</TableHead>
@@ -384,24 +360,6 @@ export default function AdminDriverAssignments() {
                           <TableBody>
                             {group.assignments.map((assignment) => (
                               <TableRow key={assignment.id} data-testid={`row-assignment-${assignment.id}`}>
-                                <TableCell>
-                                  <Select
-                                    value={assignment.driverId}
-                                    onValueChange={(newDriverId) => handleDriverReassign(assignment.id, newDriverId)}
-                                    disabled={reassignMutation.isPending}
-                                  >
-                                    <SelectTrigger className="w-[200px]" data-testid={`select-reassign-${assignment.id}`}>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {drivers?.map((driver) => (
-                                        <SelectItem key={driver.id} value={driver.id}>
-                                          {getDriverDisplayName(driver)}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </TableCell>
                                 <TableCell>
                                   <div className="flex items-center gap-2">
                                     <Route className="h-4 w-4 text-muted-foreground" />
