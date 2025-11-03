@@ -108,12 +108,15 @@ export type Vehicle = typeof vehicles.$inferSelect;
 
 // ============ Route Management Tables ============
 
+// Route type enum
+export const routeTypeEnum = pgEnum("route_type", ["MORNING", "AFTERNOON", "EXTRA"]);
+
 // Routes table
 export const routes = pgTable("routes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   description: text("description"),
-  shiftType: varchar("shift_type", { length: 20 }), // MORNING, AFTERNOON, EXTRA (nullable for flexibility)
+  routeType: routeTypeEnum("route_type"), // Morning, Afternoon, or Extra Route
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -303,7 +306,21 @@ export type StudentAttendance = typeof studentAttendance.$inferSelect;
 
 // ============ Schedule Management Tables ============
 
-// Driver assignments table
+// Schedule pattern enum
+export const schedulePatternEnum = pgEnum("schedule_pattern", [
+  "WEEKDAYS",      // Monday-Friday
+  "DAILY",         // Every day
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
+  "SUNDAY",
+  "CUSTOM",        // For custom scheduling
+]);
+
+// Driver assignments table - Simplified to just assign drivers to routes
 export const driverAssignments = pgTable("driver_assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   driverId: varchar("driver_id")
@@ -315,10 +332,8 @@ export const driverAssignments = pgTable("driver_assignments", {
   vehicleId: varchar("vehicle_id")
     .notNull()
     .references(() => vehicles.id, { onDelete: "cascade" }),
-  date: varchar("date").notNull(), // Format: YYYY-MM-DD
-  startTime: varchar("start_time").notNull(),
-  endTime: varchar("end_time").notNull(),
-  isActive: boolean("is_active").notNull().default(true),
+  schedulePattern: schedulePatternEnum("schedule_pattern"), // Optional recurring schedule
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -349,11 +364,14 @@ export const shiftStatusEnum = pgEnum("shift_status", [
   "MISSED",
 ]);
 
-// Shifts table - replaces simple day-based assignments with shift-specific scheduling
+// Shifts table - Can reference driver assignments or be created standalone
 export const shifts = pgTable(
   "shifts",
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    driverAssignmentId: varchar("driver_assignment_id").references(() => driverAssignments.id, {
+      onDelete: "set null",
+    }), // Optional reference to driver assignment
     driverId: varchar("driver_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

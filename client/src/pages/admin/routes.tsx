@@ -49,6 +49,7 @@ interface RouteWithStopCount {
   id: string;
   name: string;
   description: string | null;
+  routeType: "MORNING" | "AFTERNOON" | "EXTRA" | null;
   isActive: boolean;
   stopCount: number;
 }
@@ -69,7 +70,7 @@ export default function AdminRoutes() {
     defaultValues: {
       name: "",
       description: "",
-      shiftType: null,
+      routeType: null,
       isActive: true,
     },
   });
@@ -79,7 +80,7 @@ export default function AdminRoutes() {
     defaultValues: {
       name: "",
       description: "",
-      shiftType: null,
+      routeType: null,
       isActive: true,
     },
   });
@@ -191,6 +192,23 @@ export default function AdminRoutes() {
       cell: (value: string) => value || "—",
     },
     {
+      header: "Route Type",
+      accessor: "routeType",
+      cell: (value: string | null) => {
+        if (!value) return "—";
+        const typeLabels: Record<string, string> = {
+          MORNING: "Morning",
+          AFTERNOON: "Afternoon",
+          EXTRA: "Extra",
+        };
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded-md bg-primary/10 text-primary text-xs font-medium">
+            {typeLabels[value] || value}
+          </span>
+        );
+      },
+    },
+    {
       header: "Stops",
       accessor: "stopCount",
       cell: (value: number) => (
@@ -297,23 +315,23 @@ export default function AdminRoutes() {
 
                 <FormField
                   control={createForm.control}
-                  name="shiftType"
+                  name="routeType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Shift Type (Optional)</FormLabel>
+                      <FormLabel>Route Type</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         value={field.value || undefined}
                       >
                         <FormControl>
-                          <SelectTrigger data-testid="select-shift-type">
-                            <SelectValue placeholder="Select shift type (if applicable)" />
+                          <SelectTrigger data-testid="select-route-type">
+                            <SelectValue placeholder="Select route type" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="MORNING">Morning</SelectItem>
-                          <SelectItem value="AFTERNOON">Afternoon</SelectItem>
-                          <SelectItem value="EXTRA">Extra</SelectItem>
+                          <SelectItem value="MORNING">Morning Route</SelectItem>
+                          <SelectItem value="AFTERNOON">Afternoon Route</SelectItem>
+                          <SelectItem value="EXTRA">Extra Route</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -400,23 +418,23 @@ export default function AdminRoutes() {
 
               <FormField
                 control={editForm.control}
-                name="shiftType"
+                name="routeType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Shift Type (Optional)</FormLabel>
+                    <FormLabel>Route Type</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       value={field.value || undefined}
                     >
                       <FormControl>
-                        <SelectTrigger data-testid="select-edit-shift-type">
-                          <SelectValue placeholder="Select shift type (if applicable)" />
+                        <SelectTrigger data-testid="select-edit-route-type">
+                          <SelectValue placeholder="Select route type" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="MORNING">Morning</SelectItem>
-                        <SelectItem value="AFTERNOON">Afternoon</SelectItem>
-                        <SelectItem value="EXTRA">Extra</SelectItem>
+                        <SelectItem value="MORNING">Morning Route</SelectItem>
+                        <SelectItem value="AFTERNOON">Afternoon Route</SelectItem>
+                        <SelectItem value="EXTRA">Extra Route</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
