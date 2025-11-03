@@ -136,8 +136,6 @@ export const stops = pgTable("stops", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   address: text("address").notNull(),
-  latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
-  longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
