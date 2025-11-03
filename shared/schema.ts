@@ -419,7 +419,6 @@ export const insertShiftSchema = createInsertSchema(shifts).omit({
 
 export const updateShiftSchema = createInsertSchema(shifts).omit({
   id: true,
-  driverId: true,
   createdAt: true,
   updatedAt: true,
 }).partial();

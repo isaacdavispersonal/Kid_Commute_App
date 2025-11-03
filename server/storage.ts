@@ -701,14 +701,15 @@ export class DatabaseStorage implements IStorage {
       throw new NotFoundError("Shift not found");
     }
 
-    // Check for overlapping shifts if time is being changed
-    if (updates.plannedStart || updates.plannedEnd) {
+    // Check for overlapping shifts if time, date, or driver is being changed
+    if (updates.plannedStart || updates.plannedEnd || updates.date || updates.driverId) {
       const plannedStart = updates.plannedStart || existing.plannedStart;
       const plannedEnd = updates.plannedEnd || existing.plannedEnd;
       const date = updates.date || existing.date;
+      const driverId = updates.driverId || existing.driverId;
       
       const hasOverlap = await this.checkShiftOverlap(
-        existing.driverId,
+        driverId,
         date,
         plannedStart,
         plannedEnd,
@@ -802,38 +803,37 @@ export class DatabaseStorage implements IStorage {
     plannedEnd: string,
     excludeShiftId?: string
   ): Promise<boolean> {
-    let query = db
-      .select()
-      .from(shifts)
-      .where(
+    const conditions = [
+      eq(shifts.driverId, driverId),
+      eq(shifts.date, date),
+      or(
+        // New shift starts during existing shift
         and(
-          eq(shifts.driverId, driverId),
-          eq(shifts.date, date),
-          or(
-            // New shift starts during existing shift
-            and(
-              sql`${plannedStart} >= ${shifts.plannedStart}`,
-              sql`${plannedStart} < ${shifts.plannedEnd}`
-            ),
-            // New shift ends during existing shift
-            and(
-              sql`${plannedEnd} > ${shifts.plannedStart}`,
-              sql`${plannedEnd} <= ${shifts.plannedEnd}`
-            ),
-            // New shift completely contains existing shift
-            and(
-              sql`${plannedStart} <= ${shifts.plannedStart}`,
-              sql`${plannedEnd} >= ${shifts.plannedEnd}`
-            )
-          )
+          sql`${plannedStart} >= ${shifts.plannedStart}`,
+          sql`${plannedStart} < ${shifts.plannedEnd}`
+        ),
+        // New shift ends during existing shift
+        and(
+          sql`${plannedEnd} > ${shifts.plannedStart}`,
+          sql`${plannedEnd} <= ${shifts.plannedEnd}`
+        ),
+        // New shift completely contains existing shift
+        and(
+          sql`${plannedStart} <= ${shifts.plannedStart}`,
+          sql`${plannedEnd} >= ${shifts.plannedEnd}`
         )
-      );
+      )
+    ];
 
     if (excludeShiftId) {
-      query = query.where(sql`${shifts.id} != ${excludeShiftId}`);
+      conditions.push(sql`${shifts.id} != ${excludeShiftId}`);
     }
 
-    const overlapping = await query;
+    const overlapping = await db
+      .select()
+      .from(shifts)
+      .where(and(...conditions));
+
     return overlapping.length > 0;
   }
 
