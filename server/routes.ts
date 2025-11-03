@@ -1063,12 +1063,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             return {
               ...assignment,
-              driverName: driver ? `${driver.firstName} ${driver.lastName}` : "Unknown",
-              driverEmail: driver?.email || "",
-              routeName: route?.name || "Unknown",
-              routeType: route?.routeType || null,
-              vehicleName: vehicle?.name || "Unknown",
-              vehiclePlate: vehicle?.plateNumber || "Unknown",
+              driver: driver || null,
+              route: route || null,
+              vehicle: vehicle || null,
             };
           })
         );
