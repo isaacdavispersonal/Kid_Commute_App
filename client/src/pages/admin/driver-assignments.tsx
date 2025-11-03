@@ -71,12 +71,22 @@ interface EnrichedDriverAssignment {
   startTime: string;
   endTime: string;
   notes: string | null;
-  driverName: string;
-  driverEmail: string;
-  routeName: string;
-  routeType: string | null;
-  vehicleName: string;
-  vehiclePlate: string;
+  driver: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+  } | null;
+  route: {
+    id: string;
+    name: string;
+    routeType: "MORNING" | "AFTERNOON" | "EXTRA" | null;
+  } | null;
+  vehicle: {
+    id: string;
+    name: string;
+    plateNumber: string;
+  } | null;
 }
 
 interface Driver {
@@ -88,7 +98,7 @@ interface Driver {
 }
 
 // Helper function to safely display driver names
-function getDriverDisplayName(driver: Driver | undefined): string {
+function getDriverDisplayName(driver: { firstName: string | null; lastName: string | null; email: string } | null | undefined): string {
   if (!driver) return "Unknown Driver";
   
   const firstName = driver.firstName?.trim();
@@ -275,8 +285,8 @@ export default function AdminDriverAssignments() {
     if (!acc[key]) {
       acc[key] = {
         driverId: assignment.driverId,
-        driverName: assignment.driverName,
-        driverEmail: assignment.driverEmail,
+        driverName: getDriverDisplayName(assignment.driver),
+        driverEmail: assignment.driver?.email || "Unknown",
         assignments: [],
       };
     }
@@ -356,11 +366,11 @@ export default function AdminDriverAssignments() {
                                   <div className="flex flex-col gap-1">
                                     <div className="flex items-center gap-2">
                                       <Route className="h-4 w-4 text-muted-foreground" />
-                                      <span className="font-medium">{assignment.routeName}</span>
+                                      <span className="font-medium">{assignment.route?.name || "Unknown Route"}</span>
                                     </div>
-                                    {assignment.routeType && (
+                                    {assignment.route?.routeType && (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-medium w-fit ml-6">
-                                        {assignment.routeType === 'MORNING' ? 'Morning' : assignment.routeType === 'AFTERNOON' ? 'Afternoon' : 'Extra'}
+                                        {assignment.route.routeType === 'MORNING' ? 'Morning' : assignment.route.routeType === 'AFTERNOON' ? 'Afternoon' : 'Extra'}
                                       </span>
                                     )}
                                   </div>
@@ -369,9 +379,9 @@ export default function AdminDriverAssignments() {
                                   <div className="flex items-center gap-2">
                                     <Car className="h-4 w-4 text-muted-foreground" />
                                     <div>
-                                      <div>{assignment.vehicleName}</div>
+                                      <div>{assignment.vehicle?.name || "Unknown Vehicle"}</div>
                                       <div className="text-sm text-muted-foreground">
-                                        {assignment.vehiclePlate}
+                                        {assignment.vehicle?.plateNumber || "N/A"}
                                       </div>
                                     </div>
                                   </div>
@@ -601,8 +611,8 @@ export default function AdminDriverAssignments() {
             <AlertDialogTitle>Delete Driver Assignment</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete the assignment for{" "}
-              <span className="font-semibold">{deleteDialog?.driverName}</span> on{" "}
-              <span className="font-semibold">{deleteDialog && new Date(deleteDialog.date).toLocaleDateString()}</span>?
+              <span className="font-semibold">{getDriverDisplayName(deleteDialog?.driver)}</span> to{" "}
+              <span className="font-semibold">{deleteDialog?.route?.name || "this route"}</span>?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
