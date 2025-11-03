@@ -1,0 +1,61 @@
+#
+  To do list:
+
+    DRIVER DASH
+
+      Clock in and clock out system
+        Drivers being required to put notes for unregistered clock in and out times
+        
+      Incorporating the correct information in Vehicle section
+      
+      Unscheduled shift clock in doesn't provide feedback, it needs to remove the ability to clock in once you've done it
+        already, and then show up once youve clocked out and that information needs to be sent to the admins side for reviews
+      
+      Unscheduled routes need to be information applied first where the stuff like location and events need to be applied once
+        we try to clock in
+      
+      Recent clock outs should be towards the top in the time history section
+      
+      In addition to the clock in and out, adding a break option to pause route timers
+      
+      Common supplies list supply request option that gets shown to admin
+      
+      Lead driver access for specific roles and management processes
+        maybe give them permission over route management
+      
+      Need a section to take attendance, which would be influenced by when a parent marks their child as absent or not
+        attending the service for the day
+        
+      Attendance section for students on their route
+
+
+    ADMIN DASH
+
+      Route builder
+      
+      Auto clock out driver an hour after the end of that shift
+      
+      Admin driver parent communication for admin to step in
+      
+      Groups for routes and for stops
+      
+      Blind messaging for groups of parents
+      
+      Announcement button for drivers
+      
+      How is phone handling removed and added in, what does that look like
+      
+      
+    PARENT DASH
+    
+      On their dash should show awaited time tracker thing
+        
+      Letting Parents Delete account in settings
+    
+      Option to tell the check in that student will or wont be riding
+    
+      Tracking on the dashboard, and payment redirement
+    
+      Being able to call in saying their child will and wont be on a route etc
+
+    APP FORMAT FOR MOBILE
