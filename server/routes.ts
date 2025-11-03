@@ -47,6 +47,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Prevent phone number changes through this endpoint for parents
+      // Parents must use the dedicated /api/parent/update-phone endpoint to ensure guardian phone sync
+      const user = await storage.getUser(userId);
+      if (user?.role === "parent" && result.data.phoneNumber) {
+        const normalizedNewPhone = result.data.phoneNumber.replace(/\D/g, '');
+        const currentPhone = user.phone;
+        
+        if (normalizedNewPhone !== currentPhone) {
+          return res.status(400).json({
+            message: "Please use the 'Change Phone' button to update your phone number. This ensures your children's records stay synchronized."
+          });
+        }
+      }
+      
       // Strip phone formatting to store only digits
       const normalizedData = {
         ...result.data,
@@ -62,32 +76,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phoneNumber: updatedUser.phoneNumber,
         email: updatedUser.email
       });
-      
-      // If user is a parent and updated their phone number, check for household linking
-      if (updatedUser.role === "parent" && normalizedData.phoneNumber) {
-        try {
-          // Find household by phone number (digits only)
-          const household = await storage.findHouseholdByPhone(normalizedData.phoneNumber);
-          
-          if (household) {
-            // Check if user is already linked to this household
-            const existingHousehold = await storage.getUserHousehold(userId);
-            
-            if (!existingHousehold || existingHousehold.id !== household.id) {
-              // Link user to household with proper object structure
-              await storage.linkUserToHousehold({
-                userId,
-                householdId: household.id,
-                roleInHousehold: "SECONDARY",
-              });
-              console.log(`Linked user ${userId} to household ${household.id} via phone ${normalizedData.phoneNumber}`);
-            }
-          }
-        } catch (householdError) {
-          // Don't fail the profile update if household linking fails
-          console.error("Error linking user to household:", householdError);
-        }
-      }
       
       res.json(updatedUser);
     } catch (error: any) {
@@ -2603,6 +2591,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error: any) {
         console.error("Error creating student:", error);
         res.status(500).json({ message: "Failed to create student" });
+      }
+    }
+  );
+
+  // Update parent phone number with option to sync to children
+  app.post(
+    "/api/parent/update-phone",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        const { z } = await import("zod");
+        
+        const schema = z.object({
+          newPhoneNumber: z.string().min(1, "Phone number is required"),
+          syncToChildren: z.boolean().default(false),
+        });
+        
+        const result = schema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid request data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const { newPhoneNumber, syncToChildren } = result.data;
+        
+        // Normalize phone to digits only
+        const normalizedPhone = newPhoneNumber.replace(/\D/g, '');
+        
+        // Get parent's current info
+        const parent = await storage.getUser(parentId);
+        if (!parent) {
+          return res.status(404).json({ message: "User not found" });
+        }
+        
+        const oldPhone = parent.phone;
+        console.log(`[update-phone] Parent ${parentId}: old phone = ${oldPhone}, new phone = ${normalizedPhone}`);
+        
+        // ALWAYS sync guardian phones when changing phone number
+        // This ensures parent can re-link to households via the new phone number
+        // Otherwise they would lose access to their children
+        if (oldPhone) {
+          console.log(`[update-phone] Syncing phone change from ${oldPhone} to ${normalizedPhone}`);
+          
+          // Find students by OLD guardian phone (before updating parent)
+          const students = await storage.findStudentsByGuardianPhone(oldPhone);
+          console.log(`[update-phone] Found ${students.length} students with guardian phone ${oldPhone}`);
+          
+          for (const student of students) {
+            console.log(`[update-phone] Updating student ${student.id}, current guardianPhones:`, student.guardianPhones);
+            
+            // Replace old phone with new phone in guardianPhones array
+            const updatedGuardianPhones = student.guardianPhones.map((phone: string) => 
+              phone === oldPhone ? normalizedPhone : phone
+            );
+            
+            console.log(`[update-phone] Updated guardianPhones:`, updatedGuardianPhones);
+            
+            // Only update if there was a change
+            if (JSON.stringify(updatedGuardianPhones) !== JSON.stringify(student.guardianPhones)) {
+              console.log(`[update-phone] Updating student ${student.id} with new phones`);
+              await storage.updateStudent(student.id, { 
+                guardianPhones: updatedGuardianPhones 
+              } as any);
+              console.log(`[update-phone] Successfully updated student ${student.id}`);
+            } else {
+              console.log(`[update-phone] No changes needed for student ${student.id}`);
+            }
+          }
+        }
+        
+        // Now update parent's phone number
+        console.log(`[update-phone] Updating parent ${parentId} phone to ${normalizedPhone}`);
+        await storage.updateUserProfile(parentId, { phone: normalizedPhone });
+        console.log(`[update-phone] Parent phone updated successfully`);
+        
+        // Re-link to households with new phone
+        console.log(`[update-phone] Re-linking parent ${parentId} to households`);
+        await storage.relinkParentHouseholds(parentId, normalizedPhone);
+        console.log(`[update-phone] Re-linking complete`);
+
+        
+        res.json({ 
+          success: true, 
+          message: syncToChildren 
+            ? "Phone number updated and synced to children" 
+            : "Phone number updated"
+        });
+      } catch (error: any) {
+        console.error("Error updating phone number:", error);
+        res.status(500).json({ message: "Failed to update phone number" });
       }
     }
   );

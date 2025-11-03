@@ -104,8 +104,11 @@ export interface IStorage {
   // Household operations
   createHousehold(household: InsertHousehold): Promise<Household>;
   findHouseholdByPhone(phone: string): Promise<Household | undefined>;
+  findHouseholdByAnyGuardianPhone(phone: string): Promise<Household | undefined>;
   linkUserToHousehold(householdMember: InsertHouseholdMember): Promise<HouseholdMember>;
+  unlinkUserFromHousehold(userId: string): Promise<void>;
   getUserHousehold(userId: string): Promise<Household | undefined>;
+  relinkParentHouseholds(userId: string, phoneNumber: string): Promise<void>;
 
   // Student operations
   getAllStudents(): Promise<Student[]>;
@@ -515,9 +518,51 @@ export class DatabaseStorage implements IStorage {
     return household;
   }
 
+  async findHouseholdByAnyGuardianPhone(phone: string): Promise<Household | undefined> {
+    // Find any student that has this phone in their guardianPhones array
+    const studentsWithPhone = await db
+      .select()
+      .from(students)
+      .where(sql`${phone} = ANY(${students.guardianPhones})`)
+      .limit(1);
+    
+    if (studentsWithPhone.length === 0 || !studentsWithPhone[0].householdId) {
+      return undefined;
+    }
+    
+    // Return the household
+    const [household] = await db
+      .select()
+      .from(households)
+      .where(eq(households.id, studentsWithPhone[0].householdId))
+      .limit(1);
+    
+    return household;
+  }
+
   async linkUserToHousehold(householdMember: InsertHouseholdMember): Promise<HouseholdMember> {
+    // Check if already linked to avoid duplicates
+    const existing = await db
+      .select()
+      .from(householdMembers)
+      .where(
+        and(
+          eq(householdMembers.userId, householdMember.userId),
+          eq(householdMembers.householdId, householdMember.householdId)
+        )
+      )
+      .limit(1);
+    
+    if (existing.length > 0) {
+      return existing[0];
+    }
+    
     const [newMember] = await db.insert(householdMembers).values(householdMember).returning();
     return newMember;
+  }
+
+  async unlinkUserFromHousehold(userId: string): Promise<void> {
+    await db.delete(householdMembers).where(eq(householdMembers.userId, userId));
   }
 
   async getUserHousehold(userId: string): Promise<Household | undefined> {
@@ -539,6 +584,35 @@ export class DatabaseStorage implements IStorage {
       notes: result[0].notes,
       createdAt: result[0].createdAt,
     } : undefined;
+  }
+
+  async relinkParentHouseholds(userId: string, phoneNumber: string): Promise<void> {
+    // Remove all existing household links for this user
+    await this.unlinkUserFromHousehold(userId);
+    
+    // Find all households that have students with this guardian phone
+    const studentsWithPhone = await db
+      .select()
+      .from(students)
+      .where(sql`${phoneNumber} = ANY(${students.guardianPhones})`);
+    
+    // Get unique household IDs
+    const uniqueHouseholdIds = new Set<string>();
+    for (const student of studentsWithPhone) {
+      if (student.householdId) {
+        uniqueHouseholdIds.add(student.householdId);
+      }
+    }
+    const householdIds = Array.from(uniqueHouseholdIds);
+    
+    // Link user to all matching households
+    for (const householdId of householdIds) {
+      await this.linkUserToHousehold({
+        userId,
+        householdId,
+        roleInHousehold: "SECONDARY",
+      });
+    }
   }
 
   // ============ Student operations ============

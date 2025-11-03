@@ -85,6 +85,12 @@ async function upsertUser(claims: any) {
   // For existing users without a role claim, don't update role to preserve it
   
   await storage.upsertUser(userData);
+  
+  // Auto-link parent to household if their phone number matches any guardian phone
+  const user = await storage.getUser(claims["sub"]);
+  if (user && user.role === "parent" && user.phoneNumber) {
+    await storage.relinkParentHouseholds(user.id, user.phoneNumber);
+  }
 }
 
 export async function setupAuth(app: Express) {
