@@ -24,64 +24,72 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 
-const adminMenuItems = [
+const adminMenuSections = [
   {
-    title: "Dashboard",
-    url: "/admin",
-    icon: LayoutDashboard,
+    items: [
+      {
+        title: "Dashboard",
+        url: "/admin",
+        icon: LayoutDashboard,
+      },
+      {
+        title: "Users",
+        url: "/admin/users",
+        icon: Shield,
+      },
+      {
+        title: "Students",
+        url: "/admin/students",
+        icon: UserCircle,
+      },
+      {
+        title: "Vehicles",
+        url: "/admin/vehicles",
+        icon: Car,
+      },
+    ],
   },
   {
-    title: "Users",
-    url: "/admin/users",
-    icon: Shield,
+    items: [
+      {
+        title: "Driver Assignments",
+        url: "/admin/driver-assignments",
+        icon: Users,
+      },
+      {
+        title: "Routes",
+        url: "/admin/routes",
+        icon: RouteIcon,
+      },
+      {
+        title: "Schedule",
+        url: "/admin/schedule",
+        icon: Calendar,
+      },
+    ],
   },
   {
-    title: "Routes",
-    url: "/admin/routes",
-    icon: RouteIcon,
-  },
-  {
-    title: "Driver Assignments",
-    url: "/admin/driver-assignments",
-    icon: Users,
-  },
-  {
-    title: "Students",
-    url: "/admin/students",
-    icon: UserCircle,
-  },
-  {
-    title: "Vehicles",
-    url: "/admin/vehicles",
-    icon: Car,
-  },
-  {
-    title: "Schedule",
-    url: "/admin/schedule",
-    icon: Calendar,
-  },
-  {
-    title: "Time Management",
-    url: "/admin/time-management",
-    icon: Clock,
-  },
-  {
-    title: "Incidents",
-    url: "/admin/incidents",
-    icon: AlertTriangle,
-  },
-  {
-    title: "Messages",
-    url: "/admin/messages",
-    icon: MessageSquare,
-  },
-  {
-    title: "Profile",
-    url: "/profile",
-    icon: User,
+    items: [
+      {
+        title: "Messages",
+        url: "/admin/messages",
+        icon: MessageSquare,
+      },
+      {
+        title: "Time Management",
+        url: "/admin/time-management",
+        icon: Clock,
+      },
+      {
+        title: "Incidents",
+        url: "/admin/incidents",
+        icon: AlertTriangle,
+      },
+    ],
   },
 ];
 
@@ -126,11 +134,6 @@ const driverMenuItems = [
     url: "/driver/incident",
     icon: AlertTriangle,
   },
-  {
-    title: "Profile",
-    url: "/profile",
-    icon: User,
-  },
 ];
 
 const parentMenuItems = [
@@ -154,11 +157,6 @@ const parentMenuItems = [
     url: "/parent/messages",
     icon: MessageSquare,
   },
-  {
-    title: "Profile",
-    url: "/profile",
-    icon: User,
-  },
 ];
 
 interface AppSidebarProps {
@@ -178,14 +176,37 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
     refetchInterval: 10000, // Refresh every 10 seconds
   });
 
-  const menuItems =
-    userRole === "admin"
-      ? adminMenuItems
-      : userRole === "driver"
-      ? driverMenuItems
-      : parentMenuItems;
-
   const totalUnread = (unreadCounts?.messages || 0) + (unreadCounts?.announcements || 0) + (unreadCounts?.notifications || 0);
+
+  const renderMenuItem = (item: { title: string; url: string; icon: any }) => {
+    const isActive = location === item.url;
+    const isMessages = item.title === "Messages";
+    const showBadge = isMessages && totalUnread > 0;
+
+    return (
+      <SidebarMenuItem key={item.title}>
+        <SidebarMenuButton
+          asChild
+          className={isActive ? "bg-sidebar-accent" : ""}
+          data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+        >
+          <Link href={item.url}>
+            <item.icon className="h-4 w-4" />
+            <span>{item.title}</span>
+            {showBadge && (
+              <Badge 
+                variant="destructive" 
+                className="ml-auto h-5 min-w-5 px-1 text-xs"
+                data-testid="badge-unread-count"
+              >
+                {totalUnread}
+              </Badge>
+            )}
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
 
   return (
     <Sidebar>
@@ -195,37 +216,24 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
             Kid Connect
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {menuItems.map((item) => {
-                const isActive = location === item.url;
-                const isMessages = item.title === "Messages";
-                const showBadge = isMessages && totalUnread > 0;
-
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      className={isActive ? "bg-sidebar-accent" : ""}
-                      data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
-                    >
-                      <Link href={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                        {showBadge && (
-                          <Badge 
-                            variant="destructive" 
-                            className="ml-auto h-5 min-w-5 px-1 text-xs"
-                            data-testid="badge-unread-count"
-                          >
-                            {totalUnread}
-                          </Badge>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
+            {userRole === "admin" ? (
+              <>
+                {adminMenuSections.map((section, sectionIndex) => (
+                  <div key={sectionIndex}>
+                    <SidebarMenu>
+                      {section.items.map(renderMenuItem)}
+                    </SidebarMenu>
+                    {sectionIndex < adminMenuSections.length - 1 && (
+                      <SidebarSeparator className="my-2" />
+                    )}
+                  </div>
+                ))}
+              </>
+            ) : (
+              <SidebarMenu>
+                {(userRole === "driver" ? driverMenuItems : parentMenuItems).map(renderMenuItem)}
+              </SidebarMenu>
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

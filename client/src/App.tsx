@@ -1,5 +1,5 @@
 // Main App component with role-based routing - Reference: Replit Auth blueprint
-import { Switch, Route } from "wouter";
+import { Switch, Route, Link } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -8,7 +8,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, UserCog } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -110,6 +110,12 @@ function Router() {
                   Role: {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild data-testid="button-profile">
+                  <Link href="/profile">
+                    <UserCog className="h-4 w-4 mr-2" />
+                    Profile Settings
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => (window.location.href = "/api/logout")}
                   className="text-destructive focus:text-destructive"
