@@ -198,9 +198,9 @@ export default function AdminSchedule() {
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<Shift | null>(null);
   const [viewDayDialog, setViewDayDialog] = useState<string | null>(null);
-  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
-  const [selectedDriverIds, setSelectedDriverIds] = useState<string[]>([]);
-  const [selectedDaysOfWeek, setSelectedDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]); // Mon-Fri by default
+  const [bulkEditMode, setBulkEditMode] = useState(false);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [selectedDriverIdsForBulkEdit, setSelectedDriverIdsForBulkEdit] = useState<string[]>([]);
   const [addFromAssignmentsOpen, setAddFromAssignmentsOpen] = useState(false);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedDriversForAll, setSelectedDriversForAll] = useState<string[]>([]); // Track which drivers have "all" selected
@@ -221,16 +221,6 @@ export default function AdminSchedule() {
       plannedEnd: "15:00",
       status: "SCHEDULED",
       notes: null,
-    },
-  });
-
-  const bulkForm = useForm<BulkScheduleData>({
-    resolver: zodResolver(bulkScheduleSchema),
-    defaultValues: {
-      driverIds: [],
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      daysOfWeek: [1, 2, 3, 4, 5], // Mon-Fri
     },
   });
 
@@ -329,25 +319,45 @@ export default function AdminSchedule() {
     },
   });
 
-  const bulkCreateMutation = useMutation({
-    mutationFn: async (data: BulkScheduleData) => {
-      return await apiRequest("POST", "/api/admin/shifts/bulk", data);
+  const bulkAddMutation = useMutation({
+    mutationFn: async (data: { dates: string[]; driverIds: string[] }) => {
+      return await apiRequest("POST", "/api/admin/shifts/bulk-add", data);
     },
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
-      setBulkDialogOpen(false);
-      bulkForm.reset();
-      setSelectedDriverIds([]);
-      setSelectedDaysOfWeek([1, 2, 3, 4, 5]);
+      setSelectedDates([]);
+      setSelectedDriverIdsForBulkEdit([]);
       toast({
         title: "Success",
-        description: `Created ${response.count || 0} shifts successfully`,
+        description: `Added ${response.count || 0} shifts successfully`,
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to create shifts",
+        description: error.message || "Failed to add shifts",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (data: { dates: string[]; driverIds: string[] }) => {
+      return await apiRequest("POST", "/api/admin/shifts/bulk-delete", data);
+    },
+    onSuccess: (response: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
+      setSelectedDates([]);
+      setSelectedDriverIdsForBulkEdit([]);
+      toast({
+        title: "Success",
+        description: `Removed ${response.count || 0} shifts successfully`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove shifts",
         variant: "destructive",
       });
     },
@@ -508,40 +518,56 @@ export default function AdminSchedule() {
     }
   };
 
-  const handleOpenBulkDialog = () => {
-    setSelectedDriverIds([]);
-    setSelectedDaysOfWeek([1, 2, 3, 4, 5]);
-    bulkForm.reset({
-      driverIds: [],
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      daysOfWeek: [1, 2, 3, 4, 5],
+  const toggleBulkEditMode = () => {
+    setBulkEditMode(!bulkEditMode);
+    setSelectedDates([]);
+    setSelectedDriverIdsForBulkEdit([]);
+  };
+
+  const toggleDateSelection = (dateStr: string) => {
+    setSelectedDates(prev =>
+      prev.includes(dateStr)
+        ? prev.filter(d => d !== dateStr)
+        : [...prev, dateStr].sort()
+    );
+  };
+
+  const toggleDriverForBulkEdit = (driverId: string) => {
+    setSelectedDriverIdsForBulkEdit(prev =>
+      prev.includes(driverId)
+        ? prev.filter(id => id !== driverId)
+        : [...prev, driverId]
+    );
+  };
+
+  const handleBulkAdd = () => {
+    if (selectedDates.length === 0 || selectedDriverIdsForBulkEdit.length === 0) {
+      toast({
+        title: "Selection Required",
+        description: "Please select at least one date and one driver",
+        variant: "destructive",
+      });
+      return;
+    }
+    bulkAddMutation.mutate({
+      dates: selectedDates,
+      driverIds: selectedDriverIdsForBulkEdit,
     });
-    setBulkDialogOpen(true);
   };
 
-  const onBulkSubmit = (data: BulkScheduleData) => {
-    bulkCreateMutation.mutate(data);
-  };
-
-  const toggleDriverSelection = (driverId: string) => {
-    const newSelection = selectedDriverIds.includes(driverId)
-      ? selectedDriverIds.filter(id => id !== driverId)
-      : [...selectedDriverIds, driverId];
-    
-    setSelectedDriverIds(newSelection);
-    bulkForm.setValue("driverIds", newSelection);
-    bulkForm.trigger("driverIds");
-  };
-
-  const toggleDayOfWeek = (day: number) => {
-    const newSelection = selectedDaysOfWeek.includes(day)
-      ? selectedDaysOfWeek.filter(d => d !== day)
-      : [...selectedDaysOfWeek, day].sort();
-    
-    setSelectedDaysOfWeek(newSelection);
-    bulkForm.setValue("daysOfWeek", newSelection);
-    bulkForm.trigger("daysOfWeek");
+  const handleBulkDelete = () => {
+    if (selectedDates.length === 0 || selectedDriverIdsForBulkEdit.length === 0) {
+      toast({
+        title: "Selection Required",
+        description: "Please select at least one date and one driver",
+        variant: "destructive",
+      });
+      return;
+    }
+    bulkDeleteMutation.mutate({
+      dates: selectedDates,
+      driverIds: selectedDriverIdsForBulkEdit,
+    });
   };
 
   const nextMonth = () => {
@@ -632,12 +658,13 @@ export default function AdminSchedule() {
           </p>
         </div>
         <Button
-          onClick={handleOpenBulkDialog}
+          onClick={toggleBulkEditMode}
+          variant={bulkEditMode ? "default" : "outline"}
           className="gap-2"
-          data-testid="button-bulk-schedule"
+          data-testid="button-bulk-edit"
         >
-          <CalendarPlus className="h-4 w-4" />
-          Bulk Schedule
+          <Edit className="h-4 w-4" />
+          {bulkEditMode ? "Exit Bulk Edit" : "Bulk Edit"}
         </Button>
       </div>
 
@@ -674,13 +701,19 @@ export default function AdminSchedule() {
                 const dateStr = isPlaceholder ? "" : date.toISOString().split('T')[0];
                 const summary = isPlaceholder ? null : getShiftSummaryForDate(date);
                 const isToday = !isPlaceholder && dateStr === new Date().toISOString().split('T')[0];
+                const isSelected = !isPlaceholder && selectedDates.includes(dateStr);
 
                 return (
                   <div
                     key={index}
-                    className={`min-h-[100px] p-2 rounded-md border ${
+                    className={`min-h-[100px] p-2 rounded-md border transition-all ${
                       isPlaceholder ? "bg-muted/20" : "bg-card"
-                    } ${isToday ? "border-primary" : ""}`}
+                    } ${isToday ? "border-primary" : ""} ${
+                      bulkEditMode && !isPlaceholder ? "cursor-pointer hover-elevate" : ""
+                    } ${
+                      isSelected ? "border-primary border-2 bg-primary/10" : ""
+                    }`}
+                    onClick={() => bulkEditMode && !isPlaceholder && toggleDateSelection(dateStr)}
                     data-testid={isPlaceholder ? `placeholder-${index}` : `day-${dateStr}`}
                   >
                     {!isPlaceholder && summary && (
@@ -689,21 +722,31 @@ export default function AdminSchedule() {
                           <span className={`text-sm font-medium ${isToday ? "text-primary" : ""}`}>
                             {date.getDate()}
                           </span>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={() => handleAddShift(dateStr)}
-                            data-testid={`button-add-${dateStr}`}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </Button>
+                          {!bulkEditMode && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => handleAddShift(dateStr)}
+                              data-testid={`button-add-${dateStr}`}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {bulkEditMode && isSelected && (
+                            <Checkbox checked={true} className="pointer-events-none" />
+                          )}
                         </div>
 
                         {summary.total > 0 ? (
                           <div
-                            className="space-y-1.5 cursor-pointer hover-elevate p-2 rounded-md bg-accent/30"
-                            onClick={() => setViewDayDialog(dateStr)}
+                            className={`space-y-1.5 p-2 rounded-md bg-accent/30 ${!bulkEditMode ? "cursor-pointer hover-elevate" : ""}`}
+                            onClick={(e) => {
+                              if (!bulkEditMode) {
+                                e.stopPropagation();
+                                setViewDayDialog(dateStr);
+                              }
+                            }}
                             data-testid={`summary-${dateStr}`}
                           >
                             <div className="text-xs font-medium text-muted-foreground mb-1">
@@ -1261,130 +1304,65 @@ export default function AdminSchedule() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk Schedule Dialog */}
-      <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle data-testid="dialog-bulk-title">Bulk Schedule Shifts</DialogTitle>
-          </DialogHeader>
-
-          <Form {...bulkForm}>
-            <form onSubmit={bulkForm.handleSubmit(onBulkSubmit)} className="space-y-6">
-              {/* Driver Selection */}
-              <div className="space-y-3">
-                <Label>Select Drivers</Label>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border rounded-md p-3">
-                  {drivers.map((driver) => (
-                    <div key={driver.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`driver-${driver.id}`}
-                        checked={selectedDriverIds.includes(driver.id)}
-                        onCheckedChange={() => toggleDriverSelection(driver.id)}
-                        data-testid={`checkbox-driver-${driver.id}`}
-                      />
-                      <label
-                        htmlFor={`driver-${driver.id}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        {getDriverDisplayName(driver)}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-                {selectedDriverIds.length === 0 && (
-                  <p className="text-xs text-destructive">Please select at least one driver</p>
-                )}
+      {/* Bulk Edit Floating Action Panel */}
+      {bulkEditMode && selectedDates.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <Card className="w-[600px] shadow-lg border-2">
+            <CardContent className="p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Bulk Edit Mode</h3>
+                <Badge variant="secondary">{selectedDates.length} days selected</Badge>
               </div>
 
-              {/* Date Range */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={bulkForm.control}
-                  name="startDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start Date</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} data-testid="input-start-date" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={bulkForm.control}
-                  name="endDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End Date</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} data-testid="input-end-date" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="space-y-2">
+                <Label className="text-sm">Select Drivers</Label>
+                <ScrollArea className="h-32 border rounded-md p-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    {drivers.map((driver) => (
+                      <div key={driver.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`bulk-driver-${driver.id}`}
+                          checked={selectedDriverIdsForBulkEdit.includes(driver.id)}
+                          onCheckedChange={() => toggleDriverForBulkEdit(driver.id)}
+                          data-testid={`checkbox-bulk-driver-${driver.id}`}
+                        />
+                        <label
+                          htmlFor={`bulk-driver-${driver.id}`}
+                          className="text-sm cursor-pointer"
+                        >
+                          {getDriverDisplayName(driver)}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               </div>
 
-              {/* Days of Week */}
-              <div className="space-y-3">
-                <Label>Days of Week</Label>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { day: 0, label: "Sun" },
-                    { day: 1, label: "Mon" },
-                    { day: 2, label: "Tue" },
-                    { day: 3, label: "Wed" },
-                    { day: 4, label: "Thu" },
-                    { day: 5, label: "Fri" },
-                    { day: 6, label: "Sat" },
-                  ].map(({ day, label }) => (
-                    <Button
-                      key={day}
-                      type="button"
-                      variant={selectedDaysOfWeek.includes(day) ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => toggleDayOfWeek(day)}
-                      data-testid={`button-day-${day}`}
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </div>
-                {selectedDaysOfWeek.length === 0 && (
-                  <p className="text-xs text-destructive">Please select at least one day</p>
-                )}
-              </div>
-
-              <div className="rounded-md bg-muted/50 p-4 text-sm text-muted-foreground">
-                <p className="font-medium mb-1">Assignment-Based Scheduling</p>
-                <p>Shifts will be created using each driver's assigned routes, vehicles, and times from the Driver Assignments section.</p>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex gap-2">
                 <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setBulkDialogOpen(false)}
-                  data-testid="button-bulk-cancel"
+                  onClick={handleBulkAdd}
+                  disabled={selectedDriverIdsForBulkEdit.length === 0 || bulkAddMutation.isPending}
+                  className="flex-1"
+                  data-testid="button-bulk-add"
                 >
-                  Cancel
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add to Selected Days
                 </Button>
                 <Button
-                  type="submit"
-                  disabled={bulkCreateMutation.isPending || selectedDriverIds.length === 0 || selectedDaysOfWeek.length === 0}
-                  data-testid="button-bulk-submit"
+                  onClick={handleBulkDelete}
+                  disabled={selectedDriverIdsForBulkEdit.length === 0 || bulkDeleteMutation.isPending}
+                  variant="destructive"
+                  className="flex-1"
+                  data-testid="button-bulk-delete"
                 >
-                  {bulkCreateMutation.isPending
-                    ? "Creating..."
-                    : "Create Shifts"}
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Remove from Selected Days
                 </Button>
               </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

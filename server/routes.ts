@@ -1449,6 +1449,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Bulk add shifts for selected dates and drivers
+  app.post(
+    "/api/admin/shifts/bulk-add",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { z } = await import("zod");
+        
+        const schema = z.object({
+          dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")).min(1),
+          driverIds: z.array(z.string()).min(1),
+        });
+
+        const data = schema.parse(req.body);
+        
+        const createdShifts = [];
+        
+        // For each driver, get their assignments and create shifts for each selected date
+        for (const driverId of data.driverIds) {
+          const assignments = await storage.getDriverAssignmentsByDriver(driverId);
+          
+          for (const date of data.dates) {
+            // Create shifts from all of this driver's assignments
+            for (const assignment of assignments) {
+              const route = await storage.getRoute(assignment.routeId);
+              let shiftType: "MORNING" | "AFTERNOON" | "EXTRA" = "MORNING";
+              if (route?.routeType) {
+                shiftType = route.routeType as "MORNING" | "AFTERNOON" | "EXTRA";
+              }
+              
+              const shiftData = {
+                driverId: assignment.driverId,
+                driverAssignmentId: assignment.id,
+                date,
+                shiftType,
+                routeId: assignment.routeId,
+                vehicleId: assignment.vehicleId,
+                plannedStart: assignment.startTime,
+                plannedEnd: assignment.endTime,
+                status: "SCHEDULED" as const,
+                notes: assignment.notes,
+              };
+              
+              try {
+                const shift = await storage.createShift(shiftData);
+                createdShifts.push(shift);
+              } catch (error: any) {
+                // Skip if shift already exists or overlaps
+                console.warn(`Skipped shift creation for driver ${driverId} on ${date}:`, error.message);
+              }
+            }
+          }
+        }
+        
+        res.json({ 
+          count: createdShifts.length,
+          shifts: createdShifts 
+        });
+      } catch (error: any) {
+        console.error("Error bulk adding shifts:", error);
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to bulk add shifts" });
+      }
+    }
+  );
+
+  // Bulk delete shifts for selected dates and drivers
+  app.post(
+    "/api/admin/shifts/bulk-delete",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { z } = await import("zod");
+        
+        const schema = z.object({
+          dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")).min(1),
+          driverIds: z.array(z.string()).min(1),
+        });
+
+        const data = schema.parse(req.body);
+        
+        let deletedCount = 0;
+        
+        // For each date, get all shifts and delete those matching the selected drivers
+        for (const date of data.dates) {
+          const shifts = await storage.getShiftsByDate(date);
+          
+          for (const shift of shifts) {
+            if (data.driverIds.includes(shift.driverId)) {
+              try {
+                await storage.deleteShift(shift.id);
+                deletedCount++;
+              } catch (error: any) {
+                console.warn(`Failed to delete shift ${shift.id}:`, error.message);
+              }
+            }
+          }
+        }
+        
+        res.json({ 
+          count: deletedCount 
+        });
+      } catch (error: any) {
+        console.error("Error bulk deleting shifts:", error);
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to bulk delete shifts" });
+      }
+    }
+  );
+
   // Update shift
   app.patch(
     "/api/admin/shifts/:id",
