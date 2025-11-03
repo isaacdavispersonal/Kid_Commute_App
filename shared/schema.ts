@@ -159,7 +159,7 @@ export const routeStops = pgTable("route_stops", {
     .notNull()
     .references(() => stops.id, { onDelete: "cascade" }),
   stopOrder: integer("stop_order").notNull(),
-  scheduledTime: varchar("scheduled_time").notNull(),
+  scheduledTime: varchar("scheduled_time"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
