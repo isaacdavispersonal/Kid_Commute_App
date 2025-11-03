@@ -332,7 +332,8 @@ export const driverAssignments = pgTable("driver_assignments", {
   vehicleId: varchar("vehicle_id")
     .notNull()
     .references(() => vehicles.id, { onDelete: "cascade" }),
-  schedulePattern: schedulePatternEnum("schedule_pattern"), // Optional recurring schedule
+  startTime: varchar("start_time").notNull(), // When the route starts (e.g., "07:00")
+  endTime: varchar("end_time").notNull(), // When the route ends (e.g., "08:30")
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

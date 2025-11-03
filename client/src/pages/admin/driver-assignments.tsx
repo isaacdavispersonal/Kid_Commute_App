@@ -68,7 +68,8 @@ interface EnrichedDriverAssignment {
   driverId: string;
   routeId: string;
   vehicleId: string;
-  schedulePattern: string | null;
+  startTime: string;
+  endTime: string;
   notes: string | null;
   driverName: string;
   driverEmail: string;
@@ -131,7 +132,8 @@ export default function AdminDriverAssignments() {
       driverId: "",
       routeId: "",
       vehicleId: "",
-      schedulePattern: null,
+      startTime: "",
+      endTime: "",
       notes: "",
     },
   });
@@ -224,7 +226,8 @@ export default function AdminDriverAssignments() {
         driverId: assignment.driverId,
         routeId: assignment.routeId,
         vehicleId: assignment.vehicleId,
-        schedulePattern: assignment.schedulePattern,
+        startTime: assignment.startTime,
+        endTime: assignment.endTime,
         notes: assignment.notes || "",
       });
     } else {
@@ -233,7 +236,8 @@ export default function AdminDriverAssignments() {
         driverId: "",
         routeId: "",
         vehicleId: "",
-        schedulePattern: null,
+        startTime: "",
+        endTime: "",
         notes: "",
       });
     }
@@ -374,11 +378,9 @@ export default function AdminDriverAssignments() {
                                 </TableCell>
                                 <TableCell>
                                   <div className="flex items-center gap-2">
-                                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                                    <Clock className="h-4 w-4 text-muted-foreground" />
                                     <span className="text-sm">
-                                      {assignment.schedulePattern ? 
-                                        assignment.schedulePattern.charAt(0) + assignment.schedulePattern.slice(1).toLowerCase().replace(/_/g, ' ') 
-                                        : 'As needed'}
+                                      {assignment.startTime} - {assignment.endTime}
                                     </span>
                                   </div>
                                 </TableCell>
@@ -514,38 +516,43 @@ export default function AdminDriverAssignments() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="schedulePattern"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Schedule Pattern (Optional)</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || undefined}
-                    >
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="startTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Time</FormLabel>
                       <FormControl>
-                        <SelectTrigger data-testid="select-schedule-pattern">
-                          <SelectValue placeholder="Select schedule pattern" />
-                        </SelectTrigger>
+                        <Input
+                          type="time"
+                          {...field}
+                          data-testid="input-start-time"
+                        />
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="WEEKDAYS">Weekdays (Mon-Fri)</SelectItem>
-                        <SelectItem value="DAILY">Daily</SelectItem>
-                        <SelectItem value="MONDAY">Monday Only</SelectItem>
-                        <SelectItem value="TUESDAY">Tuesday Only</SelectItem>
-                        <SelectItem value="WEDNESDAY">Wednesday Only</SelectItem>
-                        <SelectItem value="THURSDAY">Thursday Only</SelectItem>
-                        <SelectItem value="FRIDAY">Friday Only</SelectItem>
-                        <SelectItem value="SATURDAY">Saturday Only</SelectItem>
-                        <SelectItem value="SUNDAY">Sunday Only</SelectItem>
-                        <SelectItem value="CUSTOM">Custom Schedule</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="endTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Time</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="time"
+                          {...field}
+                          data-testid="input-end-time"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={form.control}
