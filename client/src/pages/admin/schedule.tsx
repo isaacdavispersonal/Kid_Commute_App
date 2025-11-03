@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, User, Clock, Edit, Sun, Sunset, Star, CalendarPlus, Copy } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, User, Clock, Edit, Sun, Sunset, Star, CalendarPlus, Copy, Car } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -89,12 +89,31 @@ function getDriverDisplayName(driver: Driver | undefined): string {
 interface RouteType {
   id: string;
   name: string;
+  routeType?: "MORNING" | "AFTERNOON" | "EXTRA" | null;
 }
 
 interface Vehicle {
   id: string;
   name: string;
   plateNumber: string;
+}
+
+interface DriverAssignment {
+  id: string;
+  driverId: string;
+  routeId: string;
+  vehicleId: string;
+  startTime: string;
+  endTime: string;
+  notes: string | null;
+  driver: Driver;
+  route: RouteType;
+  vehicle: Vehicle;
+}
+
+interface SelectedAssignment {
+  driverId: string;
+  assignmentIds: string[]; // Empty array means "all assignments for this driver"
 }
 
 const formSchema = insertShiftSchema.extend({
@@ -104,6 +123,13 @@ const formSchema = insertShiftSchema.extend({
 });
 
 type FormData = z.infer<typeof formSchema>;
+
+const addFromAssignmentsSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
+  assignments: z.array(z.string()).min(1, "Select at least one assignment"),
+});
+
+type AddFromAssignmentsData = z.infer<typeof addFromAssignmentsSchema>;
 
 const bulkScheduleSchema = z.object({
   driverIds: z.array(z.string()).min(1, "Select at least one driver"),
@@ -181,6 +207,9 @@ export default function AdminSchedule() {
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [selectedDriverIds, setSelectedDriverIds] = useState<string[]>([]);
   const [selectedDaysOfWeek, setSelectedDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]); // Mon-Fri by default
+  const [addFromAssignmentsOpen, setAddFromAssignmentsOpen] = useState(false);
+  const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
+  const [selectedDriversForAll, setSelectedDriversForAll] = useState<string[]>([]); // Track which drivers have "all" selected
 
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
@@ -242,6 +271,10 @@ export default function AdminSchedule() {
 
   const { data: vehicles } = useQuery<Vehicle[]>({
     queryKey: ["/api/admin/vehicles"],
+  });
+
+  const { data: driverAssignments } = useQuery<DriverAssignment[]>({
+    queryKey: ["/api/admin/driver-assignments"],
   });
 
   const createMutation = useMutation({
@@ -332,7 +365,38 @@ export default function AdminSchedule() {
     },
   });
 
+  const addFromAssignmentsMutation = useMutation({
+    mutationFn: async (data: { date: string; assignmentIds: string[] }) => {
+      return await apiRequest("POST", "/api/admin/shifts/from-assignments", data);
+    },
+    onSuccess: (response: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
+      setAddFromAssignmentsOpen(false);
+      setSelectedAssignments([]);
+      setSelectedDriversForAll([]);
+      setSelectedDate(null);
+      toast({
+        title: "Success",
+        description: `Created ${response.count || 0} ${response.count === 1 ? 'shift' : 'shifts'} successfully`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create shifts from assignments",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAddShift = (date: string) => {
+    setSelectedDate(date);
+    setSelectedAssignments([]);
+    setSelectedDriversForAll([]);
+    setAddFromAssignmentsOpen(true);
+  };
+
+  const handleOpenOldShiftDialog = (date: string) => {
     setSelectedDate(date);
     setEditingShift(null);
     form.reset({
@@ -372,6 +436,81 @@ export default function AdminSchedule() {
     setSelectedDate(null);
     form.reset();
   };
+
+  const handleToggleDriverAll = (driverId: string) => {
+    const driverAssignments2 = (driverAssignments || []).filter(a => a.driverId === driverId);
+    const driverAssignmentIds = driverAssignments2.map(a => a.id);
+    
+    if (selectedDriversForAll.includes(driverId)) {
+      // Remove all this driver's assignments
+      setSelectedDriversForAll(prev => prev.filter(id => id !== driverId));
+      setSelectedAssignments(prev => prev.filter(id => !driverAssignmentIds.includes(id)));
+    } else {
+      // Add all this driver's assignments
+      setSelectedDriversForAll(prev => [...prev, driverId]);
+      setSelectedAssignments(prev => {
+        const newSelections = [...prev];
+        driverAssignmentIds.forEach(id => {
+          if (!newSelections.includes(id)) {
+            newSelections.push(id);
+          }
+        });
+        return newSelections;
+      });
+    }
+  };
+
+  const handleToggleAssignment = (assignmentId: string, driverId: string) => {
+    const driverAssignments2 = (driverAssignments || []).filter(a => a.driverId === driverId);
+    const driverAssignmentIds = driverAssignments2.map(a => a.id);
+    
+    if (selectedAssignments.includes(assignmentId)) {
+      // Remove this assignment
+      setSelectedAssignments(prev => prev.filter(id => id !== assignmentId));
+      // If this was the last one for this driver, uncheck "all"
+      const remainingForDriver = selectedAssignments.filter(id => 
+        id !== assignmentId && driverAssignmentIds.includes(id)
+      );
+      if (remainingForDriver.length < driverAssignmentIds.length - 1) {
+        setSelectedDriversForAll(prev => prev.filter(id => id !== driverId));
+      }
+    } else {
+      // Add this assignment
+      setSelectedAssignments(prev => [...prev, assignmentId]);
+      // Check if all are now selected for this driver
+      const allSelected = driverAssignmentIds.every(id => 
+        id === assignmentId || selectedAssignments.includes(id)
+      );
+      if (allSelected) {
+        setSelectedDriversForAll(prev => [...prev, driverId]);
+      }
+    }
+  };
+
+  const handleSubmitFromAssignments = () => {
+    if (!selectedDate || selectedAssignments.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select at least one assignment",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    addFromAssignmentsMutation.mutate({
+      date: selectedDate,
+      assignmentIds: selectedAssignments,
+    });
+  };
+
+  // Group assignments by driver
+  const assignmentsByDriver = (driverAssignments || []).reduce((acc, assignment) => {
+    if (!acc[assignment.driverId]) {
+      acc[assignment.driverId] = [];
+    }
+    acc[assignment.driverId].push(assignment);
+    return acc;
+  }, {} as Record<string, DriverAssignment[]>);
 
   const onSubmit = (data: FormData) => {
     if (editingShift) {
@@ -750,6 +889,134 @@ export default function AdminSchedule() {
               )}
             </div>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add from Assignments Dialog */}
+      <Dialog open={addFromAssignmentsOpen} onOpenChange={setAddFromAssignmentsOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>
+              Add Shifts from Driver Assignments
+              {selectedDate && ` - ${new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}`}
+            </DialogTitle>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[60vh]">
+            <div className="space-y-4 pr-4">
+              {Object.keys(assignmentsByDriver).length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No driver assignments found.</p>
+                  <p className="text-sm mt-2">Please create driver assignments first in the Driver Assignments section.</p>
+                </div>
+              ) : (
+                Object.entries(assignmentsByDriver).map(([driverId, assignments]) => {
+                  const driver = assignments[0].driver;
+                  const allSelected = selectedDriversForAll.includes(driverId);
+                  
+                  return (
+                    <Card key={driverId}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            checked={allSelected}
+                            onCheckedChange={() => handleToggleDriverAll(driverId)}
+                            data-testid={`checkbox-driver-all-${driverId}`}
+                          />
+                          <div className="flex-1">
+                            <CardTitle className="text-base">{getDriverDisplayName(driver)}</CardTitle>
+                            <p className="text-sm text-muted-foreground">
+                              {assignments.length} {assignments.length === 1 ? 'assignment' : 'assignments'}
+                            </p>
+                          </div>
+                          {allSelected && (
+                            <Badge variant="secondary">All Selected</Badge>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {assignments.map((assignment) => {
+                          const isSelected = selectedAssignments.includes(assignment.id);
+                          const routeTypeBadge = assignment.route.routeType
+                            ? SHIFT_TYPE_LABELS[assignment.route.routeType as "MORNING" | "AFTERNOON" | "EXTRA"]
+                            : null;
+                          
+                          return (
+                            <div
+                              key={assignment.id}
+                              className={`flex items-start gap-3 p-3 rounded-md border ${
+                                isSelected ? 'bg-accent border-primary' : 'bg-card'
+                              } hover-elevate cursor-pointer`}
+                              onClick={() => handleToggleAssignment(assignment.id, driverId)}
+                              data-testid={`assignment-${assignment.id}`}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => handleToggleAssignment(assignment.id, driverId)}
+                                data-testid={`checkbox-assignment-${assignment.id}`}
+                              />
+                              <div className="flex-1 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{assignment.route.name}</span>
+                                  {routeTypeBadge && (
+                                    <Badge variant="outline" className="text-xs">
+                                      <routeTypeBadge.Icon className="h-3 w-3 mr-1" />
+                                      {routeTypeBadge.label}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3.5 w-3.5" />
+                                    {assignment.startTime} - {assignment.endTime}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Car className="h-3.5 w-3.5" />
+                                    {assignment.vehicle.name}
+                                  </div>
+                                </div>
+                                {assignment.notes && (
+                                  <p className="text-xs text-muted-foreground italic">{assignment.notes}</p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+
+          <div className="flex items-center justify-between gap-4 pt-4 border-t">
+            <div className="text-sm text-muted-foreground">
+              {selectedAssignments.length} {selectedAssignments.length === 1 ? 'assignment' : 'assignments'} selected
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddFromAssignmentsOpen(false)}
+                data-testid="button-cancel-assignments"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmitFromAssignments}
+                disabled={selectedAssignments.length === 0 || addFromAssignmentsMutation.isPending}
+                data-testid="button-add-assignments"
+              >
+                {addFromAssignmentsMutation.isPending ? "Adding..." : "Add to Schedule"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

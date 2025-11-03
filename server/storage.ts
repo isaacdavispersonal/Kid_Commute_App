@@ -119,6 +119,7 @@ export interface IStorage {
 
   // Driver assignment operations
   getAllDriverAssignments(): Promise<DriverAssignment[]>;
+  getDriverAssignment(id: string): Promise<DriverAssignment | undefined>;
   getDriverAssignmentsByDriver(driverId: string): Promise<DriverAssignment[]>;
   getDriverAssignmentForToday(driverId: string): Promise<DriverAssignment | undefined>;
   createDriverAssignment(assignment: InsertDriverAssignment): Promise<DriverAssignment>;
@@ -604,6 +605,15 @@ export class DatabaseStorage implements IStorage {
 
   async getAllDriverAssignments(): Promise<DriverAssignment[]> {
     return await db.select().from(driverAssignments).orderBy(driverAssignments.createdAt);
+  }
+
+  async getDriverAssignment(id: string): Promise<DriverAssignment | undefined> {
+    const [assignment] = await db
+      .select()
+      .from(driverAssignments)
+      .where(eq(driverAssignments.id, id))
+      .limit(1);
+    return assignment;
   }
 
   async getDriverAssignmentsByDriver(driverId: string): Promise<DriverAssignment[]> {

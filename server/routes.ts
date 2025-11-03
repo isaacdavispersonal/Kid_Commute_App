@@ -1391,6 +1391,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Create shifts from driver assignments
+  app.post(
+    "/api/admin/shifts/from-assignments",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { z } = await import("zod");
+        
+        // Validate request
+        const schema = z.object({
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
+          assignmentIds: z.array(z.string()).min(1, "At least one assignment required"),
+        });
+
+        const data = schema.parse(req.body);
+        
+        // Fetch all assignments and create shifts
+        const createdShifts = [];
+        for (const assignmentId of data.assignmentIds) {
+          const assignment = await storage.getDriverAssignment(assignmentId);
+          if (!assignment) {
+            console.warn(`Assignment not found: ${assignmentId}`);
+            continue;
+          }
+          
+          // Fetch the route to determine shift type
+          const route = await storage.getRoute(assignment.routeId);
+          let shiftType: "MORNING" | "AFTERNOON" | "EXTRA" = "MORNING";
+          if (route?.routeType) {
+            shiftType = route.routeType as "MORNING" | "AFTERNOON" | "EXTRA";
+          }
+          
+          const shiftData = {
+            driverId: assignment.driverId,
+            driverAssignmentId: assignmentId,
+            date: data.date,
+            shiftType,
+            routeId: assignment.routeId,
+            vehicleId: assignment.vehicleId,
+            plannedStart: assignment.startTime,
+            plannedEnd: assignment.endTime,
+            status: "SCHEDULED" as const,
+            notes: assignment.notes,
+          };
+          
+          const shift = await storage.createShift(shiftData);
+          createdShifts.push(shift);
+        }
+        
+        res.json({ 
+          count: createdShifts.length,
+          shifts: createdShifts 
+        });
+      } catch (error: any) {
+        console.error("Error creating shifts from assignments:", error);
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to create shifts from assignments" });
+      }
+    }
+  );
+
   // Update shift
   app.patch(
     "/api/admin/shifts/:id",
