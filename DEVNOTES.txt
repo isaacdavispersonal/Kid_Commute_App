@@ -3,6 +3,8 @@
 
     DRIVER DASH
 
+      Groups for routes and for stops
+
       Clock in and clock out system
         Drivers being required to put notes for unregistered clock in and out times
         
@@ -11,8 +13,9 @@
       Unscheduled shift clock in doesn't provide feedback, it needs to remove the ability to clock in once you've done it
         already, and then show up once youve clocked out and that information needs to be sent to the admins side for reviews
       
-      Unscheduled routes need to be information applied first where the stuff like location and events need to be applied once
-        we try to clock in
+      Unscheduled routes need to be information applied first where the stuff like location and events need to be applied            once we try to clock in
+
+      Announcement button for drivers
       
       Recent clock outs should be towards the top in the time history section
       
@@ -30,19 +33,9 @@
 
 
     ADMIN DASH
-
-      Route builder
       
       Auto clock out driver an hour after the end of that shift
-      
-      Admin driver parent communication for admin to step in
-      
-      Groups for routes and for stops
-      
-      Blind messaging for groups of parents
-      
-      Announcement button for drivers
-      
+                        
       How is phone handling removed and added in, what does that look like
       
       
