@@ -28,6 +28,7 @@ Preferred communication style: Simple, everyday language.
 ### Data Storage
 - **Database**: PostgreSQL via Neon serverless with Drizzle ORM for type-safe queries.
 - **Data Model**: Includes Users (multi-role), Households, HouseholdMembers, Vehicles, Routes, Stops, Students, Shifts, Clock Events, Messages, Incidents, and Vehicle Inspections.
+- **Reusable Stops System**: Stops are independent entities that can be assigned to multiple routes. The `stops` table stores location data (name, address, latitude, longitude) separately from routes. The `route_stops` junction table links routes to stops with sequencing (`stopOrder`) and optional `scheduledTime`. Admin UI features tabbed interface: "Routes" tab for route management and "Stops" tab for stop CRUD operations. Each route has a "Manage Stops" dialog for adding/removing/reordering stops. This design allows stop reuse across routes and simplifies route planning.
 - **Phone-Based Household System**: Admins create students with guardian phone numbers, linking parents automatically upon registration via phone number matching. Supports multi-guardian scenarios.
 - **Time Tracking & Payroll**: Shift-based system with clock in/out, multi-segment support, auto-clockout failsafe, detailed time calculations, and admin exception queue for payroll.
 - **Route-Based Messaging System**: Drivers message parents on their current routes; parents message drivers assigned to their children's routes. Messaging is strictly scoped by route assignments.
