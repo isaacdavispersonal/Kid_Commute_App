@@ -131,18 +131,13 @@ export const insertRouteSchema = createInsertSchema(routes).omit({
 export type InsertRoute = z.infer<typeof insertRouteSchema>;
 export type Route = typeof routes.$inferSelect;
 
-// Route stops table
+// Stops table - Independent, reusable stop locations
 export const stops = pgTable("stops", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  routeId: varchar("route_id")
-    .notNull()
-    .references(() => routes.id, { onDelete: "cascade" }),
   name: varchar("name").notNull(),
   address: text("address").notNull(),
   latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
   longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
-  stopOrder: integer("stop_order").notNull(),
-  scheduledTime: varchar("scheduled_time").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -153,6 +148,28 @@ export const insertStopSchema = createInsertSchema(stops).omit({
 
 export type InsertStop = z.infer<typeof insertStopSchema>;
 export type Stop = typeof stops.$inferSelect;
+
+// Route stops junction table - Links routes to stops with ordering
+export const routeStops = pgTable("route_stops", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  routeId: varchar("route_id")
+    .notNull()
+    .references(() => routes.id, { onDelete: "cascade" }),
+  stopId: varchar("stop_id")
+    .notNull()
+    .references(() => stops.id, { onDelete: "cascade" }),
+  stopOrder: integer("stop_order").notNull(),
+  scheduledTime: varchar("scheduled_time").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertRouteStopSchema = createInsertSchema(routeStops).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertRouteStop = z.infer<typeof insertRouteStopSchema>;
+export type RouteStop = typeof routeStops.$inferSelect;
 
 // ============ Household Management Tables ============
 
@@ -762,7 +779,7 @@ export const vehiclesRelations = relations(vehicles, ({ many }) => ({
 }));
 
 export const routesRelations = relations(routes, ({ many }) => ({
-  stops: many(stops),
+  routeStops: many(routeStops),
   students: many(students),
   driverAssignments: many(driverAssignments),
   shifts: many(shifts),
@@ -796,13 +813,21 @@ export const clockEventsRelations = relations(clockEvents, ({ one }) => ({
   }),
 }));
 
-export const stopsRelations = relations(stops, ({ one, many }) => ({
-  route: one(routes, {
-    fields: [stops.routeId],
-    references: [routes.id],
-  }),
+export const stopsRelations = relations(stops, ({ many }) => ({
+  routeStops: many(routeStops),
   studentsPickup: many(students, { relationName: "pickupStop" }),
   studentsDropoff: many(students, { relationName: "dropoffStop" }),
+}));
+
+export const routeStopsRelations = relations(routeStops, ({ one }) => ({
+  route: one(routes, {
+    fields: [routeStops.routeId],
+    references: [routes.id],
+  }),
+  stop: one(stops, {
+    fields: [routeStops.stopId],
+    references: [stops.id],
+  }),
 }));
 
 export const studentsRelations = relations(students, ({ one }) => ({
