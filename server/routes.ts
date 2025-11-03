@@ -3416,6 +3416,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // ============ Student Attendance Routes ============
+
+  // Get students on driver's route for attendance (driver-specific)
+  app.get(
+    "/api/driver/route-students/:routeId",
+    isAuthenticated,
+    isDriver,
+    async (req: any, res) => {
+      try {
+        const routeId = req.params.routeId;
+        const today = new Date().toISOString().split('T')[0];
+        const students = await storage.getStudentsByRouteForDate(routeId, today);
+        res.json(students);
+      } catch (error) {
+        console.error("Error fetching route students:", error);
+        res.status(500).json({ message: "Failed to fetch route students" });
+      }
+    }
+  );
+
+  // Set student attendance (all roles)
+  app.post(
+    "/api/attendance",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const userId = req.user.claims.sub;
+        const { studentId, date, status, notes } = req.body;
+        
+        // Validate request
+        if (!studentId || !date || !status) {
+          return res.status(400).json({ message: "Missing required fields" });
+        }
+
+        const user = await storage.getUser(userId);
+        if (!user) {
+          return res.status(401).json({ message: "User not found" });
+        }
+
+        // Authorization check for parents
+        if (user.role === "parent") {
+          const student = await storage.getStudent(studentId);
+          if (!student) {
+            return res.status(404).json({ message: "Student not found" });
+          }
+          
+          // Check if parent is authorized (via household or guardian phone)
+          const household = await storage.getUserHousehold(userId);
+          const userPhoneNormalized = user.phone?.replace(/\D/g, '') || '';
+          const isAuthorized = 
+            (household && student.householdId === household.id) ||
+            student.guardianPhones.some(gp => gp.replace(/\D/g, '') === userPhoneNormalized);
+          
+          if (!isAuthorized) {
+            return res.status(403).json({ message: "Not authorized to mark attendance for this student" });
+          }
+        }
+
+        const attendance = await storage.setStudentAttendance({
+          studentId,
+          date,
+          status,
+          markedByUserId: userId,
+          notes: notes || null,
+        });
+        
+        res.json(attendance);
+      } catch (error) {
+        console.error("Error setting attendance:", error);
+        res.status(500).json({ message: "Failed to set attendance" });
+      }
+    }
+  );
+
+  // Get attendance for a specific date (admin only)
+  app.get(
+    "/api/admin/attendance/:date",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const date = req.params.date;
+        const attendance = await storage.getAttendanceForDate(date);
+        res.json(attendance);
+      } catch (error) {
+        console.error("Error fetching attendance:", error);
+        res.status(500).json({ message: "Failed to fetch attendance" });
+      }
+    }
+  );
+
+  // Get student attendance for parent (their children only)
+  app.get(
+    "/api/parent/student-attendance/:studentId/:date",
+    isAuthenticated,
+    isParent,
+    async (req: any, res) => {
+      try {
+        const userId = req.user.claims.sub;
+        const { studentId, date } = req.params;
+        
+        // Authorization check
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        const user = await storage.getUser(userId);
+        const household = await storage.getUserHousehold(userId);
+        const userPhoneNormalized = user?.phone?.replace(/\D/g, '') || '';
+        const isAuthorized = 
+          (household && student.householdId === household.id) ||
+          student.guardianPhones.some(gp => gp.replace(/\D/g, '') === userPhoneNormalized);
+        
+        if (!isAuthorized) {
+          return res.status(403).json({ message: "Not authorized to view this student's attendance" });
+        }
+
+        const attendance = await storage.getStudentAttendance(studentId, date);
+        res.json(attendance || null);
+      } catch (error) {
+        console.error("Error fetching student attendance:", error);
+        res.status(500).json({ message: "Failed to fetch student attendance" });
+      }
+    }
+  );
+
   // Create HTTP server
   const httpServer = createServer(app);
 

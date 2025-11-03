@@ -21,6 +21,7 @@ import {
   vehicleInspections,
   households,
   householdMembers,
+  studentAttendance,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -62,6 +63,9 @@ import {
   type InsertHousehold,
   type HouseholdMember,
   type InsertHouseholdMember,
+  type StudentAttendance,
+  type InsertStudentAttendance,
+  type UpdateStudentAttendance,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne } from "drizzle-orm";
@@ -189,6 +193,13 @@ export interface IStorage {
 
   // Vehicle inspection operations
   createVehicleInspection(inspection: InsertVehicleInspection): Promise<VehicleInspection>;
+
+  // Student attendance operations
+  getStudentAttendance(studentId: string, date: string): Promise<StudentAttendance | undefined>;
+  setStudentAttendance(attendance: InsertStudentAttendance): Promise<StudentAttendance>;
+  updateStudentAttendance(id: string, updates: UpdateStudentAttendance): Promise<StudentAttendance>;
+  getAttendanceForDate(date: string): Promise<any[]>;
+  getStudentsByRouteForDate(routeId: string, date: string): Promise<any[]>;
 
   // Statistics
   getStats(): Promise<any>;
@@ -1887,6 +1898,118 @@ export class DatabaseStorage implements IStorage {
 
     const readIds = new Set(readAnnouncements.map(r => r.routeAnnouncementId));
     return announcementIds.filter(id => !readIds.has(id));
+  }
+
+  // ============ Student Attendance Operations ============
+
+  async getStudentAttendance(studentId: string, date: string): Promise<StudentAttendance | undefined> {
+    const [attendance] = await db
+      .select()
+      .from(studentAttendance)
+      .where(
+        and(
+          eq(studentAttendance.studentId, studentId),
+          eq(studentAttendance.date, date)
+        )
+      )
+      .limit(1);
+    return attendance;
+  }
+
+  async setStudentAttendance(attendance: InsertStudentAttendance): Promise<StudentAttendance> {
+    // Check if attendance already exists for this student and date
+    const existing = await this.getStudentAttendance(attendance.studentId, attendance.date);
+    
+    if (existing) {
+      // Update existing attendance
+      const [updated] = await db
+        .update(studentAttendance)
+        .set({
+          status: attendance.status,
+          markedByUserId: attendance.markedByUserId,
+          notes: attendance.notes,
+          updatedAt: new Date(),
+        })
+        .where(eq(studentAttendance.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new attendance record
+      const [newAttendance] = await db
+        .insert(studentAttendance)
+        .values(attendance)
+        .returning();
+      return newAttendance;
+    }
+  }
+
+  async updateStudentAttendance(id: string, updates: UpdateStudentAttendance): Promise<StudentAttendance> {
+    const [updated] = await db
+      .update(studentAttendance)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(studentAttendance.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getAttendanceForDate(date: string): Promise<any[]> {
+    const records = await db
+      .select({
+        attendance: studentAttendance,
+        student: students,
+        markedByUser: users,
+      })
+      .from(studentAttendance)
+      .leftJoin(students, eq(studentAttendance.studentId, students.id))
+      .leftJoin(users, eq(studentAttendance.markedByUserId, users.id))
+      .where(eq(studentAttendance.date, date))
+      .orderBy(students.lastName, students.firstName);
+    
+    return records.map((r) => ({
+      ...r.attendance,
+      student: r.student,
+      markedBy: r.markedByUser ? {
+        id: r.markedByUser.id,
+        firstName: r.markedByUser.firstName,
+        lastName: r.markedByUser.lastName,
+        role: r.markedByUser.role,
+      } : null,
+    }));
+  }
+
+  async getStudentsByRouteForDate(routeId: string, date: string): Promise<any[]> {
+    // Get all students assigned to this route
+    const routeStudents = await db
+      .select()
+      .from(students)
+      .where(eq(students.assignedRouteId, routeId))
+      .orderBy(students.lastName, students.firstName);
+    
+    // Get attendance records for these students on this date
+    const studentIds = routeStudents.map(s => s.id);
+    let attendanceRecords: StudentAttendance[] = [];
+    
+    if (studentIds.length > 0) {
+      attendanceRecords = await db
+        .select()
+        .from(studentAttendance)
+        .where(
+          and(
+            eq(studentAttendance.date, date),
+            or(...studentIds.map(id => eq(studentAttendance.studentId, id)))
+          )
+        );
+    }
+    
+    const attendanceMap = new Map(attendanceRecords.map(a => [a.studentId, a]));
+    
+    return routeStudents.map(student => ({
+      ...student,
+      attendance: attendanceMap.get(student.id) || null,
+    }));
   }
 }
 
