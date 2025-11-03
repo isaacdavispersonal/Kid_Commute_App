@@ -13,11 +13,12 @@ Preferred communication style: Simple, everyday language.
 - **UI Component Library**: shadcn/ui (New York variant) with Radix UI, Tailwind CSS for styling.
 - **State Management**: TanStack Query for server state, data fetching, and caching.
 - **Role-Based Interface Design**:
-    - **Admin Dashboard**: Desktop-optimized with sidebar, data tables, fleet maps, and a compact schedule calendar for high-volume scheduling, supporting all CRUD operations.
+    - **Admin Dashboard**: Desktop-optimized with sidebar, data tables, fleet maps, and a compact schedule calendar for high-volume scheduling, supporting all CRUD operations. Sidebar organized into three logical sections with separators: Core (Dashboard, Users, Students, Vehicles), Operations (Driver Assignments, Routes, Schedule), and Communication (Messages, Time Management, Incidents).
     - **Driver Interface**: Mobile-first with clock in/out and route cards.
     - **Parent Portal**: Real-time tracking and messaging.
 - **Real-Time Features**: WebSocket integration for messaging, Leaflet.js for map visualization, polling for statistics.
 - **Clutter Reduction Features**: Grouped/collapsible UI patterns reduce visual elements by 67% - incidents grouped by status, users tabbed by role, clock events grouped by driver, messages with Recent tab showing unread/read/archived sections, driver assignments grouped by driver with reassignment via edit dialog.
+- **Navigation & Profile Access**: Profile settings removed from sidebar navigation for all roles and relocated to user dropdown menu in header (accessible via top-right user button) for cleaner navigation and improved UX.
 
 ### Backend Architecture
 - **Server Framework**: Express.js on Node.js with TypeScript, ESM module system.
