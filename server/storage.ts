@@ -4,6 +4,7 @@ import {
   vehicles,
   routes,
   stops,
+  routeStops,
   students,
   driverAssignments,
   shifts,
@@ -31,6 +32,8 @@ import {
   type InsertRoute,
   type Stop,
   type InsertStop,
+  type RouteStop,
+  type InsertRouteStop,
   type Student,
   type InsertStudent,
   type DriverAssignment,
@@ -407,26 +410,32 @@ export class DatabaseStorage implements IStorage {
       throw new NotFoundError("Route not found");
     }
     
-    // Delete all stops associated with this route first
-    await db.delete(stops).where(eq(stops.routeId, id));
-    
-    // Delete the route
+    // Delete the route (route_stops will cascade delete automatically)
     await db.delete(routes).where(eq(routes.id, id));
   }
 
-  async getRouteStops(routeId: string): Promise<Stop[]> {
-    return await db
-      .select()
-      .from(stops)
-      .where(eq(stops.routeId, routeId))
-      .orderBy(stops.stopOrder);
+  async getRouteStops(routeId: string): Promise<any[]> {
+    // Get route stops with stop details
+    const result = await db
+      .select({
+        routeStop: routeStops,
+        stop: stops,
+      })
+      .from(routeStops)
+      .leftJoin(stops, eq(routeStops.stopId, stops.id))
+      .where(eq(routeStops.routeId, routeId))
+      .orderBy(routeStops.stopOrder);
+    
+    return result.map(r => ({
+      ...r.stop,
+      stopOrder: r.routeStop.stopOrder,
+      scheduledTime: r.routeStop.scheduledTime,
+      routeStopId: r.routeStop.id,
+    }));
   }
 
   async getAllStops(): Promise<Stop[]> {
-    return await db
-      .select()
-      .from(stops)
-      .orderBy(stops.stopOrder);
+    return await db.select().from(stops).orderBy(stops.name);
   }
 
   async createStop(stop: InsertStop): Promise<Stop> {
@@ -454,6 +463,39 @@ export class DatabaseStorage implements IStorage {
     if (result.length === 0) {
       throw new NotFoundError("Stop not found");
     }
+  }
+
+  // ============ Route Stops (Junction) operations ============
+
+  async createRouteStop(routeStop: InsertRouteStop): Promise<RouteStop> {
+    const [newRouteStop] = await db.insert(routeStops).values(routeStop).returning();
+    return newRouteStop;
+  }
+
+  async updateRouteStop(id: string, updates: Partial<InsertRouteStop>): Promise<RouteStop> {
+    const [updatedRouteStop] = await db
+      .update(routeStops)
+      .set(updates)
+      .where(eq(routeStops.id, id))
+      .returning();
+    
+    if (!updatedRouteStop) {
+      throw new NotFoundError("Route stop not found");
+    }
+    
+    return updatedRouteStop;
+  }
+
+  async deleteRouteStop(id: string): Promise<void> {
+    const result = await db.delete(routeStops).where(eq(routeStops.id, id)).returning();
+    
+    if (result.length === 0) {
+      throw new NotFoundError("Route stop not found");
+    }
+  }
+
+  async deleteAllRouteStops(routeId: string): Promise<void> {
+    await db.delete(routeStops).where(eq(routeStops.routeId, routeId));
   }
 
   // ============ Household operations ============
