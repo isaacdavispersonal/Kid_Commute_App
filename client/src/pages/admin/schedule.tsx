@@ -136,12 +136,6 @@ const bulkScheduleSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid start date"),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid end date"),
   daysOfWeek: z.array(z.number()).min(1, "Select at least one day of the week"),
-  shiftType: z.enum(["MORNING", "AFTERNOON", "EXTRA"]),
-  routeId: z.string().nullable(),
-  vehicleId: z.string().nullable(),
-  plannedStart: z.string().min(1, "Start time is required"),
-  plannedEnd: z.string().min(1, "End time is required"),
-  notes: z.string().nullable(),
 });
 
 type BulkScheduleData = z.infer<typeof bulkScheduleSchema>;
@@ -237,12 +231,6 @@ export default function AdminSchedule() {
       startDate: new Date().toISOString().split('T')[0],
       endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       daysOfWeek: [1, 2, 3, 4, 5], // Mon-Fri
-      shiftType: "MORNING",
-      routeId: null,
-      vehicleId: null,
-      plannedStart: "07:00",
-      plannedEnd: "15:00",
-      notes: null,
     },
   });
 
@@ -528,12 +516,6 @@ export default function AdminSchedule() {
       startDate: new Date().toISOString().split('T')[0],
       endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       daysOfWeek: [1, 2, 3, 4, 5],
-      shiftType: "MORNING",
-      routeId: null,
-      vehicleId: null,
-      plannedStart: "07:00",
-      plannedEnd: "15:00",
-      notes: null,
     });
     setBulkDialogOpen(true);
   };
@@ -1375,140 +1357,10 @@ export default function AdminSchedule() {
                 )}
               </div>
 
-              {/* Shift Details */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={bulkForm.control}
-                  name="shiftType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Shift Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-bulk-shift-type">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="MORNING">Morning</SelectItem>
-                          <SelectItem value="AFTERNOON">Afternoon</SelectItem>
-                          <SelectItem value="EXTRA">Extra</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={bulkForm.control}
-                  name="routeId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Route (Optional)</FormLabel>
-                      <Select
-                        onValueChange={(value) => field.onChange(value === "none" ? null : value)}
-                        value={field.value || "none"}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-bulk-route">
-                            <SelectValue placeholder="Select route" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">No route</SelectItem>
-                          {routes?.map((route) => (
-                            <SelectItem key={route.id} value={route.id}>
-                              {route.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="rounded-md bg-muted/50 p-4 text-sm text-muted-foreground">
+                <p className="font-medium mb-1">Assignment-Based Scheduling</p>
+                <p>Shifts will be created using each driver's assigned routes, vehicles, and times from the Driver Assignments section.</p>
               </div>
-
-              <FormField
-                control={bulkForm.control}
-                name="vehicleId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vehicle (Optional)</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value === "none" ? null : value)}
-                      value={field.value || "none"}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-bulk-vehicle">
-                          <SelectValue placeholder="Select vehicle" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">No vehicle</SelectItem>
-                        {vehicles?.map((vehicle) => (
-                          <SelectItem key={vehicle.id} value={vehicle.id}>
-                            {vehicle.name} ({vehicle.plateNumber})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Time Range */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={bulkForm.control}
-                  name="plannedStart"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start Time</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} data-testid="input-bulk-start-time" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={bulkForm.control}
-                  name="plannedEnd"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End Time</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} data-testid="input-bulk-end-time" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={bulkForm.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes (Optional)</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        {...field}
-                        value={field.value || ""}
-                        placeholder="Add any notes about these shifts"
-                        rows={3}
-                        data-testid="input-bulk-notes"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button

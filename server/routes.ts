@@ -1282,7 +1282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Bulk create shifts
+  // Bulk create shifts from driver assignments
   app.post(
     "/api/admin/shifts/bulk",
     isAuthenticated,
@@ -1290,7 +1290,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const { z } = await import("zod");
-        const { insertShiftSchema } = await import("@shared/schema");
         
         // Validate bulk request
         const bulkSchema = z.object({
@@ -1298,13 +1297,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           daysOfWeek: z.array(z.number().min(0).max(6)).min(1, "At least one day required"),
-          shiftType: z.enum(["MORNING", "AFTERNOON", "EXTRA"]),
-          routeId: z.string().nullable(),
-          vehicleId: z.string().nullable(),
-          plannedStart: z.string(),
-          plannedEnd: z.string(),
-          status: z.enum(["SCHEDULED", "ACTIVE", "COMPLETED", "MISSED"]).optional().default("SCHEDULED"),
-          notes: z.string().nullable(),
         });
 
         const bulkData = bulkSchema.parse(req.body);
@@ -1314,22 +1306,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const driver = await storage.getUser(driverId);
           if (!driver || driver.role !== "driver") {
             return res.status(400).json({ message: `Invalid driver: ${driverId}` });
-          }
-        }
-        
-        // Validate route exists (if provided)
-        if (bulkData.routeId) {
-          const route = await storage.getRoute(bulkData.routeId);
-          if (!route) {
-            return res.status(400).json({ message: "Route not found" });
-          }
-        }
-        
-        // Validate vehicle exists (if provided)
-        if (bulkData.vehicleId) {
-          const vehicle = await storage.getVehicle(bulkData.vehicleId);
-          if (!vehicle) {
-            return res.status(400).json({ message: "Vehicle not found" });
           }
         }
         
@@ -1351,24 +1327,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
           current.setDate(current.getDate() + 1);
         }
         
-        // Create shifts for each driver on each matching date
+        // Create shifts from driver assignments for each driver on each matching date
         const createdShifts = [];
         for (const driverId of bulkData.driverIds) {
+          // Get all assignments for this driver
+          const assignments = await storage.getDriverAssignmentsByDriver(driverId);
+          
+          if (assignments.length === 0) {
+            console.warn(`No assignments found for driver: ${driverId}`);
+            continue;
+          }
+          
+          // For each date, create a shift for each assignment
           for (const date of dates) {
-            const shiftData = {
-              driverId,
-              date,
-              shiftType: bulkData.shiftType,
-              routeId: bulkData.routeId,
-              vehicleId: bulkData.vehicleId,
-              plannedStart: bulkData.plannedStart,
-              plannedEnd: bulkData.plannedEnd,
-              status: bulkData.status,
-              notes: bulkData.notes,
-            };
-            
-            const shift = await storage.createShift(shiftData);
-            createdShifts.push(shift);
+            for (const assignment of assignments) {
+              // Fetch the route to determine shift type
+              const route = await storage.getRoute(assignment.routeId);
+              let shiftType: "MORNING" | "AFTERNOON" | "EXTRA" = "MORNING";
+              if (route?.routeType) {
+                shiftType = route.routeType as "MORNING" | "AFTERNOON" | "EXTRA";
+              }
+              
+              const shiftData = {
+                driverId,
+                driverAssignmentId: assignment.id,
+                date,
+                shiftType,
+                routeId: assignment.routeId,
+                vehicleId: assignment.vehicleId,
+                plannedStart: assignment.startTime,
+                plannedEnd: assignment.endTime,
+                status: "SCHEDULED" as const,
+                notes: assignment.notes,
+              };
+              
+              const shift = await storage.createShift(shiftData);
+              createdShifts.push(shift);
+            }
           }
         }
         
