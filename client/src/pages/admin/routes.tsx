@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertRouteSchema, insertStopSchema, insertRouteStopSchema, type InsertRoute, type InsertStop, type InsertRouteStop, type Stop, type RouteStop } from "@shared/schema";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -61,10 +62,13 @@ interface RouteStopWithDetails extends RouteStop {
 
 export default function AdminRoutes() {
   const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("routes");
   const [isCreateRouteDialogOpen, setIsCreateRouteDialogOpen] = useState(false);
   const [isEditRouteDialogOpen, setIsEditRouteDialogOpen] = useState(false);
   const [isDeleteRouteDialogOpen, setIsDeleteRouteDialogOpen] = useState(false);
   const [isCreateStopDialogOpen, setIsCreateStopDialogOpen] = useState(false);
+  const [isEditStopDialogOpen, setIsEditStopDialogOpen] = useState(false);
+  const [isDeleteStopDialogOpen, setIsDeleteStopDialogOpen] = useState(false);
   const [isManageStopsDialogOpen, setIsManageStopsDialogOpen] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<RouteWithStopCount | null>(null);
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
@@ -103,6 +107,14 @@ export default function AdminRoutes() {
   });
 
   const createStopForm = useForm<InsertStop>({
+    resolver: zodResolver(insertStopSchema),
+    defaultValues: {
+      name: "",
+      address: "",
+    },
+  });
+
+  const editStopForm = useForm<InsertStop>({
     resolver: zodResolver(insertStopSchema),
     defaultValues: {
       name: "",
@@ -195,6 +207,50 @@ export default function AdminRoutes() {
       toast({
         title: "Error",
         description: error.message || "Failed to create stop",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateStopMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: InsertStop }) => {
+      return await apiRequest("PATCH", `/api/admin/stops/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stops"] });
+      setIsEditStopDialogOpen(false);
+      setSelectedStop(null);
+      toast({
+        title: "Success",
+        description: "Stop updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update stop",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteStopMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/admin/stops/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stops"] });
+      setIsDeleteStopDialogOpen(false);
+      setSelectedStop(null);
+      toast({
+        title: "Success",
+        description: "Stop deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete stop",
         variant: "destructive",
       });
     },
@@ -305,6 +361,29 @@ export default function AdminRoutes() {
     createStopMutation.mutate(data);
   };
 
+  const handleEditStopSubmit = (data: InsertStop) => {
+    if (!selectedStop) return;
+    updateStopMutation.mutate({ id: selectedStop.id, data });
+  };
+
+  const handleEditStopClick = (stop: Stop) => {
+    setSelectedStop(stop);
+    editStopForm.reset({
+      name: stop.name,
+      address: stop.address,
+    });
+    setIsEditStopDialogOpen(true);
+  };
+
+  const handleDeleteStopClick = (stop: Stop) => {
+    setSelectedStop(stop);
+    setIsDeleteStopDialogOpen(true);
+  };
+
+  const handleDeleteStopConfirm = () => {
+    if (!selectedStop) return;
+    deleteStopMutation.mutate(selectedStop.id);
+  };
 
   const handleManageStopsClick = (route: RouteWithStopCount) => {
     setSelectedRoute(route);
@@ -432,6 +511,40 @@ export default function AdminRoutes() {
     },
   ];
 
+  const stopColumns = [
+    {
+      header: "Stop Name",
+      accessor: "name",
+    },
+    {
+      header: "Address",
+      accessor: "address",
+    },
+    {
+      header: "Actions",
+      accessor: "id",
+      cell: (_value: string, row: Stop) => (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => handleEditStopClick(row)}
+            data-testid={`button-edit-stop-${row.id}`}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => handleDeleteStopClick(row)}
+            data-testid={`button-delete-stop-${row.id}`}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   const availableStops = stops?.filter(
     stop => !routeStops?.some(rs => rs.stopId === stop.id)
@@ -443,12 +556,18 @@ export default function AdminRoutes() {
         <div>
           <h1 className="text-2xl font-semibold mb-1">Route Management</h1>
           <p className="text-sm text-muted-foreground">
-            Create and manage transportation routes
+            Create and manage transportation routes and stops
           </p>
         </div>
       </div>
 
-      <div className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="routes" data-testid="tab-routes">Routes</TabsTrigger>
+          <TabsTrigger value="stops" data-testid="tab-stops">Stops</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="routes" className="space-y-4">
           <div className="flex justify-end">
             <Dialog open={isCreateRouteDialogOpen} onOpenChange={setIsCreateRouteDialogOpen}>
               <DialogTrigger asChild>
@@ -558,7 +677,93 @@ export default function AdminRoutes() {
             isLoading={routesLoading}
             emptyMessage="No routes found. Create your first route to get started."
           />
-        </div>
+        </TabsContent>
+
+        <TabsContent value="stops" className="space-y-4">
+          <div className="flex justify-end">
+            <Dialog open={isCreateStopDialogOpen} onOpenChange={setIsCreateStopDialogOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-stop">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Stop
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Stop</DialogTitle>
+                  <DialogDescription>
+                    Add a reusable stop location
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...createStopForm}>
+                  <form onSubmit={createStopForm.handleSubmit(handleCreateStopSubmit)} className="space-y-4">
+                    <FormField
+                      control={createStopForm.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Stop Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="E.g., Main Street & Oak Ave"
+                              data-testid="input-stop-name"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={createStopForm.control}
+                      name="address"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Address</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Full street address"
+                              data-testid="input-stop-address"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="flex justify-end gap-2 pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsCreateStopDialogOpen(false)}
+                        data-testid="button-cancel-stop"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={createStopMutation.isPending}
+                        data-testid="button-submit-stop"
+                      >
+                        {createStopMutation.isPending ? "Creating..." : "Create Stop"}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <DataTable
+            columns={stopColumns}
+            data={stops || []}
+            isLoading={stopsLoading}
+            emptyMessage="No stops found. Create your first stop to get started."
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Edit Route Dialog */}
       <Dialog open={isEditRouteDialogOpen} onOpenChange={setIsEditRouteDialogOpen}>
@@ -790,6 +995,98 @@ export default function AdminRoutes() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Stop Dialog */}
+      <Dialog open={isEditStopDialogOpen} onOpenChange={setIsEditStopDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Stop</DialogTitle>
+            <DialogDescription>
+              Update the stop information
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editStopForm}>
+            <form onSubmit={editStopForm.handleSubmit(handleEditStopSubmit)} className="space-y-4">
+              <FormField
+                control={editStopForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Stop Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="E.g., Main Street & Oak Ave"
+                        data-testid="input-edit-stop-name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editStopForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Full street address"
+                        data-testid="input-edit-stop-address"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditStopDialogOpen(false)}
+                  data-testid="button-cancel-edit-stop"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={updateStopMutation.isPending}
+                  data-testid="button-save-stop"
+                >
+                  {updateStopMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Stop Dialog */}
+      <AlertDialog open={isDeleteStopDialogOpen} onOpenChange={setIsDeleteStopDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Stop</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{selectedStop?.name}"? This will remove this stop from all routes that use it. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-stop">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteStopConfirm}
+              disabled={deleteStopMutation.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+              data-testid="button-confirm-delete-stop"
+            >
+              {deleteStopMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
