@@ -68,13 +68,12 @@ interface EnrichedDriverAssignment {
   driverId: string;
   routeId: string;
   vehicleId: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  isActive: boolean;
+  schedulePattern: string | null;
+  notes: string | null;
   driverName: string;
   driverEmail: string;
   routeName: string;
+  routeType: string | null;
   vehicleName: string;
   vehiclePlate: string;
 }
@@ -116,11 +115,7 @@ interface Vehicle {
   plateNumber: string;
 }
 
-const formSchema = insertDriverAssignmentSchema.extend({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
-  startTime: z.string().min(1, "Start time is required"),
-  endTime: z.string().min(1, "End time is required"),
-});
+const formSchema = insertDriverAssignmentSchema;
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -136,10 +131,8 @@ export default function AdminDriverAssignments() {
       driverId: "",
       routeId: "",
       vehicleId: "",
-      date: new Date().toISOString().split('T')[0],
-      startTime: "07:00",
-      endTime: "15:00",
-      isActive: true,
+      schedulePattern: null,
+      notes: "",
     },
   });
 
@@ -231,10 +224,8 @@ export default function AdminDriverAssignments() {
         driverId: assignment.driverId,
         routeId: assignment.routeId,
         vehicleId: assignment.vehicleId,
-        date: assignment.date,
-        startTime: assignment.startTime,
-        endTime: assignment.endTime,
-        isActive: assignment.isActive,
+        schedulePattern: assignment.schedulePattern,
+        notes: assignment.notes || "",
       });
     } else {
       setEditingAssignment(null);
@@ -242,10 +233,8 @@ export default function AdminDriverAssignments() {
         driverId: "",
         routeId: "",
         vehicleId: "",
-        date: new Date().toISOString().split('T')[0],
-        startTime: "07:00",
-        endTime: "15:00",
-        isActive: true,
+        schedulePattern: null,
+        notes: "",
       });
     }
     setDialogOpen(true);
@@ -299,7 +288,7 @@ export default function AdminDriverAssignments() {
         <div>
           <h1 className="text-3xl font-bold">Driver Assignments</h1>
           <p className="text-muted-foreground mt-1">
-            Assign drivers to routes with vehicles and schedules
+            Set up driver assignments to routes and vehicles for scheduling
           </p>
         </div>
         <Button onClick={() => handleOpenDialog()} data-testid="button-create-assignment">
@@ -351,9 +340,8 @@ export default function AdminDriverAssignments() {
                             <TableRow>
                               <TableHead>Route</TableHead>
                               <TableHead>Vehicle</TableHead>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Time</TableHead>
-                              <TableHead>Status</TableHead>
+                              <TableHead>Schedule</TableHead>
+                              <TableHead>Notes</TableHead>
                               <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -361,9 +349,16 @@ export default function AdminDriverAssignments() {
                             {group.assignments.map((assignment) => (
                               <TableRow key={assignment.id} data-testid={`row-assignment-${assignment.id}`}>
                                 <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <Route className="h-4 w-4 text-muted-foreground" />
-                                    <span>{assignment.routeName}</span>
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                      <Route className="h-4 w-4 text-muted-foreground" />
+                                      <span className="font-medium">{assignment.routeName}</span>
+                                    </div>
+                                    {assignment.routeType && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-medium w-fit ml-6">
+                                        {assignment.routeType === 'MORNING' ? 'Morning' : assignment.routeType === 'AFTERNOON' ? 'Afternoon' : 'Extra'}
+                                      </span>
+                                    )}
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -380,24 +375,17 @@ export default function AdminDriverAssignments() {
                                 <TableCell>
                                   <div className="flex items-center gap-2">
                                     <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                                    <span>{new Date(assignment.date).toLocaleDateString()}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-muted-foreground" />
-                                    <span>
-                                      {assignment.startTime} - {assignment.endTime}
+                                    <span className="text-sm">
+                                      {assignment.schedulePattern ? 
+                                        assignment.schedulePattern.charAt(0) + assignment.schedulePattern.slice(1).toLowerCase().replace(/_/g, ' ') 
+                                        : 'As needed'}
                                     </span>
                                   </div>
                                 </TableCell>
                                 <TableCell>
-                                  <Badge
-                                    variant={assignment.isActive ? "default" : "secondary"}
-                                    data-testid={`badge-status-${assignment.id}`}
-                                  >
-                                    {assignment.isActive ? "Active" : "Inactive"}
-                                  </Badge>
+                                  <span className="text-sm text-muted-foreground">
+                                    {assignment.notes || '—'}
+                                  </span>
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-2">
@@ -528,80 +516,51 @@ export default function AdminDriverAssignments() {
 
               <FormField
                 control={form.control}
-                name="date"
+                name="schedulePattern"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Date</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="date"
-                        {...field}
-                        data-testid="input-date"
-                      />
-                    </FormControl>
+                    <FormLabel>Schedule Pattern (Optional)</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || undefined}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-schedule-pattern">
+                          <SelectValue placeholder="Select schedule pattern" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="WEEKDAYS">Weekdays (Mon-Fri)</SelectItem>
+                        <SelectItem value="DAILY">Daily</SelectItem>
+                        <SelectItem value="MONDAY">Monday Only</SelectItem>
+                        <SelectItem value="TUESDAY">Tuesday Only</SelectItem>
+                        <SelectItem value="WEDNESDAY">Wednesday Only</SelectItem>
+                        <SelectItem value="THURSDAY">Thursday Only</SelectItem>
+                        <SelectItem value="FRIDAY">Friday Only</SelectItem>
+                        <SelectItem value="SATURDAY">Saturday Only</SelectItem>
+                        <SelectItem value="SUNDAY">Sunday Only</SelectItem>
+                        <SelectItem value="CUSTOM">Custom Schedule</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="startTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start Time</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="time"
-                          {...field}
-                          data-testid="input-start-time"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="endTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End Time</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="time"
-                          {...field}
-                          data-testid="input-end-time"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
               <FormField
                 control={form.control}
-                name="isActive"
+                name="notes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value === "true")}
-                      value={field.value !== undefined ? field.value.toString() : "true"}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-status">
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="true">Active</SelectItem>
-                        <SelectItem value="false">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Notes (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Add any notes about this assignment"
+                        {...field}
+                        value={field.value || ""}
+                        data-testid="input-notes"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

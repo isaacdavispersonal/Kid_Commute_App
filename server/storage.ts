@@ -561,7 +561,7 @@ export class DatabaseStorage implements IStorage {
   // ============ Driver assignment operations ============
 
   async getAllDriverAssignments(): Promise<DriverAssignment[]> {
-    return await db.select().from(driverAssignments).orderBy(driverAssignments.date);
+    return await db.select().from(driverAssignments).orderBy(driverAssignments.createdAt);
   }
 
   async getDriverAssignmentsByDriver(driverId: string): Promise<DriverAssignment[]> {
@@ -569,21 +569,17 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(driverAssignments)
       .where(eq(driverAssignments.driverId, driverId))
-      .orderBy(driverAssignments.date);
+      .orderBy(driverAssignments.createdAt);
   }
 
   async getDriverAssignmentForToday(driverId: string): Promise<DriverAssignment | undefined> {
-    const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    // With the new schema, driver assignments are general - they don't have specific dates
+    // Return the first assignment for the driver
     const [assignment] = await db
       .select()
       .from(driverAssignments)
-      .where(
-        and(
-          eq(driverAssignments.driverId, driverId),
-          eq(driverAssignments.date, today),
-          eq(driverAssignments.isActive, true)
-        )
-      );
+      .where(eq(driverAssignments.driverId, driverId))
+      .limit(1);
     return assignment;
   }
 
@@ -1277,16 +1273,11 @@ export class DatabaseStorage implements IStorage {
 
   // Get parents whose children are on routes this driver is assigned to
   async getMessageableParentsForDriver(driverId: string): Promise<any[]> {
-    // Get driver's active routes from driver assignments
+    // Get driver's routes from driver assignments
     const driverRoutes = await db
       .select({ routeId: driverAssignments.routeId })
       .from(driverAssignments)
-      .where(
-        and(
-          eq(driverAssignments.driverId, driverId),
-          eq(driverAssignments.isActive, true)
-        )
-      );
+      .where(eq(driverAssignments.driverId, driverId));
 
     const routeIds = driverRoutes.map(r => r.routeId);
     if (routeIds.length === 0) return [];
@@ -1395,16 +1386,11 @@ export class DatabaseStorage implements IStorage {
     const routeIds = Array.from(routeIdsSet);
     if (routeIds.length === 0) return [];
 
-    // Get active driver assignments for these routes
+    // Get driver assignments for these routes
     const activeAssignments = await db
       .select()
       .from(driverAssignments)
-      .where(
-        and(
-          or(...routeIds.map(routeId => eq(driverAssignments.routeId, routeId!))),
-          eq(driverAssignments.isActive, true)
-        )
-      );
+      .where(or(...routeIds.map(routeId => eq(driverAssignments.routeId, routeId!))));
 
     // Get unique driver IDs
     const driverIdsSet = new Set(activeAssignments.map(a => a.driverId));

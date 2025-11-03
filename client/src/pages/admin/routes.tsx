@@ -165,7 +165,7 @@ export default function AdminRoutes() {
     editForm.reset({
       name: route.name,
       description: route.description || "",
-      shiftType: (route as any).shiftType || null,
+      routeType: route.routeType || null,
       isActive: route.isActive,
     });
     setIsEditDialogOpen(true);
