@@ -11,8 +11,25 @@ import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner"
 import { NoChildrenBanner } from "@/components/no-children-banner";
 import { ParentTutorialBanner } from "@/components/parent-tutorial-banner";
 
+interface StudentData {
+  id: string;
+  firstName: string;
+  lastName: string;
+  grade?: string;
+  assignedRoute?: string;
+  routeName?: string;
+  pickupStop?: {
+    name: string;
+    scheduledTime: string;
+  };
+  dropoffStop?: {
+    name: string;
+    scheduledTime: string;
+  };
+}
+
 export default function ParentDashboard() {
-  const { data: students, isLoading } = useQuery({
+  const { data: students, isLoading } = useQuery<StudentData[]>({
     queryKey: ["/api/parent/students"],
   });
 
