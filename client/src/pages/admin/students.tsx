@@ -47,6 +47,7 @@ import {
   Plus,
   X,
   Edit,
+  Calendar,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -63,6 +64,11 @@ interface EnrichedStudent {
   dropoffStopId: string | null;
   pickupStop: any;
   dropoffStop: any;
+  attendance?: {
+    status: "riding" | "absent";
+    markedByUserId: string;
+    createdAt: string;
+  } | null;
 }
 
 interface Route {
@@ -107,6 +113,93 @@ const editStudentFormSchema = updateStudentSchema.extend({
 });
 
 type EditStudentFormValues = z.infer<typeof editStudentFormSchema>;
+
+function AttendanceSection({ student }: { student: EnrichedStudent }) {
+  const { toast } = useToast();
+  const today = new Date().toISOString().split('T')[0];
+
+  const setAttendanceMutation = useMutation({
+    mutationFn: async (status: "riding" | "absent") => {
+      return await apiRequest("POST", "/api/attendance", {
+        studentId: student.id,
+        date: today,
+        status,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/students"] });
+      toast({
+        title: "Success",
+        description: "Attendance updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update attendance",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAttendance = (status: "riding" | "absent") => {
+    setAttendanceMutation.mutate(status);
+  };
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
+      <Calendar className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium">Today's Attendance</p>
+        {student.attendance ? (
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <Badge
+              variant={student.attendance.status === "riding" ? "default" : "destructive"}
+              data-testid={`badge-attendance-${student.id}`}
+            >
+              {student.attendance.status === "riding" ? "Riding" : "Absent"}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                handleAttendance(
+                  student.attendance!.status === "riding" ? "absent" : "riding"
+                )
+              }
+              disabled={setAttendanceMutation.isPending}
+              data-testid={`button-toggle-attendance-${student.id}`}
+            >
+              Toggle
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-2 mt-2 flex-wrap">
+            <Button
+              size="sm"
+              onClick={() => handleAttendance("riding")}
+              disabled={setAttendanceMutation.isPending}
+              data-testid={`button-riding-${student.id}`}
+            >
+              <CheckCircle className="w-4 h-4 mr-1" />
+              Riding
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleAttendance("absent")}
+              disabled={setAttendanceMutation.isPending}
+              data-testid={`button-absent-${student.id}`}
+            >
+              <XCircle className="w-4 h-4 mr-1" />
+              Absent
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminStudentsPage() {
   const { toast } = useToast();
@@ -501,6 +594,8 @@ export default function AdminStudentsPage() {
                     </div>
                   )}
 
+                  <AttendanceSection student={student} />
+
                   <div className="flex gap-2 pt-2">
                     <Button
                       variant="outline"
@@ -530,29 +625,32 @@ export default function AdminStudentsPage() {
                   </div>
                 </>
               ) : (
-                <div className="text-center py-6">
-                  <UserCircle className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Not assigned to any route
-                  </p>
-                  <div className="flex gap-2 justify-center">
-                    <Button
-                      onClick={() => handleOpenDialog(student)}
-                      size="sm"
-                      data-testid={`button-assign-${student.id}`}
-                    >
-                      Assign to Route
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleOpenEditDialog(student)}
-                      data-testid={`button-edit-info-${student.id}`}
-                    >
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit Info
-                    </Button>
+                <div className="space-y-3">
+                  <div className="text-center py-6">
+                    <UserCircle className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Not assigned to any route
+                    </p>
+                    <div className="flex gap-2 justify-center flex-wrap">
+                      <Button
+                        onClick={() => handleOpenDialog(student)}
+                        size="sm"
+                        data-testid={`button-assign-${student.id}`}
+                      >
+                        Assign to Route
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenEditDialog(student)}
+                        data-testid={`button-edit-info-${student.id}`}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit Info
+                      </Button>
+                    </div>
                   </div>
+                  <AttendanceSection student={student} />
                 </div>
               )}
             </CardContent>

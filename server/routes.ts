@@ -707,7 +707,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const students = await storage.getAllStudents();
-        // Enrich with household and route information
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Enrich with household, route, and attendance information
         const enrichedStudents = await Promise.all(
           students.map(async (student) => {
             // Get household information
@@ -736,6 +738,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
 
+            // Get today's attendance
+            const attendance = await storage.getStudentAttendance(student.id, today);
+
             return {
               ...student,
               guardianPhones: student.guardianPhones || [],
@@ -743,6 +748,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               routeName,
               pickupStop,
               dropoffStop,
+              attendance,
             };
           })
         );
