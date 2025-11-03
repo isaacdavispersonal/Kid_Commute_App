@@ -532,7 +532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Get all stops
+  // Get all stops (independent of routes)
   app.get(
     "/api/admin/stops",
     isAuthenticated,
@@ -540,14 +540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const stops = await storage.getAllStops();
-        // Enrich with route names
-        const enrichedStops = await Promise.all(
-          stops.map(async (stop) => {
-            const route = await storage.getRoute(stop.routeId);
-            return { ...stop, routeName: route?.name || "Unknown" };
-          })
-        );
-        res.json(enrichedStops);
+        res.json(stops);
       } catch (error) {
         console.error("Error fetching stops:", error);
         res.status(500).json({ message: "Failed to fetch stops" });
@@ -555,7 +548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Create a new stop
+  // Create a new stop (not tied to any route)
   app.post(
     "/api/admin/stops",
     isAuthenticated,
@@ -571,12 +564,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: "Invalid stop data", 
             errors: result.error.errors 
           });
-        }
-        
-        // Verify route exists
-        const route = await storage.getRoute(result.data.routeId);
-        if (!route) {
-          return res.status(404).json({ message: "Route not found" });
         }
         
         const newStop = await storage.createStop(result.data);
@@ -616,14 +603,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        // If routeId is being updated, verify the route exists
-        if (result.data.routeId) {
-          const route = await storage.getRoute(result.data.routeId);
-          if (!route) {
-            return res.status(404).json({ message: "Route not found" });
-          }
-        }
-        
         const updatedStop = await storage.updateStop(id, result.data);
         res.json(updatedStop);
       } catch (error: any) {
@@ -660,6 +639,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         res.status(500).json({ message: "Failed to delete stop" });
+      }
+    }
+  );
+
+  // Add a stop to a route (create route_stop junction)
+  app.post(
+    "/api/admin/routes/:routeId/stops",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { routeId } = req.params;
+        const { insertRouteStopSchema } = await import("@shared/schema");
+        
+        // Validate request body
+        const result = insertRouteStopSchema.safeParse({
+          ...req.body,
+          routeId,
+        });
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid route stop data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        // Verify route and stop exist
+        const route = await storage.getRoute(routeId);
+        if (!route) {
+          return res.status(404).json({ message: "Route not found" });
+        }
+        
+        const newRouteStop = await storage.createRouteStop(result.data);
+        res.json(newRouteStop);
+      } catch (error: any) {
+        console.error("Error adding stop to route:", error);
+        res.status(500).json({ message: "Failed to add stop to route" });
+      }
+    }
+  );
+
+  // Update route stops (for reordering or changing scheduled times)
+  app.patch(
+    "/api/admin/routes/:routeId/stops",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { routeId } = req.params;
+        const { stops } = req.body; // Array of { id, stopOrder, scheduledTime }
+        
+        if (!Array.isArray(stops)) {
+          return res.status(400).json({ message: "Stops must be an array" });
+        }
+        
+        // Update each route stop
+        await Promise.all(
+          stops.map(stop =>
+            storage.updateRouteStop(stop.id, {
+              stopOrder: stop.stopOrder,
+              scheduledTime: stop.scheduledTime,
+            })
+          )
+        );
+        
+        res.json({ message: "Route stops updated successfully" });
+      } catch (error: any) {
+        console.error("Error updating route stops:", error);
+        res.status(500).json({ message: "Failed to update route stops" });
+      }
+    }
+  );
+
+  // Remove a stop from a route (delete route_stop junction)
+  app.delete(
+    "/api/admin/routes/:routeId/stops/:routeStopId",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { routeStopId } = req.params;
+        await storage.deleteRouteStop(routeStopId);
+        res.json({ message: "Stop removed from route successfully" });
+      } catch (error: any) {
+        console.error("Error removing stop from route:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to remove stop from route" });
       }
     }
   );
