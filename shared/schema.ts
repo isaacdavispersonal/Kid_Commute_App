@@ -264,6 +264,43 @@ export type UpdateStudent = z.infer<typeof updateStudentSchema>;
 export type AdminUpdateStudent = z.infer<typeof adminUpdateStudentSchema>;
 export type Student = typeof students.$inferSelect;
 
+// Attendance status enum
+export const attendanceStatusEnum = pgEnum("attendance_status", ["riding", "absent"]);
+
+// Student attendance table - Daily attendance tracking
+export const studentAttendance = pgTable("student_attendance", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  studentId: varchar("student_id")
+    .notNull()
+    .references(() => students.id, { onDelete: "cascade" }),
+  date: varchar("date").notNull(), // Format: YYYY-MM-DD
+  status: attendanceStatusEnum("status").notNull().default("riding"),
+  markedByUserId: varchar("marked_by_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertStudentAttendanceSchema = createInsertSchema(studentAttendance).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateStudentAttendanceSchema = createInsertSchema(studentAttendance).omit({
+  id: true,
+  studentId: true,
+  date: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export type InsertStudentAttendance = z.infer<typeof insertStudentAttendanceSchema>;
+export type UpdateStudentAttendance = z.infer<typeof updateStudentAttendanceSchema>;
+export type StudentAttendance = typeof studentAttendance.$inferSelect;
+
 // ============ Schedule Management Tables ============
 
 // Driver assignments table
