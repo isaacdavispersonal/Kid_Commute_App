@@ -11,8 +11,7 @@ import {
   Clock,
   ClipboardCheck,
   Shield,
-  User,
-  MapPin
+  User
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -43,11 +42,6 @@ const adminMenuItems = [
     title: "Routes",
     url: "/admin/routes",
     icon: RouteIcon,
-  },
-  {
-    title: "Stops",
-    url: "/admin/stops",
-    icon: MapPin,
   },
   {
     title: "Driver Assignments",
