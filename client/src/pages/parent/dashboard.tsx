@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/status-badge";
 import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 import { NoChildrenBanner } from "@/components/no-children-banner";
+import { ParentTutorialBanner } from "@/components/parent-tutorial-banner";
 
 export default function ParentDashboard() {
   const { data: students, isLoading } = useQuery({
@@ -29,6 +30,8 @@ export default function ParentDashboard() {
       </div>
 
       <IncompleteProfileBanner />
+      
+      <ParentTutorialBanner />
       
       {students && students.length === 0 && <NoChildrenBanner />}
 
