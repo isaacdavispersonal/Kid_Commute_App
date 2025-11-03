@@ -108,6 +108,11 @@ const driverMenuItems = [
     icon: Calendar,
   },
   {
+    title: "Attendance",
+    url: "/driver/attendance",
+    icon: ClipboardCheck,
+  },
+  {
     title: "Time History",
     url: "/driver/time-history",
     icon: Clock,

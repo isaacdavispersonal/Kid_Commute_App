@@ -41,6 +41,7 @@ import DriverSchedule from "@/pages/driver/schedule";
 import DriverTimeHistory from "@/pages/driver/time-history";
 import DriverInspection from "@/pages/driver/inspection";
 import DriverIncident from "@/pages/driver/incident";
+import DriverAttendance from "@/pages/driver/attendance";
 
 import ParentDashboard from "@/pages/parent/dashboard";
 import ParentTracking from "@/pages/parent/tracking";
@@ -156,6 +157,7 @@ function Router() {
                   <Route path="/driver/dashboard" component={DriverDashboard} />
                   <Route path="/driver/routes" component={DriverRoutes} />
                   <Route path="/driver/schedule" component={DriverSchedule} />
+                  <Route path="/driver/attendance" component={DriverAttendance} />
                   <Route path="/driver/time-history" component={DriverTimeHistory} />
                   <Route path="/driver/inspection" component={DriverInspection} />
                   <Route path="/driver/incident" component={DriverIncident} />

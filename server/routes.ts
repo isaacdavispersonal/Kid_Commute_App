@@ -3422,7 +3422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get(
     "/api/driver/route-students/:routeId",
     isAuthenticated,
-    isDriver,
+    requireRole("driver"),
     async (req: any, res) => {
       try {
         const routeId = req.params.routeId;
@@ -3494,7 +3494,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get(
     "/api/admin/attendance/:date",
     isAuthenticated,
-    isAdmin,
+    requireRole("admin"),
     async (req: any, res) => {
       try {
         const date = req.params.date;
@@ -3511,7 +3511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get(
     "/api/parent/student-attendance/:studentId/:date",
     isAuthenticated,
-    isParent,
+    requireRole("parent"),
     async (req: any, res) => {
       try {
         const userId = req.user.claims.sub;
