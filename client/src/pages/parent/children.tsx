@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Link2, AlertCircle, CheckCircle, Phone, UserCircle, MapPin, Route as RouteIcon, Edit, Plus, X } from "lucide-react";
+import { Link2, AlertCircle, CheckCircle, Phone, UserCircle, MapPin, Route as RouteIcon, Edit, Plus, X, XCircle, Calendar } from "lucide-react";
 import { Link } from "wouter";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +48,11 @@ interface EnrichedStudent {
     id: string;
     name: string;
     scheduledTime: string;
+  } | null;
+  attendance?: {
+    status: "riding" | "absent";
+    markedByUserId: string;
+    createdAt: string;
   } | null;
 }
 
@@ -380,6 +385,93 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
   );
 }
 
+function AttendanceSection({ student }: { student: EnrichedStudent }) {
+  const { toast } = useToast();
+  const today = new Date().toISOString().split('T')[0];
+
+  const setAttendanceMutation = useMutation({
+    mutationFn: async (status: "riding" | "absent") => {
+      return await apiRequest("POST", "/api/attendance", {
+        studentId: student.id,
+        date: today,
+        status,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/students"] });
+      toast({
+        title: "Success",
+        description: "Attendance updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update attendance",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAttendance = (status: "riding" | "absent") => {
+    setAttendanceMutation.mutate(status);
+  };
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
+      <Calendar className="h-5 w-5 text-primary mt-0.5" />
+      <div className="flex-1">
+        <p className="text-sm font-medium">Today's Attendance</p>
+        {student.attendance ? (
+          <div className="flex items-center gap-2 mt-2">
+            <Badge
+              variant={student.attendance.status === "riding" ? "default" : "destructive"}
+              data-testid={`badge-attendance-${student.id}`}
+            >
+              {student.attendance.status === "riding" ? "Riding" : "Absent"}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                handleAttendance(
+                  student.attendance!.status === "riding" ? "absent" : "riding"
+                )
+              }
+              disabled={setAttendanceMutation.isPending}
+              data-testid={`button-toggle-attendance-${student.id}`}
+            >
+              Toggle
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-2 mt-2">
+            <Button
+              size="sm"
+              onClick={() => handleAttendance("riding")}
+              disabled={setAttendanceMutation.isPending}
+              data-testid={`button-riding-${student.id}`}
+            >
+              <CheckCircle className="w-4 h-4 mr-1" />
+              Riding
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleAttendance("absent")}
+              disabled={setAttendanceMutation.isPending}
+              data-testid={`button-absent-${student.id}`}
+            >
+              <XCircle className="w-4 h-4 mr-1" />
+              Absent
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ConnectChildrenPage() {
   const { toast } = useToast();
   const [hasAttemptedConnection, setHasAttemptedConnection] = useState(false);
@@ -593,13 +685,18 @@ export default function ConnectChildrenPage() {
                           </div>
                         </div>
                       )}
+
+                      <AttendanceSection student={student} />
                     </div>
                   ) : (
-                    <div className="text-center py-4">
-                      <UserCircle className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">
-                        Not assigned to a route yet
-                      </p>
+                    <div className="space-y-3">
+                      <div className="text-center py-4">
+                        <UserCircle className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">
+                          Not assigned to a route yet
+                        </p>
+                      </div>
+                      <AttendanceSection student={student} />
                     </div>
                   )}
                   

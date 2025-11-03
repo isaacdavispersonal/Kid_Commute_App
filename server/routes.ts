@@ -2240,8 +2240,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const parentId = req.user.claims.sub;
         const students = await storage.getStudentsByParent(parentId);
+        const today = new Date().toISOString().split('T')[0];
 
-        // Enrich with route and stop details
+        // Enrich with route, stop details, and attendance
         const enrichedStudents = await Promise.all(
           students.map(async (student) => {
             let routeName = null;
@@ -2267,11 +2268,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
               dropoffStop = stops.find((s) => s.id === student.dropoffStopId);
             }
 
+            // Get today's attendance
+            const attendance = await storage.getStudentAttendance(student.id, today);
+
             return {
               ...student,
               routeName,
               pickupStop,
               dropoffStop,
+              attendance,
             };
           })
         );
