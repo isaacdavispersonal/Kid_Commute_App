@@ -49,6 +49,12 @@ Preferred communication style: Simple, everyday language.
   - **Phone-Based Authorization**: All attendance operations respect household linking via guardian phone numbers
   - **Multi-Role Access**: Accessible by drivers (for assigned routes), parents (for their children), and admins (full system view)
 - **Parent Dashboard Tutorial**: A dismissible tutorial banner introduces key features for new parent users.
+- **Parent Dashboard Enhancements**: 
+  - **Live ETA Countdown**: Displays estimated time until bus arrival when pickup is within 15-minute window, helping parents prepare children for pickup
+  - **Quick Contact Actions**: Direct access to message driver, call driver (with phone number), and track vehicle from dashboard student cards
+  - **Driver Information Display**: Shows assigned driver name and phone number for each student's route on current day
+  - **Payment & Billing Section**: Profile section for billing inquiries and payment support with contact information for billing questions
+  - **Account Management**: Self-service account deletion with confirmation dialog, household management tools, and family account oversight
 - **Admin Audit Log**: Tracks all driver and parent actions (create, update, delete) with user context, entity type, description, and JSON change details, accessible via an admin UI with filtering and quick filters for Time Exceptions, Attendance Updates, and Route Messages.
 - **Route Progress Tracking**: Real-time tracking of driver route progress with parent visibility, showing completed/skipped stops and estimated arrival times.
 - **GPS Infrastructure**: Placeholder fields for GPS coordinates in stops for future vehicle tracking integration.
