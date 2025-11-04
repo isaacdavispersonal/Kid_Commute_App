@@ -52,6 +52,7 @@ Preferred communication style: Simple, everyday language.
   - **Authorization**: Drivers mark attendance for students on their assigned routes via dedicated attendance page. Parents can mark their children's attendance from the children page. Admins have full access to mark any student's attendance
   - **Backend**: POST /api/attendance endpoint accepts optional `endDate` parameter and creates attendance records for all dates in the range with validation
 - **Parent Dashboard Tutorial**: Dismissable tutorial banner on parent dashboard that introduces key features and navigation. Uses localStorage for persistence with dismiss functionality. Banner provides clear guidance on accessing children profiles, tracking routes, and using messaging features.
+- **Admin Audit Log System**: Comprehensive audit logging tracks all driver and parent actions across the system for accountability and monitoring. The `audit_logs` table captures user context (userId, userRole), action type (created, updated, deleted), entity type (profile, incident, attendance, student), description, and JSON change details. Automatic logging on profile updates, incident reports, and attendance marking. Admin-only UI at `/admin/audit-log` provides filtering by role, action type, date range, and search across descriptions/users/entities. Positioned in sidebar under Incidents section for easy access to operational oversight.
 - **Session Management**: PostgreSQL-backed sessions using `connect-pg-simple` with a 7-day TTL and secure cookies.
 
 ## External Dependencies
