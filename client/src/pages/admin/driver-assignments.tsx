@@ -193,6 +193,8 @@ export default function AdminDriverAssignments() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
+      // Invalidate shifts cache because assignment updates cascade to future shifts
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
       handleCloseDialog();
       toast({
         title: "Success",
@@ -214,6 +216,8 @@ export default function AdminDriverAssignments() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
+      // Invalidate shifts cache as shifts may have referenced this assignment
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
       setDeleteDialog(null);
       toast({
         title: "Success",

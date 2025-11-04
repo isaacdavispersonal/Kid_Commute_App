@@ -733,6 +733,36 @@ export class DatabaseStorage implements IStorage {
       .where(eq(driverAssignments.id, id))
       .returning();
     
+    // CASCADE UPDATE: Update all future shifts that reference this assignment
+    // Use SQL CURRENT_DATE for timezone-safe comparison
+    const shiftUpdates: any = { updatedAt: new Date() };
+    
+    // Map assignment updates to shift updates
+    if (updates.driverId !== undefined) shiftUpdates.driverId = updates.driverId;
+    if (updates.routeId !== undefined) shiftUpdates.routeId = updates.routeId;
+    if (updates.vehicleId !== undefined) shiftUpdates.vehicleId = updates.vehicleId;
+    if (updates.startTime !== undefined) shiftUpdates.plannedStart = updates.startTime;
+    if (updates.endTime !== undefined) shiftUpdates.plannedEnd = updates.endTime;
+    
+    // Only update if there are actual changes to propagate
+    if (Object.keys(shiftUpdates).length > 1) {
+      try {
+        await db
+          .update(shifts)
+          .set(shiftUpdates)
+          .where(
+            and(
+              eq(shifts.driverAssignmentId, id),
+              sql`${shifts.date}::date >= CURRENT_DATE`
+            )
+          );
+      } catch (error) {
+        // Log cascade update errors but don't fail the whole operation
+        // The assignment update succeeded, so we return it
+        console.error(`Failed to cascade update to shifts for assignment ${id}:`, error);
+      }
+    }
+    
     return updated;
   }
 
