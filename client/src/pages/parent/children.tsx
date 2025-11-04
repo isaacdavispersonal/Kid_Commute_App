@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Link2, AlertCircle, CheckCircle, Phone, UserCircle, MapPin, Route as RouteIcon, Edit, Plus, X, XCircle, Calendar } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Link2, AlertCircle, CheckCircle, Phone, UserCircle, MapPin, Route as RouteIcon, Edit, Plus, X, XCircle, Calendar, Navigation, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -385,6 +386,87 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
   );
 }
 
+function RouteProgressSection({ studentId, pickupStopId }: { studentId: string; pickupStopId: string | null }) {
+  const today = new Date().toISOString().split("T")[0];
+  
+  const { data: progress, isLoading, error } = useQuery({
+    queryKey: ["/api/parent/student-progress", studentId, today],
+    queryFn: async () => {
+      const response = await fetch(`/api/parent/student-progress/${studentId}?date=${today}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch progress');
+      }
+      return response.json();
+    },
+    enabled: !!studentId && !!pickupStopId,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  if (!pickupStopId) {
+    return null;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
+        <Navigation className="h-5 w-5 text-muted-foreground mt-0.5" />
+        <div className="flex-1">
+          <p className="text-sm text-muted-foreground">Loading route progress...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !progress) {
+    return null; // Route hasn't started yet
+  }
+
+  const { stops, completedCount, totalStops, pickupStopIndex, currentStopIndex } = progress;
+  
+  // Calculate stops away from pickup
+  let stopsAway = null;
+  let statusMessage = "Route not started";
+  
+  if (currentStopIndex !== null && currentStopIndex < pickupStopIndex) {
+    stopsAway = pickupStopIndex - currentStopIndex;
+    statusMessage = `${stopsAway} stop${stopsAway !== 1 ? 's' : ''} away`;
+  } else if (currentStopIndex !== null && currentStopIndex >= pickupStopIndex) {
+    statusMessage = "Pickup completed";
+  } else if (completedCount === 0) {
+    statusMessage = "Route starting soon";
+  } else {
+    statusMessage = "En route";
+  }
+
+  const progressPercentage = totalStops > 0 ? (completedCount / totalStops) * 100 : 0;
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-md bg-primary/5 border border-primary/20">
+      <Navigation className="h-5 w-5 text-primary mt-0.5" />
+      <div className="flex-1 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">Route Progress</p>
+          <Badge variant="outline" className="text-xs">
+            {completedCount} / {totalStops} stops
+          </Badge>
+        </div>
+        
+        <Progress value={progressPercentage} className="h-2" />
+        
+        <div className="flex items-center justify-between text-sm">
+          <p className="text-muted-foreground">{statusMessage}</p>
+          {stopsAway !== null && stopsAway > 0 && (
+            <Badge variant="default" className="text-xs">
+              <TrendingUp className="h-3 w-3 mr-1" />
+              Approaching
+            </Badge>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AttendanceSection({ student }: { student: EnrichedStudent }) {
   const { toast } = useToast();
   const [showDateRangeDialog, setShowDateRangeDialog] = useState(false);
@@ -752,6 +834,11 @@ export default function ConnectChildrenPage() {
                           </div>
                         </div>
                       )}
+
+                      <RouteProgressSection 
+                        studentId={student.id} 
+                        pickupStopId={student.pickupStop?.id || null}
+                      />
 
                       <AttendanceSection student={student} />
                     </div>
