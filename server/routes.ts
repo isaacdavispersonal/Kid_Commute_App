@@ -2466,6 +2466,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // ============ Route Progress routes (Driver) ============
+
+  // Get route progress for driver's current shift
+  app.get(
+    "/api/driver/route-progress",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { shiftId } = req.query;
+
+        if (!shiftId || typeof shiftId !== "string") {
+          return res.status(400).json({ message: "Shift ID is required" });
+        }
+
+        // Verify this shift belongs to the driver
+        const shift = await storage.getShift(shiftId);
+        if (!shift || shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+
+        const progress = await storage.getRouteProgress(shiftId);
+        res.json(progress);
+      } catch (error) {
+        console.error("Error fetching route progress:", error);
+        res.status(500).json({ message: "Failed to fetch route progress" });
+      }
+    }
+  );
+
+  // Initialize route progress for a shift
+  app.post(
+    "/api/driver/route-progress/initialize",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { shiftId } = req.body;
+
+        if (!shiftId) {
+          return res.status(400).json({ message: "Shift ID is required" });
+        }
+
+        // Verify this shift belongs to the driver
+        const shift = await storage.getShift(shiftId);
+        if (!shift || shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+
+        await storage.initializeRouteProgress(shiftId);
+        const progress = await storage.getRouteProgress(shiftId);
+        res.json(progress);
+      } catch (error) {
+        console.error("Error initializing route progress:", error);
+        res.status(500).json({ message: "Failed to initialize route progress" });
+      }
+    }
+  );
+
+  // Update stop status
+  app.post(
+    "/api/driver/route-progress/update-stop",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { shiftId, routeStopId, status, notes } = req.body;
+
+        if (!shiftId || !routeStopId || !status) {
+          return res.status(400).json({ message: "Shift ID, route stop ID, and status are required" });
+        }
+
+        // Verify this shift belongs to the driver
+        const shift = await storage.getShift(shiftId);
+        if (!shift || shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+
+        const updated = await storage.updateStopStatus(shiftId, routeStopId, status, notes);
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error updating stop status:", error);
+        if (error.name === "NotFoundError") {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to update stop status" });
+      }
+    }
+  );
+
+  // ============ Route Progress routes (Parent) ============
+
+  // Get route progress for student
+  app.get(
+    "/api/parent/student-progress/:studentId",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        const { studentId } = req.params;
+        const date = req.query.date || new Date().toISOString().split("T")[0];
+
+        // Verify parent has access to this student
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+
+        const household = await storage.getUserHousehold(parentId);
+        const studentHousehold = await storage.getStudentsByHousehold(student.householdId);
+        
+        const hasAccess = studentHousehold.some((s) => s.id === studentId);
+        if (!hasAccess) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+
+        const progress = await storage.getStopProgressForStudent(studentId, date as string);
+        res.json(progress);
+      } catch (error) {
+        console.error("Error fetching student progress:", error);
+        res.status(500).json({ message: "Failed to fetch student progress" });
+      }
+    }
+  );
+
   // ============ Parent routes ============
 
   // Connect children by phone number matching
