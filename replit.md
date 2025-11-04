@@ -34,7 +34,10 @@ Preferred communication style: Simple, everyday language.
     - **Route-Based**: Drivers message parents on their current routes; parents message drivers assigned to their children's routes.
     - **Admin Direct Messaging**: Admins can message any user. Admins can intervene in parent-driver conversations, with drivers receiving notifications of intervention and parents receiving messages with an "Admin Forwarded" badge.
 - **Notification System**: Real-time tracking of unread messages and notifications with badges.
-- **Announcement System**: Users can dismiss announcements. Drivers can broadcast route-specific announcements to parents.
+- **Announcement System**: 
+    - Users can dismiss announcements
+    - Drivers can broadcast route-specific announcements to parents
+    - **Enhanced Admin Broadcasts**: Admins can send announcements to all drivers, all parents, or to all parents on a specific route via the admin announcements page
 - **Incident Management**: Drivers report incidents, which admins can review, filter, and resolve.
 - **Driver Assignment System**: Admins assign drivers to routes with specific vehicles and times. Updates to assignments cascade to future shifts.
 - **Parent Student Management**: Parents can edit children's information, including demographics, emergency contacts, medical notes, and guardian phone numbers.
@@ -46,7 +49,7 @@ Preferred communication style: Simple, everyday language.
   - **Phone-Based Authorization**: All attendance operations respect household linking via guardian phone numbers
   - **Multi-Role Access**: Accessible by drivers (for assigned routes), parents (for their children), and admins (full system view)
 - **Parent Dashboard Tutorial**: A dismissible tutorial banner introduces key features for new parent users.
-- **Admin Audit Log**: Tracks all driver and parent actions (create, update, delete) with user context, entity type, description, and JSON change details, accessible via an admin UI with filtering.
+- **Admin Audit Log**: Tracks all driver and parent actions (create, update, delete) with user context, entity type, description, and JSON change details, accessible via an admin UI with filtering and quick filters for Time Exceptions, Attendance Updates, and Route Messages.
 - **Route Progress Tracking**: Real-time tracking of driver route progress with parent visibility, showing completed/skipped stops and estimated arrival times.
 - **GPS Infrastructure**: Placeholder fields for GPS coordinates in stops for future vehicle tracking integration.
 - **Lead Driver Permissions**: `isLeadDriver` flag provides enhanced permissions for senior drivers, managed via the admin UI. Lead drivers are visually identified with a badge on their dashboard.
@@ -56,6 +59,7 @@ Preferred communication style: Simple, everyday language.
   - **Driver Feedback**: System for drivers to submit improvement suggestions, bug reports, and feedback with admin response workflow
   - **Admin Management**: Centralized admin page for viewing and managing all driver utilities with status updates and notes
   - **Quick Feedback**: Floating action button on driver dashboard for easy access to feedback submission
+- **Route Health Monitoring**: Real-time admin dashboard page showing active route status, driver availability (on-time, late, not started, no driver), student counts per route, and unresolved incidents with at-a-glance metrics for operational oversight.
 - **Session Management**: PostgreSQL-backed sessions with a 7-day TTL and secure cookies.
 
 ## External Dependencies
