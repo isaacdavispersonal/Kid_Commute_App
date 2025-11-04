@@ -3778,14 +3778,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Set student attendance (all roles)
+  // Set student attendance (all roles) - supports single date or date range
   app.post(
     "/api/attendance",
     isAuthenticated,
     async (req: any, res) => {
       try {
         const userId = req.user.claims.sub;
-        const { studentId, date, status, notes } = req.body;
+        const { studentId, date, endDate, status, notes } = req.body;
         
         // Validate request
         if (!studentId || !date || !status) {
@@ -3816,6 +3816,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
+        // If endDate is provided, set attendance for date range
+        if (endDate) {
+          const startDate = new Date(date);
+          const finalDate = new Date(endDate);
+          
+          if (finalDate < startDate) {
+            return res.status(400).json({ message: "End date must be after start date" });
+          }
+          
+          const attendanceRecords = [];
+          const currentDate = new Date(startDate);
+          
+          while (currentDate <= finalDate) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            const record = await storage.setStudentAttendance({
+              studentId,
+              date: dateStr,
+              status,
+              markedByUserId: userId,
+              notes: notes || null,
+            });
+            attendanceRecords.push(record);
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          
+          return res.json({ 
+            message: `Attendance set for ${attendanceRecords.length} days`,
+            records: attendanceRecords 
+          });
+        }
+
+        // Single date attendance
         const attendance = await storage.setStudentAttendance({
           studentId,
           date,

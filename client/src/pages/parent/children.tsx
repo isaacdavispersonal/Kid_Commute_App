@@ -387,21 +387,26 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
 
 function AttendanceSection({ student }: { student: EnrichedStudent }) {
   const { toast } = useToast();
+  const [showDateRangeDialog, setShowDateRangeDialog] = useState(false);
+  const [endDate, setEndDate] = useState("");
   const today = new Date().toISOString().split('T')[0];
 
   const setAttendanceMutation = useMutation({
-    mutationFn: async (status: "riding" | "absent") => {
+    mutationFn: async (data: { status: "riding" | "absent"; endDate?: string }) => {
       return await apiRequest("POST", "/api/attendance", {
         studentId: student.id,
         date: today,
-        status,
+        endDate: data.endDate,
+        status: data.status,
       });
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/parent/students"] });
+      setShowDateRangeDialog(false);
+      setEndDate("");
       toast({
         title: "Success",
-        description: "Attendance updated successfully",
+        description: data.message || "Attendance updated successfully",
       });
     },
     onError: () => {
@@ -414,61 +419,129 @@ function AttendanceSection({ student }: { student: EnrichedStudent }) {
   });
 
   const handleAttendance = (status: "riding" | "absent") => {
-    setAttendanceMutation.mutate(status);
+    setAttendanceMutation.mutate({ status });
+  };
+
+  const handleAbsentClick = () => {
+    setShowDateRangeDialog(true);
+  };
+
+  const handleConfirmAbsence = () => {
+    setAttendanceMutation.mutate({ status: "absent", endDate: endDate || undefined });
   };
 
   return (
-    <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
-      <Calendar className="h-5 w-5 text-primary mt-0.5" />
-      <div className="flex-1">
-        <p className="text-sm font-medium">Today's Attendance</p>
-        {student.attendance ? (
-          <div className="flex items-center gap-2 mt-2">
-            <Badge
-              variant={student.attendance.status === "riding" ? "default" : "destructive"}
-              data-testid={`badge-attendance-${student.id}`}
-            >
-              {student.attendance.status === "riding" ? "Riding" : "Absent"}
-            </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                handleAttendance(
-                  student.attendance!.status === "riding" ? "absent" : "riding"
-                )
-              }
-              disabled={setAttendanceMutation.isPending}
-              data-testid={`button-toggle-attendance-${student.id}`}
-            >
-              Toggle
-            </Button>
-          </div>
-        ) : (
-          <div className="flex gap-2 mt-2">
-            <Button
-              size="sm"
-              onClick={() => handleAttendance("riding")}
-              disabled={setAttendanceMutation.isPending}
-              data-testid={`button-riding-${student.id}`}
-            >
-              <CheckCircle className="w-4 h-4 mr-1" />
-              Riding
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => handleAttendance("absent")}
-              disabled={setAttendanceMutation.isPending}
-              data-testid={`button-absent-${student.id}`}
-            >
-              <XCircle className="w-4 h-4 mr-1" />
-              Absent
-            </Button>
-          </div>
-        )}
+    <>
+      <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
+        <Calendar className="h-5 w-5 text-primary mt-0.5" />
+        <div className="flex-1">
+          <p className="text-sm font-medium">Today's Attendance</p>
+          {student.attendance ? (
+            <div className="flex items-center gap-2 mt-2">
+              <Badge
+                variant={student.attendance.status === "riding" ? "default" : "destructive"}
+                data-testid={`badge-attendance-${student.id}`}
+              >
+                {student.attendance.status === "riding" ? "Riding" : "Absent"}
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  handleAttendance(
+                    student.attendance!.status === "riding" ? "absent" : "riding"
+                  )
+                }
+                disabled={setAttendanceMutation.isPending}
+                data-testid={`button-toggle-attendance-${student.id}`}
+              >
+                Toggle
+              </Button>
+            </div>
+          ) : (
+            <div className="flex gap-2 mt-2">
+              <Button
+                size="sm"
+                onClick={() => handleAttendance("riding")}
+                disabled={setAttendanceMutation.isPending}
+                data-testid={`button-riding-${student.id}`}
+              >
+                <CheckCircle className="w-4 h-4 mr-1" />
+                Riding
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleAbsentClick}
+                disabled={setAttendanceMutation.isPending}
+                data-testid={`button-absent-${student.id}`}
+              >
+                <XCircle className="w-4 h-4 mr-1" />
+                Absent
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      <Dialog open={showDateRangeDialog} onOpenChange={setShowDateRangeDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark Absent</DialogTitle>
+            <DialogDescription>
+              Mark {student.firstName} as absent for today or multiple days
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Start Date</label>
+              <Input
+                type="date"
+                value={today}
+                disabled
+                className="mt-1"
+                data-testid="input-start-date"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">End Date (Optional)</label>
+              <p className="text-xs text-muted-foreground mb-1">
+                Leave empty for today only, or select a future date for multiple days
+              </p>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                min={today}
+                placeholder="Select end date"
+                className="mt-1"
+                data-testid="input-end-date"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDateRangeDialog(false);
+                  setEndDate("");
+                }}
+                data-testid="button-cancel-absence"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmAbsence}
+                disabled={setAttendanceMutation.isPending}
+                data-testid="button-confirm-absence"
+              >
+                {setAttendanceMutation.isPending ? "Marking..." : "Mark Absent"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
