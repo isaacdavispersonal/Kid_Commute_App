@@ -45,6 +45,7 @@ export const users = pgTable("users", {
   role: userRoleEnum("role").notNull().default("parent"),
   phoneNumber: varchar("phone_number"),
   address: text("address"),
+  isLeadDriver: boolean("is_lead_driver").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -136,6 +137,8 @@ export const stops = pgTable("stops", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   address: text("address").notNull(),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -477,6 +480,51 @@ export const updateClockEventSchema = createInsertSchema(clockEvents).omit({
 export type InsertClockEvent = z.infer<typeof insertClockEventSchema>;
 export type UpdateClockEvent = z.infer<typeof updateClockEventSchema>;
 export type ClockEvent = typeof clockEvents.$inferSelect;
+
+// ============ Route Progress Tracking Tables ============
+
+// Stop status enum for route progress
+export const stopStatusEnum = pgEnum("stop_status", ["PENDING", "COMPLETED", "SKIPPED"]);
+
+// Route progress table - tracks which stops have been completed during a shift
+export const routeProgress = pgTable(
+  "route_progress",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    shiftId: varchar("shift_id")
+      .notNull()
+      .references(() => shifts.id, { onDelete: "cascade" }),
+    routeStopId: varchar("route_stop_id")
+      .notNull()
+      .references(() => routeStops.id, { onDelete: "cascade" }),
+    status: stopStatusEnum("status").notNull().default("PENDING"),
+    completedAt: timestamp("completed_at"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_route_progress_shift").on(table.shiftId),
+  ]
+);
+
+export const insertRouteProgressSchema = createInsertSchema(routeProgress).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateRouteProgressSchema = createInsertSchema(routeProgress).omit({
+  id: true,
+  shiftId: true,
+  routeStopId: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export type InsertRouteProgress = z.infer<typeof insertRouteProgressSchema>;
+export type UpdateRouteProgress = z.infer<typeof updateRouteProgressSchema>;
+export type RouteProgress = typeof routeProgress.$inferSelect;
 
 // ============ Time Tracking Tables ============
 
