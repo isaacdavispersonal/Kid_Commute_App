@@ -12,6 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { useAuth } from "@/hooks/useAuth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
@@ -459,6 +460,7 @@ function ShiftCard({ shift }: { shift: EnrichedShift }) {
 
 export default function DriverDashboard() {
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const { data: todayShifts, isLoading, error } = useQuery<EnrichedShift[]>({
     queryKey: ["/api/driver/today-shifts"],
@@ -551,9 +553,16 @@ export default function DriverDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold mb-1" data-testid="title-dashboard">
-          Driver Dashboard
-        </h1>
+        <div className="flex items-center gap-3 mb-1">
+          <h1 className="text-2xl font-semibold" data-testid="title-dashboard">
+            Driver Dashboard
+          </h1>
+          {user?.isLeadDriver && (
+            <Badge variant="default" className="bg-primary" data-testid="badge-lead-driver">
+              Lead Driver
+            </Badge>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground">
           Manage your shifts and clock in/out for each shift
         </p>
