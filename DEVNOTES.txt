@@ -35,9 +35,7 @@
     ADMIN DASH
       
       Auto clock out driver an hour after the end of that shift
-                        
-      How is phone handling removed and added in, what does that look like
-      
+                              
       
     PARENT DASH
     
