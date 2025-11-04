@@ -31,10 +31,14 @@
         
       Attendance section for students on their route
 
+      Tie conversation to route and not to drivers
+
 
     ADMIN DASH
       
       Auto clock out driver an hour after the end of that shift
+
+      
                               
       
     PARENT DASH
