@@ -23,6 +23,7 @@ import {
   households,
   householdMembers,
   studentAttendance,
+  auditLogs,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -69,6 +70,8 @@ import {
   type StudentAttendance,
   type InsertStudentAttendance,
   type UpdateStudentAttendance,
+  type AuditLog,
+  type InsertAuditLog,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne } from "drizzle-orm";
@@ -211,6 +214,12 @@ export interface IStorage {
   // Statistics
   getStats(): Promise<any>;
   getActiveDrivers(): Promise<any[]>;
+
+  // Audit log operations
+  createAuditLog(auditLog: InsertAuditLog): Promise<AuditLog>;
+  getAllAuditLogs(): Promise<any[]>;
+  getAuditLogsByUser(userId: string): Promise<any[]>;
+  getAuditLogsByRole(role: "driver" | "parent"): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -344,6 +353,19 @@ export class DatabaseStorage implements IStorage {
     
     if (!updatedUser) {
       throw new NotFoundError(`User with id ${userId} not found`);
+    }
+    
+    // Audit log for driver/parent profile updates
+    if (updatedUser.role === "driver" || updatedUser.role === "parent") {
+      await this.createAuditLog({
+        userId: updatedUser.id,
+        userRole: updatedUser.role,
+        action: "updated_profile",
+        entityType: "profile",
+        entityId: updatedUser.id,
+        description: `Updated profile information`,
+        changes: profile,
+      });
     }
     
     return updatedUser;
@@ -1646,6 +1668,24 @@ export class DatabaseStorage implements IStorage {
 
   async createIncident(incident: InsertIncident): Promise<Incident> {
     const [newIncident] = await db.insert(incidents).values(incident).returning();
+    
+    // Audit log for incident reporting (drivers only)
+    const reporter = await this.getUser(incident.reporterId);
+    if (reporter && reporter.role === "driver") {
+      await this.createAuditLog({
+        userId: reporter.id,
+        userRole: reporter.role,
+        action: "reported_incident",
+        entityType: "incident",
+        entityId: newIncident.id,
+        description: `Reported incident: ${newIncident.title}`,
+        changes: {
+          severity: newIncident.severity,
+          location: newIncident.location,
+        },
+      });
+    }
+    
     return newIncident;
   }
 
@@ -2062,6 +2102,7 @@ export class DatabaseStorage implements IStorage {
     // Check if attendance already exists for this student and date
     const existing = await this.getStudentAttendance(attendance.studentId, attendance.date);
     
+    let result: StudentAttendance;
     if (existing) {
       // Update existing attendance
       const [updated] = await db
@@ -2074,15 +2115,37 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(studentAttendance.id, existing.id))
         .returning();
-      return updated;
+      result = updated;
     } else {
       // Create new attendance record
       const [newAttendance] = await db
         .insert(studentAttendance)
         .values(attendance)
         .returning();
-      return newAttendance;
+      result = newAttendance;
     }
+    
+    // Audit log for attendance marking (driver/parent only)
+    if (attendance.markedByUserId) {
+      const markedBy = await this.getUser(attendance.markedByUserId);
+      if (markedBy && (markedBy.role === "driver" || markedBy.role === "parent")) {
+        const student = await this.getStudent(attendance.studentId);
+        await this.createAuditLog({
+          userId: markedBy.id,
+          userRole: markedBy.role,
+          action: "marked_attendance",
+          entityType: "attendance",
+          entityId: result.id,
+          description: `Marked ${student?.firstName} ${student?.lastName} as ${attendance.status} for ${attendance.date}`,
+          changes: {
+            status: attendance.status,
+            date: attendance.date,
+          },
+        });
+      }
+    }
+    
+    return result;
   }
 
   async updateStudentAttendance(id: string, updates: UpdateStudentAttendance): Promise<StudentAttendance> {
@@ -2151,6 +2214,84 @@ export class DatabaseStorage implements IStorage {
     return routeStudents.map(student => ({
       ...student,
       attendance: attendanceMap.get(student.id) || null,
+    }));
+  }
+
+  // ============ Audit Log Operations ============
+
+  async createAuditLog(auditLog: InsertAuditLog): Promise<AuditLog> {
+    const [log] = await db
+      .insert(auditLogs)
+      .values(auditLog)
+      .returning();
+    return log;
+  }
+
+  async getAllAuditLogs(): Promise<any[]> {
+    const logs = await db
+      .select({
+        log: auditLogs,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+          role: users.role,
+        },
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.userId, users.id))
+      .orderBy(desc(auditLogs.createdAt));
+    
+    return logs.map((l) => ({
+      ...l.log,
+      user: l.user,
+    }));
+  }
+
+  async getAuditLogsByUser(userId: string): Promise<any[]> {
+    const logs = await db
+      .select({
+        log: auditLogs,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+          role: users.role,
+        },
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.userId, users.id))
+      .where(eq(auditLogs.userId, userId))
+      .orderBy(desc(auditLogs.createdAt));
+    
+    return logs.map((l) => ({
+      ...l.log,
+      user: l.user,
+    }));
+  }
+
+  async getAuditLogsByRole(role: "driver" | "parent"): Promise<any[]> {
+    const logs = await db
+      .select({
+        log: auditLogs,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+          role: users.role,
+        },
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.userId, users.id))
+      .where(eq(auditLogs.userRole, role))
+      .orderBy(desc(auditLogs.createdAt));
+    
+    return logs.map((l) => ({
+      ...l.log,
+      user: l.user,
     }));
   }
 }
