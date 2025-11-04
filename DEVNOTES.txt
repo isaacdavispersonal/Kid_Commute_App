@@ -60,3 +60,130 @@
       Being able to call in saying their child will and wont be on a route etc
 
     APP FORMAT FOR MOBILE
+
+---
+
+ 🚀 UPDATED REPLIT PROMPTS (Version 2)
+    🧭 Prompt 1 — Enhance the Route & Stop System
+
+    The route and stop system already allows creation of routes with reusable stops (name + address).
+    Update it with these new features:
+
+    Add route progress tracking for drivers (marking each stop as complete or skipped).
+
+    Add stop order indicators and estimated time-to-next-stop.
+
+    Show how many stops away a student is from pickup/drop-off.
+
+    Allow admins and lead drivers to rearrange stop order directly from the dashboard.
+
+    Enable optional GPS mode (if lat/lng are available) for distance-based ETA in the future.
+
+    Tie route-based chat threads to the route itself, not to individual drivers.
+
+    Keep the current reusable stop model lightweight (no GPS required unless added later).
+
+    ⏱️ Prompt 2 — Improve the Clock-In, Clock-Out, and Shift Management System
+
+    The clock-in/out and scheduling system already works with automatic time tracking.
+    Extend it to include:
+
+    Require driver notes for any unregistered or manual clock entries (exceptions).
+
+    Add break/pause button to suspend the active timer mid-route.
+
+    Prevent multiple active clock-ins by locking the button until clocked out.
+
+    Automatically clock out drivers 1 hour after scheduled end time (admin-configurable).
+
+    Display recent clock-outs at the top of driver time history.
+
+    Notify admins via dashboard when timecard anomalies (missed clock-outs, double-ins) occur.
+
+    All time data continues feeding into the payroll and audit logs already in place.
+
+    🚐 Prompt 3 — Upgrade the Driver Dashboard UI & Utilities
+
+    The driver dashboard already shows routes, attendance, and communication.
+    Add the following utility enhancements:
+
+    Add an Announcements center for route and admin messages, with badge counts.
+
+    Add a Common Supplies Request form to send supply needs directly to admin.
+
+    Add Vehicle Checklists (pre-trip/post-trip) to confirm vehicle readiness.
+
+    Give Lead Drivers an elevated role to manage route logistics and verify attendance.
+
+    Add a Quick Feedback button for drivers to suggest improvements or report UI issues.
+
+    Keep the interface minimal and mobile-optimized.
+
+    🧒 Prompt 4 — Expand Attendance & Student Sync Features
+
+    Attendance currently works for both drivers and parents with real-time updates.
+    Add these refinements:
+
+    Introduce a live attendance overview on the admin dashboard.
+
+    Add a "Pending" attendance state (when driver hasn’t marked student yet).
+
+    Notify drivers when a parent updates attendance while en route.
+
+    Add attendance analytics (e.g., absences per student per month).
+
+    Sync attendance data to reports for payroll verification and route timing accuracy.
+
+    Ensure that all updates remain tied to phone-based household linking.
+
+    👩‍💼 Prompt 5 — Expand Admin Dashboard Capabilities
+
+    Admin dashboard already supports user, route, and schedule management.
+    Add these capabilities:
+
+    Admin Logs: Add quick filters for “Time Exceptions,” “Attendance Updates,” and “Route Messages.”
+
+    Create a Supply Requests tab for driver submissions with “Pending/Resolved” states.
+
+    Enable Announcement Broadcasts by role or by route.
+
+    Add Route Health View — summarize active routes, driver status (on time/late), and unresolved incidents.
+
+    Introduce soft-lock controls for routes (prevent new shifts from being added if vehicle maintenance is pending).
+
+    Keep integration seamless with your current Audit Log and Scheduling systems.
+
+    👨‍👩‍👧 Prompt 6 — Improve Parent Dashboard Experience
+
+    Parent dashboard currently handles attendance, communication, and tracking.
+    Add these quality-of-life upgrades:
+
+    Show live ETA countdown (“Bus arriving in 7 minutes”).
+
+    Allow parents to view driver’s current location (optional toggle for privacy).
+
+    Include a call/message button to contact dispatch or the route driver directly.
+
+    Add payment redirection module that integrates with a billing system (Stripe, QuickBooks, etc.).
+
+    Include account deletion and household management tools in settings.
+
+    Add parent alert notifications (e.g., “Bus delayed,” “Driver clocked in late,” etc.).
+
+    The layout should remain simple and educational for non-technical users.
+
+    📱 Prompt 7 — Mobile & Interface Optimization
+
+    Ensure the entire system functions seamlessly on mobile devices:
+
+    All dashboards (Admin, Driver, Parent) must use responsive card layouts and collapsible sections.
+
+    Optimize all buttons and input fields for touch.
+
+    Add offline caching for drivers, allowing them to view route data without connection.
+
+    Provide dark mode and high-contrast options for accessibility.
+
+    Enable push notifications for messages, clock-in reminders, and route updates.
+
+    Prioritize performance, simplicity, and minimal load times.
