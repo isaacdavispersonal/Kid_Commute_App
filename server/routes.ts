@@ -3,6 +3,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
 import { NotFoundError, ValidationError } from "./errors";
 import express from "express";
@@ -4504,7 +4506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // Broadcast WebSocket notification if parent updated attendance
-        // Only send route ID to notify drivers to refresh - don't leak student identity
+        // Only send to authorized clients (drivers on this route, admins)
         if (user.role === "parent") {
           const student = await storage.getStudent(studentId);
           const wss = req.app.locals.wss;
@@ -4514,9 +4516,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
               routeId: student.assignedRouteId,
               date,
             };
+            
+            // Broadcast only to authorized clients
             wss.clients.forEach((client: any) => {
               if (client.readyState === 1) {
-                client.send(JSON.stringify(notification));
+                const clientRole = client.userRole;
+                const clientRoutes = client.authorizedRoutes || [];
+                
+                // Send to admins (all routes) or drivers/parents with this route
+                const isAuthorized = 
+                  clientRole === 'admin' || 
+                  clientRoutes.includes(student.assignedRouteId);
+                
+                if (isAuthorized) {
+                  client.send(JSON.stringify(notification));
+                }
               }
             });
           }
@@ -4670,8 +4684,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", async (ws, req) => {
     console.log("WebSocket client connected");
+
+    // Parse session cookie to get user info
+    let userId: number | null = null;
+    let userRole: string | null = null;
+    let authorizedRoutes: string[] = [];
+
+    try {
+      // Extract session from cookie
+      const cookieHeader = req.headers.cookie;
+      if (cookieHeader) {
+        const sessionCookie = cookieHeader.split(';').find(c => c.trim().startsWith('connect.sid='));
+        if (sessionCookie) {
+          // Decode the URL-encoded cookie value
+          const encodedSessionId = sessionCookie.split('=')[1];
+          const sessionId = decodeURIComponent(encodedSessionId);
+          // Parse the signed cookie (format: s:sessionId.signature)
+          const unsignedSessionId = sessionId.startsWith('s:') ? sessionId.slice(2).split('.')[0] : sessionId;
+          
+          // Query session from database using raw SQL
+          const sessionResult = await db.execute(
+            sql`SELECT sess FROM session WHERE sid = ${unsignedSessionId}`
+          );
+          
+          if (sessionResult.rows.length > 0) {
+            const sessionData = sessionResult.rows[0].sess as any;
+            if (sessionData?.passport?.user) {
+              const sessionUserId = sessionData.passport.user;
+              
+              // Get user role
+              const user = await storage.getUser(sessionUserId.toString());
+              if (user) {
+                userId = sessionUserId;
+                userRole = user.role;
+                
+                // Get authorized routes based on role
+                if (userRole === 'driver') {
+                  // Get all routes this driver is assigned to
+                  const assignments = await storage.getDriverAssignmentsByDriver(sessionUserId.toString());
+                  authorizedRoutes = assignments.map(a => a.routeId);
+                } else if (userRole === 'parent') {
+                  // Get all routes for this parent's children
+                  const students = await storage.getStudentsByHousehold(sessionUserId.toString());
+                  authorizedRoutes = students
+                    .map(s => s.assignedRouteId)
+                    .filter((id): id is string => id !== null);
+                }
+                // Admin can see all routes, so leave authorizedRoutes empty (will allow all)
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error parsing WebSocket session:", error);
+    }
+
+    // Store user info on the WebSocket client
+    (ws as any).userId = userId;
+    (ws as any).userRole = userRole;
+    (ws as any).authorizedRoutes = authorizedRoutes;
+
+    console.log(`WebSocket authenticated: userId=${userId}, role=${userRole}, routes=[${authorizedRoutes.join(', ')}]`);
 
     ws.on("message", (data) => {
       console.log("Received WebSocket message:", data.toString());
