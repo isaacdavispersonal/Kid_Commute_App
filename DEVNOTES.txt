@@ -38,7 +38,7 @@
       
       Auto clock out driver an hour after the end of that shift
 
-      
+      admin log to keep track of data
                               
       
     PARENT DASH
