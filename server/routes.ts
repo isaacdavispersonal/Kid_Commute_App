@@ -91,6 +91,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete user account permanently
+  app.delete("/api/profile/delete-account", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Delete user and all associated data
+      await storage.deleteUser(userId);
+      
+      // Log the user out by destroying session
+      req.logout((err: any) => {
+        if (err) {
+          console.error("Error logging out after account deletion:", err);
+        }
+        res.json({ success: true, message: "Account deleted successfully" });
+      });
+    } catch (error: any) {
+      console.error("Error deleting account:", error);
+      res.status(500).json({ message: "Failed to delete account" });
+    }
+  });
+
   // Get unread counts for current user
   app.get("/api/user/unread-counts", isAuthenticated, async (req: any, res) => {
     try {
@@ -3199,16 +3225,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const students = await storage.getStudentsByParent(parentId);
         const today = new Date().toISOString().split('T')[0];
 
-        // Enrich with route, stop details, and attendance
+        // Enrich with route, stop details, driver info, and attendance
         const enrichedStudents = await Promise.all(
           students.map(async (student) => {
             let routeName = null;
             let pickupStop = null;
             let dropoffStop = null;
+            let driverId = null;
+            let driverName = null;
+            let driverPhone = null;
 
             if (student.assignedRouteId) {
               const route = await storage.getRoute(student.assignedRouteId);
               routeName = route?.name || null;
+
+              // Get current driver assignment for this route
+              const assignments = await storage.getDriverAssignmentsByRoute(student.assignedRouteId);
+              const todayAssignment = assignments.find(a => a.startTime <= today && a.endTime >= today);
+              if (todayAssignment) {
+                const driver = await storage.getUser(todayAssignment.driverId);
+                if (driver) {
+                  driverId = driver.id;
+                  driverName = `${driver.firstName} ${driver.lastName}`;
+                  driverPhone = driver.phone || null;
+                }
+              }
             }
 
             if (student.pickupStopId) {
@@ -3233,6 +3274,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               routeName,
               pickupStop,
               dropoffStop,
+              driverId,
+              driverName,
+              driverPhone,
               attendance,
             };
           })

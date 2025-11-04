@@ -136,7 +136,7 @@
 
     Ensure that all updates remain tied to phone-based household linking.
 
-    👩‍💼 Prompt 5 — Expand Admin Dashboard Capabilities
+    👩‍💼 Prompt 5 — Expand Admin Dashboard Capabilities - COMPLETED -
 
     Admin dashboard already supports user, route, and schedule management.
     Add these capabilities:
