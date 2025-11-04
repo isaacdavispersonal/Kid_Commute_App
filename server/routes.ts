@@ -273,6 +273,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // ============ Audit Log Routes ============
+
+  // Get all audit logs
+  app.get(
+    "/api/admin/audit-logs",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const logs = await storage.getAllAuditLogs();
+        res.json(logs);
+      } catch (error) {
+        console.error("Error fetching audit logs:", error);
+        res.status(500).json({ message: "Failed to fetch audit logs" });
+      }
+    }
+  );
+
+  // Get audit logs filtered by role
+  app.get(
+    "/api/admin/audit-logs/role/:role",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { role } = req.params;
+        if (!role || !["driver", "parent"].includes(role)) {
+          return res.status(400).json({ message: "Invalid role. Must be: driver or parent" });
+        }
+        const logs = await storage.getAuditLogsByRole(role as "driver" | "parent");
+        res.json(logs);
+      } catch (error) {
+        console.error("Error fetching audit logs by role:", error);
+        res.status(500).json({ message: "Failed to fetch audit logs" });
+      }
+    }
+  );
+
+  // Get audit logs for a specific user
+  app.get(
+    "/api/admin/audit-logs/user/:userId",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { userId } = req.params;
+        const logs = await storage.getAuditLogsByUser(userId);
+        res.json(logs);
+      } catch (error) {
+        console.error("Error fetching audit logs for user:", error);
+        res.status(500).json({ message: "Failed to fetch audit logs" });
+      }
+    }
+  );
+
   // Get all users
   app.get(
     "/api/admin/users",

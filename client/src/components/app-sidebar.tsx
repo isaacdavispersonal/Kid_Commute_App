@@ -11,7 +11,8 @@ import {
   Clock,
   ClipboardCheck,
   Shield,
-  User
+  User,
+  FileText
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -88,6 +89,11 @@ const adminMenuSections = [
         title: "Incidents",
         url: "/admin/incidents",
         icon: AlertTriangle,
+      },
+      {
+        title: "Audit Log",
+        url: "/admin/audit-log",
+        icon: FileText,
       },
     ],
   },
