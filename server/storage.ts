@@ -9,6 +9,7 @@ import {
   driverAssignments,
   shifts,
   clockEvents,
+  adminSettings,
   timeEntries,
   messages,
   driverNotifications,
@@ -46,6 +47,8 @@ import {
   type ClockEvent,
   type InsertClockEvent,
   type UpdateClockEvent,
+  type AdminSetting,
+  type InsertAdminSetting,
   type TimeEntry,
   type InsertTimeEntry,
   type Message,
@@ -157,6 +160,15 @@ export interface IStorage {
   resolveClockEvent(id: string, notes?: string): Promise<ClockEvent>;
   getActiveClockIn(driverId: string): Promise<{clockEvent: ClockEvent, shift: Shift} | null>;
   autoClockoutOrphanedShifts(graceHours?: number): Promise<{processed: number, clockedOut: ClockEvent[]}>;
+  getActiveBreak(driverId: string): Promise<ClockEvent | null>;
+  startBreak(driverId: string, shiftId: string | null, notes?: string): Promise<ClockEvent>;
+  endBreak(driverId: string, notes?: string): Promise<ClockEvent>;
+  detectTimecardAnomalies(): Promise<any[]>;
+  
+  // Admin settings operations
+  getAdminSetting(key: string): Promise<AdminSetting | undefined>;
+  setAdminSetting(key: string, value: string, description?: string, updatedBy?: string): Promise<AdminSetting>;
+  getAllAdminSettings(): Promise<AdminSetting[]>;
 
   // Time entry operations
   getCurrentTimeEntry(driverId: string): Promise<TimeEntry | undefined>;
@@ -1170,6 +1182,183 @@ export class DatabaseStorage implements IStorage {
       processed: clockedOutEvents.length,
       clockedOut: clockedOutEvents,
     };
+  }
+
+  async getActiveBreak(driverId: string): Promise<ClockEvent | null> {
+    // Find the most recent BREAK_START event without a matching BREAK_END
+    const recentEvents = await db
+      .select()
+      .from(clockEvents)
+      .where(eq(clockEvents.driverId, driverId))
+      .orderBy(desc(clockEvents.timestamp))
+      .limit(10);
+
+    // Find the latest BREAK_START without a subsequent BREAK_END
+    for (const event of recentEvents) {
+      if (event.type === "BREAK_START") {
+        return event;
+      } else if (event.type === "BREAK_END" || event.type === "OUT") {
+        // Found a BREAK_END or OUT, so no active break
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  async startBreak(driverId: string, shiftId: string | null, notes?: string): Promise<ClockEvent> {
+    const breakStart: InsertClockEvent = {
+      driverId,
+      shiftId,
+      type: "BREAK_START",
+      source: "USER",
+      notes: notes || null,
+    };
+
+    return await this.createClockEvent(breakStart);
+  }
+
+  async endBreak(driverId: string, notes?: string): Promise<ClockEvent> {
+    const activeBreak = await this.getActiveBreak(driverId);
+    if (!activeBreak) {
+      throw new Error("No active break found");
+    }
+
+    const breakEnd: InsertClockEvent = {
+      driverId,
+      shiftId: activeBreak.shiftId,
+      type: "BREAK_END",
+      source: "USER",
+      notes: notes || null,
+    };
+
+    return await this.createClockEvent(breakEnd);
+  }
+
+  async detectTimecardAnomalies(): Promise<any[]> {
+    const anomalies: any[] = [];
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Get all drivers
+    const drivers = await db
+      .select()
+      .from(users)
+      .where(eq(users.role, "driver"));
+
+    for (const driver of drivers) {
+      // Check for active clock-ins without clock-outs (missed clock-outs)
+      const activeClockIn = await this.getActiveClockIn(driver.id);
+      if (activeClockIn && activeClockIn.clockEvent) {
+        const clockInTime = new Date(activeClockIn.clockEvent.timestamp);
+        // If clock-in is more than 12 hours old, it's an anomaly
+        if (now.getTime() - clockInTime.getTime() > 12 * 60 * 60 * 1000) {
+          anomalies.push({
+            type: "MISSED_CLOCKOUT",
+            driverId: driver.id,
+            driverName: `${driver.firstName} ${driver.lastName}`,
+            clockEvent: activeClockIn.clockEvent,
+            shift: activeClockIn.shift,
+            message: `Driver has been clocked in for ${Math.floor((now.getTime() - clockInTime.getTime()) / (60 * 60 * 1000))} hours without clocking out`,
+          });
+        }
+      }
+
+      // Check for orphaned breaks (BREAK_START without BREAK_END)
+      const activeBreak = await this.getActiveBreak(driver.id);
+      if (activeBreak) {
+        const breakStartTime = new Date(activeBreak.timestamp);
+        if (now.getTime() - breakStartTime.getTime() > 4 * 60 * 60 * 1000) {
+          anomalies.push({
+            type: "ORPHANED_BREAK",
+            driverId: driver.id,
+            driverName: `${driver.firstName} ${driver.lastName}`,
+            clockEvent: activeBreak,
+            message: `Driver has been on break for ${Math.floor((now.getTime() - breakStartTime.getTime()) / (60 * 60 * 1000))} hours`,
+          });
+        }
+      }
+
+      // Check for multiple clock-ins in the past day (potential double clock-ins)
+      const recentEvents = await db
+        .select()
+        .from(clockEvents)
+        .where(
+          and(
+            eq(clockEvents.driverId, driver.id),
+            sql`${clockEvents.timestamp} >= ${oneDayAgo.toISOString()}`
+          )
+        )
+        .orderBy(clockEvents.timestamp);
+
+      let consecutiveIns = 0;
+      for (const event of recentEvents) {
+        if (event.type === "IN") {
+          consecutiveIns++;
+          if (consecutiveIns > 1) {
+            anomalies.push({
+              type: "DOUBLE_CLOCKIN",
+              driverId: driver.id,
+              driverName: `${driver.firstName} ${driver.lastName}`,
+              clockEvent: event,
+              message: `Multiple consecutive clock-ins detected`,
+            });
+            consecutiveIns = 0; // Reset after reporting
+          }
+        } else if (event.type === "OUT") {
+          consecutiveIns = 0;
+        }
+      }
+    }
+
+    return anomalies;
+  }
+
+  // ============ Admin Settings operations ============
+
+  async getAdminSetting(key: string): Promise<AdminSetting | undefined> {
+    const [setting] = await db
+      .select()
+      .from(adminSettings)
+      .where(eq(adminSettings.settingKey, key))
+      .limit(1);
+    return setting;
+  }
+
+  async setAdminSetting(
+    key: string,
+    value: string,
+    description?: string,
+    updatedBy?: string
+  ): Promise<AdminSetting> {
+    const existingSetting = await this.getAdminSetting(key);
+
+    if (existingSetting) {
+      const [updated] = await db
+        .update(adminSettings)
+        .set({
+          settingValue: value,
+          description: description || existingSetting.description,
+          updatedBy: updatedBy || existingSetting.updatedBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(adminSettings.settingKey, key))
+        .returning();
+      return updated;
+    } else {
+      const newSetting: InsertAdminSetting = {
+        settingKey: key,
+        settingValue: value,
+        description: description || null,
+        updatedBy: updatedBy || null,
+      };
+      const [created] = await db.insert(adminSettings).values(newSetting).returning();
+      return created;
+    }
+  }
+
+  async getAllAdminSettings(): Promise<AdminSetting[]> {
+    return await db.select().from(adminSettings).orderBy(adminSettings.settingKey);
   }
 
   // ============ Time entry operations ============

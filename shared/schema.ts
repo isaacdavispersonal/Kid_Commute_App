@@ -431,13 +431,14 @@ export type UpdateShift = z.infer<typeof updateShiftSchema>;
 export type Shift = typeof shifts.$inferSelect;
 
 // Clock event type enum
-export const clockEventTypeEnum = pgEnum("clock_event_type", ["IN", "OUT"]);
+export const clockEventTypeEnum = pgEnum("clock_event_type", ["IN", "OUT", "BREAK_START", "BREAK_END"]);
 
 // Clock event source enum
 export const clockEventSourceEnum = pgEnum("clock_event_source", [
   "USER",
   "AUTO",
   "ADMIN_EDIT",
+  "AUTO_CLOCKOUT",
 ]);
 
 // Clock events table - tracks actual clock in/out times per shift
@@ -480,6 +481,24 @@ export const updateClockEventSchema = createInsertSchema(clockEvents).omit({
 export type InsertClockEvent = z.infer<typeof insertClockEventSchema>;
 export type UpdateClockEvent = z.infer<typeof updateClockEventSchema>;
 export type ClockEvent = typeof clockEvents.$inferSelect;
+
+// Admin settings table - stores system configuration
+export const adminSettings = pgTable("admin_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  settingKey: varchar("setting_key").notNull().unique(),
+  settingValue: text("setting_value").notNull(),
+  description: text("description"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+});
+
+export const insertAdminSettingSchema = createInsertSchema(adminSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type InsertAdminSetting = z.infer<typeof insertAdminSettingSchema>;
+export type AdminSetting = typeof adminSettings.$inferSelect;
 
 // ============ Route Progress Tracking Tables ============
 
