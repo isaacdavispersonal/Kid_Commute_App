@@ -2362,6 +2362,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get today's shifts
+  app.get(
+    "/api/driver/shifts/today",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const today = new Date().toISOString().split("T")[0];
+        const shifts = await storage.getShiftsByDate(today, driverId);
+        res.json(shifts);
+      } catch (error) {
+        console.error("Error fetching today's shifts:", error);
+        res.status(500).json({ message: "Failed to fetch shifts" });
+      }
+    }
+  );
+
   // Get driver's weekly schedule
   app.get(
     "/api/driver/schedule",
