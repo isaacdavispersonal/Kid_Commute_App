@@ -26,6 +26,9 @@ import {
   studentAttendance,
   auditLogs,
   routeProgress,
+  suppliesRequests,
+  vehicleChecklists,
+  driverFeedback,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -79,9 +82,15 @@ import {
   type RouteProgress,
   type InsertRouteProgress,
   type UpdateRouteProgress,
+  type SuppliesRequest,
+  type InsertSuppliesRequest,
+  type VehicleChecklist,
+  type InsertVehicleChecklist,
+  type DriverFeedback,
+  type InsertDriverFeedback,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, or, sql, gte, lte, ne } from "drizzle-orm";
+import { eq, and, desc, or, sql, gte, lte, ne, lt } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "./errors";
 
 export interface IStorage {
@@ -248,6 +257,34 @@ export interface IStorage {
   ): Promise<RouteProgress>;
   getCurrentStopForShift(shiftId: string): Promise<any | null>;
   getStopProgressForStudent(studentId: string, date: string): Promise<any | null>;
+
+  // Supplies requests operations
+  createSuppliesRequest(request: InsertSuppliesRequest): Promise<SuppliesRequest>;
+  getSuppliesRequestsByDriver(driverId: string): Promise<SuppliesRequest[]>;
+  getAllSuppliesRequests(): Promise<SuppliesRequest[]>;
+  updateSuppliesRequestStatus(
+    id: string,
+    status: "PENDING" | "APPROVED" | "ORDERED" | "DELIVERED" | "REJECTED",
+    adminNotes?: string,
+    approvedBy?: string
+  ): Promise<SuppliesRequest>;
+
+  // Vehicle checklists operations
+  createVehicleChecklist(checklist: InsertVehicleChecklist): Promise<VehicleChecklist>;
+  getVehicleChecklistsByDriver(driverId: string): Promise<VehicleChecklist[]>;
+  getVehicleChecklistsByVehicle(vehicleId: string): Promise<VehicleChecklist[]>;
+  getTodayVehicleChecklist(driverId: string, vehicleId: string, type: "PRE_TRIP" | "POST_TRIP"): Promise<VehicleChecklist | undefined>;
+
+  // Driver feedback operations
+  createDriverFeedback(feedback: InsertDriverFeedback): Promise<DriverFeedback>;
+  getDriverFeedbackByDriver(driverId: string): Promise<DriverFeedback[]>;
+  getAllDriverFeedback(): Promise<DriverFeedback[]>;
+  updateDriverFeedbackStatus(
+    id: string,
+    status: "NEW" | "REVIEWING" | "PLANNED" | "COMPLETED" | "DISMISSED",
+    adminResponse?: string,
+    respondedBy?: string
+  ): Promise<DriverFeedback>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2683,6 +2720,148 @@ export class DatabaseStorage implements IStorage {
       totalStops: allProgress.length,
       completedStops: allProgress.filter((p) => p.status === "COMPLETED").length,
     };
+  }
+
+  // ============ Supplies Requests operations ============
+
+  async createSuppliesRequest(request: InsertSuppliesRequest): Promise<SuppliesRequest> {
+    const [newRequest] = await db
+      .insert(suppliesRequests)
+      .values(request)
+      .returning();
+    return newRequest;
+  }
+
+  async getSuppliesRequestsByDriver(driverId: string): Promise<SuppliesRequest[]> {
+    return await db
+      .select()
+      .from(suppliesRequests)
+      .where(eq(suppliesRequests.driverId, driverId))
+      .orderBy(desc(suppliesRequests.createdAt));
+  }
+
+  async getAllSuppliesRequests(): Promise<SuppliesRequest[]> {
+    return await db
+      .select()
+      .from(suppliesRequests)
+      .orderBy(desc(suppliesRequests.createdAt));
+  }
+
+  async updateSuppliesRequestStatus(
+    id: string,
+    status: "PENDING" | "APPROVED" | "ORDERED" | "DELIVERED" | "REJECTED",
+    adminNotes?: string,
+    approvedBy?: string
+  ): Promise<SuppliesRequest> {
+    const [updated] = await db
+      .update(suppliesRequests)
+      .set({
+        status,
+        adminNotes,
+        approvedBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(suppliesRequests.id, id))
+      .returning();
+    return updated;
+  }
+
+  // ============ Vehicle Checklists operations ============
+
+  async createVehicleChecklist(checklist: InsertVehicleChecklist): Promise<VehicleChecklist> {
+    const [newChecklist] = await db
+      .insert(vehicleChecklists)
+      .values(checklist)
+      .returning();
+    return newChecklist;
+  }
+
+  async getVehicleChecklistsByDriver(driverId: string): Promise<VehicleChecklist[]> {
+    return await db
+      .select()
+      .from(vehicleChecklists)
+      .where(eq(vehicleChecklists.driverId, driverId))
+      .orderBy(desc(vehicleChecklists.createdAt));
+  }
+
+  async getVehicleChecklistsByVehicle(vehicleId: string): Promise<VehicleChecklist[]> {
+    return await db
+      .select()
+      .from(vehicleChecklists)
+      .where(eq(vehicleChecklists.vehicleId, vehicleId))
+      .orderBy(desc(vehicleChecklists.createdAt));
+  }
+
+  async getTodayVehicleChecklist(
+    driverId: string,
+    vehicleId: string,
+    type: "PRE_TRIP" | "POST_TRIP"
+  ): Promise<VehicleChecklist | undefined> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [checklist] = await db
+      .select()
+      .from(vehicleChecklists)
+      .where(
+        and(
+          eq(vehicleChecklists.driverId, driverId),
+          eq(vehicleChecklists.vehicleId, vehicleId),
+          eq(vehicleChecklists.checklistType, type),
+          gte(vehicleChecklists.createdAt, today),
+          lt(vehicleChecklists.createdAt, tomorrow)
+        )
+      )
+      .orderBy(desc(vehicleChecklists.createdAt))
+      .limit(1);
+
+    return checklist;
+  }
+
+  // ============ Driver Feedback operations ============
+
+  async createDriverFeedback(feedback: InsertDriverFeedback): Promise<DriverFeedback> {
+    const [newFeedback] = await db
+      .insert(driverFeedback)
+      .values(feedback)
+      .returning();
+    return newFeedback;
+  }
+
+  async getDriverFeedbackByDriver(driverId: string): Promise<DriverFeedback[]> {
+    return await db
+      .select()
+      .from(driverFeedback)
+      .where(eq(driverFeedback.driverId, driverId))
+      .orderBy(desc(driverFeedback.createdAt));
+  }
+
+  async getAllDriverFeedback(): Promise<DriverFeedback[]> {
+    return await db
+      .select()
+      .from(driverFeedback)
+      .orderBy(desc(driverFeedback.createdAt));
+  }
+
+  async updateDriverFeedbackStatus(
+    id: string,
+    status: "NEW" | "REVIEWING" | "PLANNED" | "COMPLETED" | "DISMISSED",
+    adminResponse?: string,
+    respondedBy?: string
+  ): Promise<DriverFeedback> {
+    const [updated] = await db
+      .update(driverFeedback)
+      .set({
+        status,
+        adminResponse,
+        respondedBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(driverFeedback.id, id))
+      .returning();
+    return updated;
   }
 }
 

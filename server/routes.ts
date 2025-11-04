@@ -273,6 +273,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // ============ Admin Driver Utility Routes ============
+
+  // Get all supplies requests
+  app.get(
+    "/api/admin/supplies-requests",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const requests = await storage.getAllSuppliesRequests();
+        res.json(requests);
+      } catch (error) {
+        console.error("Error fetching supplies requests:", error);
+        res.status(500).json({ message: "Failed to fetch supplies requests" });
+      }
+    }
+  );
+
+  // Update supplies request status
+  app.patch(
+    "/api/admin/supplies-requests/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { status, adminNotes } = req.body;
+        const approvedBy = req.user.claims.sub;
+
+        if (!status || !["PENDING", "APPROVED", "ORDERED", "DELIVERED", "REJECTED"].includes(status)) {
+          return res.status(400).json({ message: "Invalid status" });
+        }
+
+        const updated = await storage.updateSuppliesRequestStatus(
+          id,
+          status,
+          adminNotes,
+          approvedBy
+        );
+
+        res.json(updated);
+      } catch (error) {
+        console.error("Error updating supplies request:", error);
+        res.status(500).json({ message: "Failed to update supplies request" });
+      }
+    }
+  );
+
+  // Get all driver feedback
+  app.get(
+    "/api/admin/feedback",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const feedback = await storage.getAllDriverFeedback();
+        res.json(feedback);
+      } catch (error) {
+        console.error("Error fetching driver feedback:", error);
+        res.status(500).json({ message: "Failed to fetch driver feedback" });
+      }
+    }
+  );
+
+  // Update driver feedback status
+  app.patch(
+    "/api/admin/feedback/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { status, adminResponse } = req.body;
+        const respondedBy = req.user.claims.sub;
+
+        if (!status || !["NEW", "REVIEWING", "PLANNED", "COMPLETED", "DISMISSED"].includes(status)) {
+          return res.status(400).json({ message: "Invalid status" });
+        }
+
+        const updated = await storage.updateDriverFeedbackStatus(
+          id,
+          status,
+          adminResponse,
+          respondedBy
+        );
+
+        res.json(updated);
+      } catch (error) {
+        console.error("Error updating driver feedback:", error);
+        res.status(500).json({ message: "Failed to update driver feedback" });
+      }
+    }
+  );
+
   // ============ Audit Log Routes ============
 
   // Get all audit logs
@@ -2311,6 +2405,189 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error getting break status:", error);
         res.status(500).json({ message: "Failed to get break status" });
+      }
+    }
+  );
+
+  // ============ Driver Utility Routes ============
+
+  // Supplies Requests - Create new request
+  app.post(
+    "/api/driver/supplies-request",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { itemName, quantity, urgency, reason } = req.body;
+
+        const request = await storage.createSuppliesRequest({
+          driverId,
+          itemName,
+          quantity,
+          urgency,
+          reason,
+        });
+
+        res.json(request);
+      } catch (error) {
+        console.error("Error creating supplies request:", error);
+        res.status(500).json({ message: "Failed to create supplies request" });
+      }
+    }
+  );
+
+  // Get driver's supplies requests
+  app.get(
+    "/api/driver/supplies-requests",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const requests = await storage.getSuppliesRequestsByDriver(driverId);
+        res.json(requests);
+      } catch (error) {
+        console.error("Error fetching supplies requests:", error);
+        res.status(500).json({ message: "Failed to fetch supplies requests" });
+      }
+    }
+  );
+
+  // Vehicle Checklists - Create new checklist
+  app.post(
+    "/api/driver/vehicle-checklist",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const {
+          vehicleId,
+          shiftId,
+          checklistType,
+          tiresOk,
+          lightsOk,
+          brakesOk,
+          fluidLevelsOk,
+          interiorCleanOk,
+          emergencyEquipmentOk,
+          mirrorsOk,
+          seatsOk,
+          odometerReading,
+          fuelLevel,
+          issues,
+        } = req.body;
+
+        const checklist = await storage.createVehicleChecklist({
+          driverId,
+          vehicleId,
+          shiftId,
+          checklistType,
+          tiresOk,
+          lightsOk,
+          brakesOk,
+          fluidLevelsOk,
+          interiorCleanOk,
+          emergencyEquipmentOk,
+          mirrorsOk,
+          seatsOk,
+          odometerReading,
+          fuelLevel,
+          issues,
+        });
+
+        res.json(checklist);
+      } catch (error) {
+        console.error("Error creating vehicle checklist:", error);
+        res.status(500).json({ message: "Failed to create vehicle checklist" });
+      }
+    }
+  );
+
+  // Get driver's vehicle checklists
+  app.get(
+    "/api/driver/vehicle-checklists",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const checklists = await storage.getVehicleChecklistsByDriver(driverId);
+        res.json(checklists);
+      } catch (error) {
+        console.error("Error fetching vehicle checklists:", error);
+        res.status(500).json({ message: "Failed to fetch vehicle checklists" });
+      }
+    }
+  );
+
+  // Get today's vehicle checklist for specific vehicle and type
+  app.get(
+    "/api/driver/vehicle-checklist/today",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { vehicleId, type } = req.query;
+
+        if (!vehicleId || !type) {
+          return res.status(400).json({ message: "vehicleId and type are required" });
+        }
+
+        const checklist = await storage.getTodayVehicleChecklist(
+          driverId,
+          vehicleId as string,
+          type as "PRE_TRIP" | "POST_TRIP"
+        );
+
+        res.json(checklist || null);
+      } catch (error) {
+        console.error("Error fetching today's checklist:", error);
+        res.status(500).json({ message: "Failed to fetch today's checklist" });
+      }
+    }
+  );
+
+  // Driver Feedback - Create new feedback
+  app.post(
+    "/api/driver/feedback",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { category, subject, description } = req.body;
+
+        const feedback = await storage.createDriverFeedback({
+          driverId,
+          category,
+          subject,
+          description,
+        });
+
+        res.json(feedback);
+      } catch (error) {
+        console.error("Error creating driver feedback:", error);
+        res.status(500).json({ message: "Failed to create feedback" });
+      }
+    }
+  );
+
+  // Get driver's feedback submissions
+  app.get(
+    "/api/driver/feedback",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const feedback = await storage.getDriverFeedbackByDriver(driverId);
+        res.json(feedback);
+      } catch (error) {
+        console.error("Error fetching driver feedback:", error);
+        res.status(500).json({ message: "Failed to fetch feedback" });
       }
     }
   );
