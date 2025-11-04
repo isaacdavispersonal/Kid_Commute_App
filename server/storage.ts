@@ -24,6 +24,7 @@ import {
   householdMembers,
   studentAttendance,
   auditLogs,
+  routeProgress,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -72,6 +73,9 @@ import {
   type UpdateStudentAttendance,
   type AuditLog,
   type InsertAuditLog,
+  type RouteProgress,
+  type InsertRouteProgress,
+  type UpdateRouteProgress,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne } from "drizzle-orm";
@@ -220,6 +224,18 @@ export interface IStorage {
   getAllAuditLogs(): Promise<any[]>;
   getAuditLogsByUser(userId: string): Promise<any[]>;
   getAuditLogsByRole(role: "driver" | "parent"): Promise<any[]>;
+
+  // Route progress operations
+  initializeRouteProgress(shiftId: string): Promise<void>;
+  getRouteProgress(shiftId: string): Promise<any[]>;
+  updateStopStatus(
+    shiftId: string,
+    routeStopId: string,
+    status: "PENDING" | "COMPLETED" | "SKIPPED",
+    notes?: string
+  ): Promise<RouteProgress>;
+  getCurrentStopForShift(shiftId: string): Promise<any | null>;
+  getStopProgressForStudent(studentId: string, date: string): Promise<any | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2293,6 +2309,191 @@ export class DatabaseStorage implements IStorage {
       ...l.log,
       user: l.user,
     }));
+  }
+
+  // ============ Route Progress operations ============
+
+  async initializeRouteProgress(shiftId: string): Promise<void> {
+    // Get the shift and its route
+    const shift = await db.query.shifts.findFirst({
+      where: eq(shifts.id, shiftId),
+    });
+
+    if (!shift || !shift.routeId) {
+      throw new NotFoundError("Shift or route not found");
+    }
+
+    // Get all stops for this route
+    const routeStopsList = await db.query.routeStops.findMany({
+      where: eq(routeStops.routeId, shift.routeId),
+      orderBy: routeStops.stopOrder,
+    });
+
+    // Create progress records for each stop
+    for (const routeStop of routeStopsList) {
+      // Check if progress record already exists
+      const existing = await db.query.routeProgress.findFirst({
+        where: and(
+          eq(routeProgress.shiftId, shiftId),
+          eq(routeProgress.routeStopId, routeStop.id)
+        ),
+      });
+
+      if (!existing) {
+        await db.insert(routeProgress).values({
+          shiftId,
+          routeStopId: routeStop.id,
+          status: "PENDING",
+        });
+      }
+    }
+  }
+
+  async getRouteProgress(shiftId: string): Promise<any[]> {
+    const progress = await db
+      .select({
+        progress: routeProgress,
+        stop: stops,
+        routeStop: routeStops,
+      })
+      .from(routeProgress)
+      .leftJoin(routeStops, eq(routeProgress.routeStopId, routeStops.id))
+      .leftJoin(stops, eq(routeStops.stopId, stops.id))
+      .where(eq(routeProgress.shiftId, shiftId))
+      .orderBy(routeStops.stopOrder);
+
+    return progress.map((p) => ({
+      ...p.progress,
+      stop: p.stop,
+      stopOrder: p.routeStop?.stopOrder,
+      scheduledTime: p.routeStop?.scheduledTime,
+    }));
+  }
+
+  async updateStopStatus(
+    shiftId: string,
+    routeStopId: string,
+    status: "PENDING" | "COMPLETED" | "SKIPPED",
+    notes?: string
+  ): Promise<RouteProgress> {
+    const existing = await db.query.routeProgress.findFirst({
+      where: and(
+        eq(routeProgress.shiftId, shiftId),
+        eq(routeProgress.routeStopId, routeStopId)
+      ),
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Route progress record not found");
+    }
+
+    const updates: UpdateRouteProgress = {
+      status,
+      notes,
+      completedAt: status === "COMPLETED" ? new Date() : null,
+    };
+
+    const [updated] = await db
+      .update(routeProgress)
+      .set(updates)
+      .where(eq(routeProgress.id, existing.id))
+      .returning();
+
+    return updated;
+  }
+
+  async getCurrentStopForShift(shiftId: string): Promise<any | null> {
+    // Get the first PENDING stop for this shift
+    const progress = await db
+      .select({
+        progress: routeProgress,
+        stop: stops,
+        routeStop: routeStops,
+      })
+      .from(routeProgress)
+      .leftJoin(routeStops, eq(routeProgress.routeStopId, routeStops.id))
+      .leftJoin(stops, eq(routeStops.stopId, stops.id))
+      .where(
+        and(
+          eq(routeProgress.shiftId, shiftId),
+          eq(routeProgress.status, "PENDING")
+        )
+      )
+      .orderBy(routeStops.stopOrder)
+      .limit(1);
+
+    if (progress.length === 0) {
+      return null;
+    }
+
+    const p = progress[0];
+    return {
+      ...p.progress,
+      stop: p.stop,
+      stopOrder: p.routeStop?.stopOrder,
+      scheduledTime: p.routeStop?.scheduledTime,
+    };
+  }
+
+  async getStopProgressForStudent(studentId: string, date: string): Promise<any | null> {
+    // Get student's route for this date
+    const student = await db.query.students.findFirst({
+      where: eq(students.id, studentId),
+    });
+
+    if (!student || !student.routeId) {
+      return null;
+    }
+
+    // Find the shift for this route and date
+    const shift = await db.query.shifts.findFirst({
+      where: and(
+        eq(shifts.routeId, student.routeId),
+        eq(shifts.date, date)
+      ),
+    });
+
+    if (!shift) {
+      return null;
+    }
+
+    // Get all progress for this shift
+    const allProgress = await this.getRouteProgress(shift.id);
+    
+    // Get current stop (first PENDING stop)
+    const currentStop = await this.getCurrentStopForShift(shift.id);
+    
+    // Find student's pickup stop by matching route stops
+    const studentPickupStop = allProgress.find((p) => 
+      p.stop?.address && student.pickupAddress && 
+      p.stop.address.toLowerCase().includes(student.pickupAddress.toLowerCase())
+    );
+
+    if (!studentPickupStop || !currentStop) {
+      return {
+        studentId,
+        routeId: student.routeId,
+        shiftId: shift.id,
+        currentStop: null,
+        studentStop: null,
+        stopsAway: null,
+        totalStops: allProgress.length,
+        completedStops: allProgress.filter((p) => p.status === "COMPLETED").length,
+      };
+    }
+
+    const stopsAway = Math.max(0, (studentPickupStop.stopOrder || 0) - (currentStop.stopOrder || 0));
+
+    return {
+      studentId,
+      routeId: student.routeId,
+      shiftId: shift.id,
+      currentStop,
+      studentStop: studentPickupStop,
+      stopsAway,
+      totalStops: allProgress.length,
+      completedStops: allProgress.filter((p) => p.status === "COMPLETED").length,
+    };
   }
 }
 
