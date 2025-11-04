@@ -43,7 +43,13 @@ Preferred communication style: Simple, everyday language.
 - **Admin Audit Log**: Tracks all driver and parent actions (create, update, delete) with user context, entity type, description, and JSON change details, accessible via an admin UI with filtering.
 - **Route Progress Tracking**: Real-time tracking of driver route progress with parent visibility, showing completed/skipped stops and estimated arrival times.
 - **GPS Infrastructure**: Placeholder fields for GPS coordinates in stops for future vehicle tracking integration.
-- **Lead Driver Permissions**: `isLeadDriver` flag provides enhanced permissions for senior drivers, managed via the admin UI.
+- **Lead Driver Permissions**: `isLeadDriver` flag provides enhanced permissions for senior drivers, managed via the admin UI. Lead drivers are visually identified with a badge on their dashboard.
+- **Driver Utilities System**: Comprehensive system for drivers to request supplies, submit vehicle inspection checklists, and provide feedback, with full admin management capabilities:
+  - **Supplies Requests**: Drivers can request supplies with urgency levels, admins can approve/reject and track delivery status
+  - **Vehicle Checklists**: Pre/post-trip inspection checklists for vehicle safety and maintenance tracking
+  - **Driver Feedback**: System for drivers to submit improvement suggestions, bug reports, and feedback with admin response workflow
+  - **Admin Management**: Centralized admin page for viewing and managing all driver utilities with status updates and notes
+  - **Quick Feedback**: Floating action button on driver dashboard for easy access to feedback submission
 - **Session Management**: PostgreSQL-backed sessions with a 7-day TTL and secure cookies.
 
 ## External Dependencies

@@ -273,6 +273,7 @@ export interface IStorage {
   createVehicleChecklist(checklist: InsertVehicleChecklist): Promise<VehicleChecklist>;
   getVehicleChecklistsByDriver(driverId: string): Promise<VehicleChecklist[]>;
   getVehicleChecklistsByVehicle(vehicleId: string): Promise<VehicleChecklist[]>;
+  getAllVehicleChecklists(): Promise<VehicleChecklist[]>;
   getTodayVehicleChecklist(driverId: string, vehicleId: string, type: "PRE_TRIP" | "POST_TRIP"): Promise<VehicleChecklist | undefined>;
 
   // Driver feedback operations
@@ -2789,6 +2790,13 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(vehicleChecklists)
       .where(eq(vehicleChecklists.vehicleId, vehicleId))
+      .orderBy(desc(vehicleChecklists.createdAt));
+  }
+
+  async getAllVehicleChecklists(): Promise<VehicleChecklist[]> {
+    return await db
+      .select()
+      .from(vehicleChecklists)
       .orderBy(desc(vehicleChecklists.createdAt));
   }
 

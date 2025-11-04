@@ -367,6 +367,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get all vehicle checklists (admin)
+  app.get(
+    "/api/admin/vehicle-checklists",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const checklists = await storage.getAllVehicleChecklists();
+        res.json(checklists);
+      } catch (error) {
+        console.error("Error fetching vehicle checklists:", error);
+        res.status(500).json({ message: "Failed to fetch vehicle checklists" });
+      }
+    }
+  );
+
   // ============ Audit Log Routes ============
 
   // Get all audit logs

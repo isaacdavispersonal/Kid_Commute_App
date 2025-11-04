@@ -93,6 +93,11 @@ const adminMenuSections = [
         icon: AlertTriangle,
       },
       {
+        title: "Driver Utilities",
+        url: "/admin/driver-utilities",
+        icon: Package,
+      },
+      {
         title: "Audit Log",
         url: "/admin/audit-log",
         icon: FileText,
