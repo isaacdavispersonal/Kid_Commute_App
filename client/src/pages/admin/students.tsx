@@ -189,24 +189,18 @@ function AttendanceSection({ student }: { student: EnrichedStudent }) {
             </div>
           ) : (
             <div className="flex gap-2 mt-2 flex-wrap">
+              <p className="text-sm text-muted-foreground" data-testid={`text-riding-default-${student.id}`}>
+                Riding (default)
+              </p>
               <Button
-                size="sm"
-                onClick={() => handleAttendance("riding")}
-                disabled={setAttendanceMutation.isPending}
-                data-testid={`button-riding-${student.id}`}
-              >
-                <CheckCircle className="w-4 h-4 mr-1" />
-                Riding
-              </Button>
-              <Button
-                variant="destructive"
+                variant="outline"
                 size="sm"
                 onClick={handleAbsentClick}
                 disabled={setAttendanceMutation.isPending}
                 data-testid={`button-absent-${student.id}`}
               >
                 <XCircle className="w-4 h-4 mr-1" />
-                Absent
+                Mark as Absent
               </Button>
             </div>
           )}
