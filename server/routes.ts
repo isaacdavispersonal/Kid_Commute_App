@@ -328,6 +328,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // ============ Timecard Anomaly Detection Routes ============
+
+  // Detect timecard anomalies
+  app.get(
+    "/api/admin/timecard-anomalies",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const anomalies = await storage.detectTimecardAnomalies();
+        res.json(anomalies);
+      } catch (error) {
+        console.error("Error detecting timecard anomalies:", error);
+        res.status(500).json({ message: "Failed to detect timecard anomalies" });
+      }
+    }
+  );
+
+  // ============ Admin Settings Routes ============
+
+  // Get all admin settings
+  app.get(
+    "/api/admin/settings",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const settings = await storage.getAllAdminSettings();
+        res.json(settings);
+      } catch (error) {
+        console.error("Error fetching admin settings:", error);
+        res.status(500).json({ message: "Failed to fetch admin settings" });
+      }
+    }
+  );
+
+  // Get specific admin setting by key
+  app.get(
+    "/api/admin/settings/:key",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { key } = req.params;
+        const setting = await storage.getAdminSetting(key);
+        if (!setting) {
+          return res.status(404).json({ message: "Setting not found" });
+        }
+        res.json(setting);
+      } catch (error) {
+        console.error("Error fetching admin setting:", error);
+        res.status(500).json({ message: "Failed to fetch admin setting" });
+      }
+    }
+  );
+
+  // Create or update admin setting
+  app.post(
+    "/api/admin/settings",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { key, value, description } = req.body;
+        const userId = req.user.claims.sub;
+
+        if (!key || !value) {
+          return res.status(400).json({ message: "Key and value are required" });
+        }
+
+        const setting = await storage.setAdminSetting(key, value, description, userId);
+        res.json(setting);
+      } catch (error) {
+        console.error("Error setting admin setting:", error);
+        res.status(500).json({ message: "Failed to set admin setting" });
+      }
+    }
+  );
+
   // Get all users
   app.get(
     "/api/admin/users",
@@ -2159,6 +2238,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error clocking out:", error);
         res.status(500).json({ message: "Failed to clock out" });
+      }
+    }
+  );
+
+  // Start break
+  app.post(
+    "/api/driver/break/start",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { notes } = req.body;
+        
+        // Check if already on break
+        const activeBreak = await storage.getActiveBreak(driverId);
+        if (activeBreak) {
+          return res.status(400).json({ 
+            message: "Already on break. Please end current break first." 
+          });
+        }
+        
+        // Check if clocked in
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        const shiftId = activeClockIn?.clockEvent.shiftId || null;
+        
+        // Start break
+        const breakEvent = await storage.startBreak(driverId, shiftId, notes);
+        
+        res.json({ breakEvent });
+      } catch (error) {
+        console.error("Error starting break:", error);
+        res.status(500).json({ message: "Failed to start break" });
+      }
+    }
+  );
+
+  // End break
+  app.post(
+    "/api/driver/break/end",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { notes } = req.body;
+        
+        // End break
+        const breakEvent = await storage.endBreak(driverId, notes);
+        
+        res.json({ breakEvent });
+      } catch (error: any) {
+        console.error("Error ending break:", error);
+        const message = error.message || "Failed to end break";
+        res.status(400).json({ message });
+      }
+    }
+  );
+
+  // Get active break status
+  app.get(
+    "/api/driver/break/status",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const activeBreak = await storage.getActiveBreak(driverId);
+        
+        res.json({ activeBreak });
+      } catch (error) {
+        console.error("Error getting break status:", error);
+        res.status(500).json({ message: "Failed to get break status" });
       }
     }
   );

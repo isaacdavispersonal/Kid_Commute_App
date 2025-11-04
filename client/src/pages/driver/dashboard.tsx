@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, MapPin, Users, LogIn, LogOut, Timer, Calendar, AlertCircle } from "lucide-react";
+import { Clock, MapPin, Users, LogIn, LogOut, Timer, Calendar, AlertCircle, Coffee, Play } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -94,6 +94,15 @@ function ShiftCard({ shift }: { shift: EnrichedShift }) {
   const elapsedTime = useElapsedTime(isClockedIn ? lastClockEvent.timestamp : null);
   const isUnscheduledShift = shift.routeId === null;
 
+  // Fetch active break status
+  const { data: breakStatus } = useQuery<{ activeBreak: any }>({
+    queryKey: ["/api/driver/break/status"],
+    enabled: isClockedIn, // Only fetch when clocked in
+    refetchInterval: 5000, // Refetch every 5 seconds when clocked in
+  });
+
+  const isOnBreak = breakStatus?.activeBreak !== null;
+
   const clockInMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest("POST", `/api/driver/shifts/${shift.id}/clock-in`, {});
@@ -133,6 +142,7 @@ function ShiftCard({ shift }: { shift: EnrichedShift }) {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/driver/today-shifts"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/driver/break/status"] });
       setShowNotesDialog(false);
       setClockOutNotes("");
       toast({
@@ -155,6 +165,46 @@ function ShiftCard({ shift }: { shift: EnrichedShift }) {
       toast({
         title: "Error",
         description: (error as any).message || "Failed to clock out",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const startBreakMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/driver/break/start", {});
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/driver/break/status"] });
+      toast({
+        title: "Break Started",
+        description: "Your break has been recorded",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: (error as any).message || "Failed to start break",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const endBreakMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/driver/break/end", {});
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/driver/break/status"] });
+      toast({
+        title: "Break Ended",
+        description: "Back to work",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: (error as any).message || "Failed to end break",
         variant: "destructive",
       });
     },
@@ -218,18 +268,24 @@ function ShiftCard({ shift }: { shift: EnrichedShift }) {
         </div>
 
         {isClockedIn && (
-          <div className="p-3 rounded-md bg-primary/10 border border-primary/20">
+          <div className={`p-3 rounded-md border ${isOnBreak ? "bg-orange-500/10 border-orange-500/20" : "bg-primary/10 border-primary/20"}`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">Elapsed Time</p>
+                <p className="text-xs text-muted-foreground">
+                  {isOnBreak ? "On Break" : "Elapsed Time"}
+                </p>
                 <p 
-                  className="text-xl font-bold text-primary font-mono" 
+                  className={`text-xl font-bold font-mono ${isOnBreak ? "text-orange-600 dark:text-orange-400" : "text-primary"}`}
                   data-testid={`elapsed-time-${shift.id}`}
                 >
                   {elapsedTime}
                 </p>
               </div>
-              <Timer className="h-5 w-5 text-primary" />
+              {isOnBreak ? (
+                <Coffee className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              ) : (
+                <Timer className="h-5 w-5 text-primary" />
+              )}
             </div>
           </div>
         )}
@@ -256,31 +312,62 @@ function ShiftCard({ shift }: { shift: EnrichedShift }) {
 
         <div className="flex gap-2">
           {isClockedIn ? (
-            <Button
-              className="flex-1"
-              variant="destructive"
-              onClick={() => {
-                if (isUnscheduledShift) {
-                  setShowNotesDialog(true);
-                } else {
-                  clockOutMutation.mutate(undefined);
-                }
-              }}
-              disabled={clockOutMutation.isPending}
-              data-testid={`button-clock-out-${shift.id}`}
-            >
-              {clockOutMutation.isPending ? (
-                <>
-                  <Clock className="h-4 w-4 mr-2 animate-spin" />
-                  Clocking Out...
-                </>
-              ) : (
-                <>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Clock Out
-                </>
-              )}
-            </Button>
+            <>
+              <Button
+                variant={isOnBreak ? "default" : "outline"}
+                onClick={() => {
+                  if (isOnBreak) {
+                    endBreakMutation.mutate();
+                  } else {
+                    startBreakMutation.mutate();
+                  }
+                }}
+                disabled={startBreakMutation.isPending || endBreakMutation.isPending}
+                data-testid={`button-break-${shift.id}`}
+              >
+                {startBreakMutation.isPending || endBreakMutation.isPending ? (
+                  <>
+                    <Clock className="h-4 w-4 mr-2 animate-spin" />
+                    {isOnBreak ? "Ending..." : "Starting..."}
+                  </>
+                ) : isOnBreak ? (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    End Break
+                  </>
+                ) : (
+                  <>
+                    <Coffee className="h-4 w-4 mr-2" />
+                    Start Break
+                  </>
+                )}
+              </Button>
+              <Button
+                className="flex-1"
+                variant="destructive"
+                onClick={() => {
+                  if (isUnscheduledShift) {
+                    setShowNotesDialog(true);
+                  } else {
+                    clockOutMutation.mutate(undefined);
+                  }
+                }}
+                disabled={clockOutMutation.isPending}
+                data-testid={`button-clock-out-${shift.id}`}
+              >
+                {clockOutMutation.isPending ? (
+                  <>
+                    <Clock className="h-4 w-4 mr-2 animate-spin" />
+                    Clocking Out...
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Clock Out
+                  </>
+                )}
+              </Button>
+            </>
           ) : shift.status !== "COMPLETED" ? (
             <Button
               className="flex-1"

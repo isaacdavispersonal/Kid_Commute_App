@@ -325,7 +325,25 @@ export default function DriverTimeHistory() {
           </div>
         ) : shifts && shifts.length > 0 ? (
           <div className="space-y-3">
-            {shifts.map((shift) => (
+            {shifts
+              .sort((a, b) => {
+                // Find the most recent clock OUT event for each shift
+                const aClockOut = [...a.clockEvents].reverse().find(e => e.type === "OUT");
+                const bClockOut = [...b.clockEvents].reverse().find(e => e.type === "OUT");
+                
+                // If both have clock outs, sort by most recent first
+                if (aClockOut && bClockOut) {
+                  return new Date(bClockOut.timestamp).getTime() - new Date(aClockOut.timestamp).getTime();
+                }
+                
+                // If only one has a clock out, prioritize it
+                if (aClockOut && !bClockOut) return -1;
+                if (!aClockOut && bClockOut) return 1;
+                
+                // If neither have clock outs, sort by date (most recent first)
+                return b.date.localeCompare(a.date);
+              })
+              .map((shift) => (
               <Card key={shift.id} data-testid={`card-shift-${shift.id}`}>
                 <CardHeader>
                   <div className="flex items-start justify-between">

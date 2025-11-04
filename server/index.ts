@@ -78,4 +78,33 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
   });
+
+  // Setup auto-clockout scheduled job
+  // Run every hour to automatically clock out drivers who exceeded grace period
+  const AUTO_CLOCKOUT_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+  
+  async function runAutoClockout() {
+    try {
+      const { storage } = await import("./storage");
+      
+      // Get grace period from admin settings, default to 1 hour if not set
+      const graceSetting = await storage.getAdminSetting("auto_clockout_grace_hours");
+      const graceHours = graceSetting ? parseFloat(graceSetting.settingValue) : 1;
+      
+      const result = await storage.autoClockoutOrphanedShifts(graceHours);
+      
+      if (result.processed > 0) {
+        log(`Auto-clockout: Processed ${result.processed} orphaned shifts`);
+      }
+    } catch (error) {
+      console.error("Error running auto-clockout:", error);
+    }
+  }
+  
+  // Run immediately on startup
+  runAutoClockout();
+  
+  // Then run every hour
+  setInterval(runAutoClockout, AUTO_CLOCKOUT_INTERVAL);
+  log(`Auto-clockout job scheduled to run every ${AUTO_CLOCKOUT_INTERVAL / 1000 / 60} minutes`);
 })();

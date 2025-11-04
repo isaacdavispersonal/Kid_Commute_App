@@ -2,10 +2,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Car, Users, Route as RouteIcon, AlertTriangle, UserCircle, Clock } from "lucide-react";
+import { Car, Users, Route as RouteIcon, AlertTriangle, UserCircle, Clock, AlertCircle } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 interface AdminStats {
   activeVehicles: number;
@@ -62,6 +64,11 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/active-drivers"],
   });
 
+  const { data: anomalies, isLoading: anomaliesLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/timecard-anomalies"],
+    refetchInterval: 60000, // Refetch every minute
+  });
+
   if (statsLoading) {
     return <DashboardSkeleton />;
   }
@@ -76,6 +83,39 @@ export default function AdminDashboard() {
       </div>
 
       <IncompleteProfileBanner />
+
+      {/* Timecard Anomalies Alert */}
+      {!anomaliesLoading && anomalies && anomalies.length > 0 && (
+        <Alert variant="destructive" data-testid="alert-timecard-anomalies">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle className="flex items-center gap-2">
+            Timecard Anomalies Detected
+            <Badge variant="destructive">{anomalies.length}</Badge>
+          </AlertTitle>
+          <AlertDescription>
+            <div className="mt-2 space-y-2">
+              {anomalies.slice(0, 3).map((anomaly, idx) => (
+                <div key={idx} className="text-sm p-2 rounded bg-background/50">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{anomaly.driverName}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {anomaly.type === "MISSED_CLOCKOUT" && "Missed Clock Out"}
+                      {anomaly.type === "ORPHANED_BREAK" && "Orphaned Break"}
+                      {anomaly.type === "DOUBLE_CLOCKIN" && "Double Clock In"}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{anomaly.message}</p>
+                </div>
+              ))}
+              {anomalies.length > 3 && (
+                <p className="text-xs text-muted-foreground">
+                  And {anomalies.length - 3} more anomalies requiring attention
+                </p>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
@@ -191,7 +231,9 @@ export default function AdminDashboard() {
                           >
                             <div className="flex items-start justify-between gap-2 mb-1">
                               <p className="font-medium text-sm">{incident.title}</p>
-                              <StatusBadge status={incident.severity} />
+                              <Badge variant={incident.severity === "critical" ? "destructive" : "secondary"} className="text-xs">
+                                {incident.severity}
+                              </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground line-clamp-2">
                               {incident.description}
