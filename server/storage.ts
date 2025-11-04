@@ -1308,29 +1308,34 @@ export class DatabaseStorage implements IStorage {
       // Check for active clock-ins without clock-outs (missed clock-outs)
       const activeClockIn = await this.getActiveClockIn(driver.id);
       if (activeClockIn && activeClockIn.clockEvent) {
-        const clockInTime = new Date(activeClockIn.clockEvent.timestamp);
-        // If clock-in is more than 12 hours old, it's an anomaly
-        if (now.getTime() - clockInTime.getTime() > 12 * 60 * 60 * 1000) {
-          anomalies.push({
-            type: "MISSED_CLOCKOUT",
-            driverId: driver.id,
-            driverName: `${driver.firstName} ${driver.lastName}`,
-            clockEvent: activeClockIn.clockEvent,
-            shift: activeClockIn.shift,
-            message: `Driver has been clocked in for ${Math.floor((now.getTime() - clockInTime.getTime()) / (60 * 60 * 1000))} hours without clocking out`,
-          });
+        // Only report if not already resolved
+        if (activeClockIn.clockEvent.isResolved === false) {
+          const clockInTime = new Date(activeClockIn.clockEvent.timestamp);
+          // If clock-in is more than 12 hours old, it's an anomaly
+          if (now.getTime() - clockInTime.getTime() > 12 * 60 * 60 * 1000) {
+            anomalies.push({
+              type: "MISSED_CLOCKOUT",
+              driverId: driver.id,
+              driverName: `${driver.firstName} ${driver.lastName}`,
+              clockEventId: activeClockIn.clockEvent.id,
+              clockEvent: activeClockIn.clockEvent,
+              shift: activeClockIn.shift,
+              message: `Driver has been clocked in for ${Math.floor((now.getTime() - clockInTime.getTime()) / (60 * 60 * 1000))} hours without clocking out`,
+            });
+          }
         }
       }
 
       // Check for orphaned breaks (BREAK_START without BREAK_END)
       const activeBreak = await this.getActiveBreak(driver.id);
-      if (activeBreak) {
+      if (activeBreak && activeBreak.isResolved === false) {
         const breakStartTime = new Date(activeBreak.timestamp);
         if (now.getTime() - breakStartTime.getTime() > 4 * 60 * 60 * 1000) {
           anomalies.push({
             type: "ORPHANED_BREAK",
             driverId: driver.id,
             driverName: `${driver.firstName} ${driver.lastName}`,
+            clockEventId: activeBreak.id,
             clockEvent: activeBreak,
             message: `Driver has been on break for ${Math.floor((now.getTime() - breakStartTime.getTime()) / (60 * 60 * 1000))} hours`,
           });
@@ -1353,11 +1358,12 @@ export class DatabaseStorage implements IStorage {
       for (const event of recentEvents) {
         if (event.type === "IN") {
           consecutiveIns++;
-          if (consecutiveIns > 1) {
+          if (consecutiveIns > 1 && event.isResolved === false) {
             anomalies.push({
               type: "DOUBLE_CLOCKIN",
               driverId: driver.id,
               driverName: `${driver.firstName} ${driver.lastName}`,
+              clockEventId: event.id,
               clockEvent: event,
               message: `Multiple consecutive clock-ins detected`,
             });

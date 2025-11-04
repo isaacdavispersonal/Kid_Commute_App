@@ -1,13 +1,17 @@
 // Admin dashboard with fleet overview
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Car, Users, Route as RouteIcon, AlertTriangle, UserCircle, Clock, AlertCircle } from "lucide-react";
+import { Car, Users, Route as RouteIcon, AlertTriangle, UserCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface AdminStats {
   activeVehicles: number;
@@ -53,6 +57,7 @@ interface Incident {
 
 export default function AdminDashboard() {
   const today = new Date().toISOString().split('T')[0];
+  const { toast } = useToast();
 
   const { data: stats, isLoading: statsLoading } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
@@ -69,6 +74,29 @@ export default function AdminDashboard() {
   const { data: anomalies, isLoading: anomaliesLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/timecard-anomalies"],
     refetchInterval: 60000, // Refetch every minute
+  });
+
+  const resolveAnomalyMutation = useMutation({
+    mutationFn: async (clockEventId: string) => {
+      return await apiRequest(`/api/admin/clock-events/${clockEventId}/resolve`, {
+        method: "PATCH",
+        body: { notes: "Resolved from dashboard" }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/timecard-anomalies"] });
+      toast({
+        title: "Anomaly Resolved",
+        description: "The timecard anomaly has been marked as resolved.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to resolve anomaly. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const { data: attendanceOverview, isLoading: attendanceLoading } = useQuery<{
@@ -105,23 +133,44 @@ export default function AdminDashboard() {
       {!anomaliesLoading && anomalies && anomalies.length > 0 && (
         <Alert variant="destructive" data-testid="alert-timecard-anomalies">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle className="flex items-center gap-2">
-            Timecard Anomalies Detected
-            <Badge variant="destructive">{anomalies.length}</Badge>
+          <AlertTitle className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              Timecard Anomalies Detected
+              <Badge variant="destructive">{anomalies.length}</Badge>
+            </div>
+            <Link href="/admin/time-management">
+              <Button variant="outline" size="sm" className="gap-1" data-testid="button-view-all-anomalies">
+                View All
+                <ExternalLink className="h-3 w-3" />
+              </Button>
+            </Link>
           </AlertTitle>
           <AlertDescription>
             <div className="mt-2 space-y-2">
               {anomalies.slice(0, 3).map((anomaly, idx) => (
                 <div key={idx} className="text-sm p-2 rounded bg-background/50">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{anomaly.driverName}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {anomaly.type === "MISSED_CLOCKOUT" && "Missed Clock Out"}
-                      {anomaly.type === "ORPHANED_BREAK" && "Orphaned Break"}
-                      {anomaly.type === "DOUBLE_CLOCKIN" && "Double Clock In"}
-                    </Badge>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{anomaly.driverName}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {anomaly.type === "MISSED_CLOCKOUT" && "Missed Clock Out"}
+                          {anomaly.type === "ORPHANED_BREAK" && "Orphaned Break"}
+                          {anomaly.type === "DOUBLE_CLOCKIN" && "Double Clock In"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{anomaly.message}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => resolveAnomalyMutation.mutate(anomaly.clockEventId)}
+                      disabled={resolveAnomalyMutation.isPending}
+                      data-testid={`button-resolve-anomaly-${idx}`}
+                    >
+                      {resolveAnomalyMutation.isPending ? "Resolving..." : "Resolve"}
+                    </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">{anomaly.message}</p>
                 </div>
               ))}
               {anomalies.length > 3 && (
