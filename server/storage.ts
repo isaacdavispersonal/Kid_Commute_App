@@ -360,7 +360,7 @@ export class DatabaseStorage implements IStorage {
       await this.createAuditLog({
         userId: updatedUser.id,
         userRole: updatedUser.role,
-        action: "updated_profile",
+        action: "updated",
         entityType: "profile",
         entityId: updatedUser.id,
         description: `Updated profile information`,
@@ -1675,7 +1675,7 @@ export class DatabaseStorage implements IStorage {
       await this.createAuditLog({
         userId: reporter.id,
         userRole: reporter.role,
-        action: "reported_incident",
+        action: "created",
         entityType: "incident",
         entityId: newIncident.id,
         description: `Reported incident: ${newIncident.title}`,
@@ -2133,7 +2133,7 @@ export class DatabaseStorage implements IStorage {
         await this.createAuditLog({
           userId: markedBy.id,
           userRole: markedBy.role,
-          action: "marked_attendance",
+          action: "created",
           entityType: "attendance",
           entityId: result.id,
           description: `Marked ${student?.firstName} ${student?.lastName} as ${attendance.status} for ${attendance.date}`,

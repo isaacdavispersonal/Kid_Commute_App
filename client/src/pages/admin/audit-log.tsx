@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -26,6 +27,7 @@ import {
   CheckCircle,
   AlertCircle,
   Edit,
+  Search,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -51,6 +53,9 @@ interface AuditLog {
 export default function AdminAuditLogPage() {
   const [roleFilter, setRoleFilter] = useState<"all" | "driver" | "parent">("all");
   const [actionFilter, setActionFilter] = useState<"all" | string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   const { data: logs, isLoading } = useQuery<AuditLog[]>({
     queryKey: ["/api/admin/audit-logs"],
@@ -59,6 +64,29 @@ export default function AdminAuditLogPage() {
   const filteredLogs = logs?.filter((log) => {
     if (roleFilter !== "all" && log.userRole !== roleFilter) return false;
     if (actionFilter !== "all" && log.action !== actionFilter) return false;
+    
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesDescription = log.description.toLowerCase().includes(query);
+      const matchesUser = `${log.user.firstName} ${log.user.lastName}`.toLowerCase().includes(query);
+      const matchesEntity = log.entityType.toLowerCase().includes(query);
+      if (!matchesDescription && !matchesUser && !matchesEntity) return false;
+    }
+    
+    // Date range filter
+    if (startDate) {
+      const logDate = new Date(log.createdAt);
+      const start = new Date(startDate);
+      if (logDate < start) return false;
+    }
+    if (endDate) {
+      const logDate = new Date(log.createdAt);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Include the entire end date
+      if (logDate > end) return false;
+    }
+    
     return true;
   });
 
@@ -117,12 +145,24 @@ export default function AdminAuditLogPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              Activity Log ({filteredLogs?.length || 0})
-            </CardTitle>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Activity Log ({filteredLogs?.length || 0})
+              </CardTitle>
+            </div>
             <div className="flex gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search logs..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                  data-testid="input-search"
+                />
+              </div>
               <Select value={roleFilter} onValueChange={(v: any) => setRoleFilter(v)}>
                 <SelectTrigger className="w-[140px]" data-testid="select-role-filter">
                   <SelectValue placeholder="Filter by role" />
@@ -146,6 +186,22 @@ export default function AdminAuditLogPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <Input
+                type="date"
+                placeholder="From"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-[150px]"
+                data-testid="input-start-date"
+              />
+              <Input
+                type="date"
+                placeholder="To"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-[150px]"
+                data-testid="input-end-date"
+              />
             </div>
           </div>
         </CardHeader>
