@@ -4503,6 +4503,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notes: notes || null,
         });
         
+        // Broadcast WebSocket notification if parent updated attendance
+        // Only send route ID to notify drivers to refresh - don't leak student identity
+        if (user.role === "parent") {
+          const student = await storage.getStudent(studentId);
+          const wss = req.app.locals.wss;
+          if (wss && student?.assignedRouteId) {
+            const notification = {
+              type: "attendance_update",
+              routeId: student.assignedRouteId,
+              date,
+            };
+            wss.clients.forEach((client: any) => {
+              if (client.readyState === 1) {
+                client.send(JSON.stringify(notification));
+              }
+            });
+          }
+        }
+        
         res.json(attendance);
       } catch (error) {
         console.error("Error setting attendance:", error);
@@ -4564,6 +4583,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get attendance overview for a specific date (admin only)
+  app.get(
+    "/api/admin/attendance/overview/:date",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const date = req.params.date;
+        const overview = await storage.getAttendanceOverview(date);
+        res.json(overview);
+      } catch (error) {
+        console.error("Error fetching attendance overview:", error);
+        res.status(500).json({ message: "Failed to fetch attendance overview" });
+      }
+    }
+  );
+
+  // Get attendance analytics for date range (admin only)
+  app.get(
+    "/api/admin/attendance/analytics",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { startDate, endDate } = req.query;
+        if (!startDate || !endDate) {
+          return res.status(400).json({ message: "startDate and endDate are required" });
+        }
+        const analytics = await storage.getAttendanceAnalytics(startDate as string, endDate as string);
+        res.json(analytics);
+      } catch (error) {
+        console.error("Error fetching attendance analytics:", error);
+        res.status(500).json({ message: "Failed to fetch attendance analytics" });
+      }
+    }
+  );
+
+  // Get monthly attendance stats (admin only)
+  app.get(
+    "/api/admin/attendance/monthly-stats/:year/:month",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const year = parseInt(req.params.year);
+        const month = parseInt(req.params.month);
+        if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+          return res.status(400).json({ message: "Invalid year or month" });
+        }
+        const stats = await storage.getMonthlyAttendanceStats(year, month);
+        res.json(stats);
+      } catch (error) {
+        console.error("Error fetching monthly stats:", error);
+        res.status(500).json({ message: "Failed to fetch monthly stats" });
+      }
+    }
+  );
+
+  // Get student absence report for date range (admin only)
+  app.get(
+    "/api/admin/attendance/student-absences/:studentId",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { studentId } = req.params;
+        const { startDate, endDate } = req.query;
+        if (!startDate || !endDate) {
+          return res.status(400).json({ message: "startDate and endDate are required" });
+        }
+        const absences = await storage.getStudentAbsenceReport(studentId, startDate as string, endDate as string);
+        res.json(absences);
+      } catch (error) {
+        console.error("Error fetching student absences:", error);
+        res.status(500).json({ message: "Failed to fetch student absences" });
+      }
+    }
+  );
+
   // Create HTTP server
   const httpServer = createServer(app);
 
@@ -4584,8 +4682,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Store wss for broadcasting from routes
+  app.locals.wss = wss;
+
   return httpServer;
 }
-
-// Export wss for broadcasting
-let wss: WebSocketServer | null = null;

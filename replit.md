@@ -38,7 +38,13 @@ Preferred communication style: Simple, everyday language.
 - **Incident Management**: Drivers report incidents, which admins can review, filter, and resolve.
 - **Driver Assignment System**: Admins assign drivers to routes with specific vehicles and times. Updates to assignments cascade to future shifts.
 - **Parent Student Management**: Parents can edit children's information, including demographics, emergency contacts, medical notes, and guardian phone numbers.
-- **Student Attendance Tracking**: Allows marking students as riding or absent for single days or date ranges. Accessible by drivers (for assigned routes), parents (for their children), and admins.
+- **Student Attendance Tracking**: Comprehensive attendance system with three states (PENDING, riding, absent) for single days or date ranges. Features include:
+  - **Live Admin Overview**: Real-time dashboard widget showing pending, riding, and absent counts with percentages
+  - **Pending State**: Default state for students before driver marks attendance, ensuring visibility of unmarked students
+  - **Real-Time Notifications**: WebSocket notifications alert drivers when parents update attendance while en route
+  - **Attendance Analytics**: Monthly statistics and absence reports per student for payroll verification and route timing analysis
+  - **Phone-Based Authorization**: All attendance operations respect household linking via guardian phone numbers
+  - **Multi-Role Access**: Accessible by drivers (for assigned routes), parents (for their children), and admins (full system view)
 - **Parent Dashboard Tutorial**: A dismissible tutorial banner introduces key features for new parent users.
 - **Admin Audit Log**: Tracks all driver and parent actions (create, update, delete) with user context, entity type, description, and JSON change details, accessible via an admin UI with filtering.
 - **Route Progress Tracking**: Real-time tracking of driver route progress with parent visibility, showing completed/skipped stops and estimated arrival times.

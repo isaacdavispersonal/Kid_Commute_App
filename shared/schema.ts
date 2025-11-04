@@ -285,8 +285,8 @@ export type UpdateStudent = z.infer<typeof updateStudentSchema>;
 export type AdminUpdateStudent = z.infer<typeof adminUpdateStudentSchema>;
 export type Student = typeof students.$inferSelect;
 
-// Attendance status enum
-export const attendanceStatusEnum = pgEnum("attendance_status", ["riding", "absent"]);
+// Attendance status enum (for type safety only - stored as varchar in DB)
+export const attendanceStatusEnum = pgEnum("attendance_status", ["PENDING", "riding", "absent"]);
 
 // Student attendance table - Daily attendance tracking
 export const studentAttendance = pgTable("student_attendance", {
@@ -295,9 +295,8 @@ export const studentAttendance = pgTable("student_attendance", {
     .notNull()
     .references(() => students.id, { onDelete: "cascade" }),
   date: varchar("date").notNull(), // Format: YYYY-MM-DD
-  status: attendanceStatusEnum("status").notNull().default("riding"),
+  status: varchar("status").notNull().default("PENDING"), // PENDING | riding | absent
   markedByUserId: varchar("marked_by_user_id")
-    .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -308,6 +307,8 @@ export const insertStudentAttendanceSchema = createInsertSchema(studentAttendanc
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  status: z.enum(["PENDING", "riding", "absent"]),
 });
 
 export const updateStudentAttendanceSchema = createInsertSchema(studentAttendance).omit({
@@ -316,6 +317,8 @@ export const updateStudentAttendanceSchema = createInsertSchema(studentAttendanc
   date: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  status: z.enum(["PENDING", "riding", "absent"]).optional(),
 }).partial();
 
 export type InsertStudentAttendance = z.infer<typeof insertStudentAttendanceSchema>;

@@ -52,6 +52,8 @@ interface Incident {
 }
 
 export default function AdminDashboard() {
+  const today = new Date().toISOString().split('T')[0];
+
   const { data: stats, isLoading: statsLoading } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
   });
@@ -67,6 +69,21 @@ export default function AdminDashboard() {
   const { data: anomalies, isLoading: anomaliesLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/timecard-anomalies"],
     refetchInterval: 60000, // Refetch every minute
+  });
+
+  const { data: attendanceOverview, isLoading: attendanceLoading } = useQuery<{
+    pending: number;
+    riding: number;
+    absent: number;
+    total: number;
+  }>({
+    queryKey: ["/api/admin/attendance/overview", today],
+    queryFn: async () => {
+      const response = await fetch(`/api/admin/attendance/overview/${today}`);
+      if (!response.ok) throw new Error("Failed to fetch attendance overview");
+      return response.json();
+    },
+    refetchInterval: 30000, // Refetch every 30 seconds for live updates
   });
 
   if (statsLoading) {
@@ -143,6 +160,78 @@ export default function AdminDashboard() {
           iconColor="text-muted-foreground"
         />
       </div>
+
+      {/* Attendance Overview */}
+      <Card data-testid="card-attendance-overview">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <UserCircle className="h-5 w-5" />
+            Today's Attendance Overview
+            <Badge variant="outline" className="ml-auto text-xs">Live</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {attendanceLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full" />
+              ))}
+            </div>
+          ) : attendanceOverview ? (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="p-4 rounded-lg bg-accent/30 hover-elevate" data-testid="attendance-total">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm text-muted-foreground">Total Students</p>
+                  <p className="text-3xl font-bold">{attendanceOverview.total}</p>
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-yellow-500/10 hover-elevate" data-testid="attendance-pending">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm text-muted-foreground">Pending</p>
+                  <p className="text-3xl font-bold text-yellow-700 dark:text-yellow-400">
+                    {attendanceOverview.pending}
+                  </p>
+                  {attendanceOverview.total > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {Math.round((attendanceOverview.pending / attendanceOverview.total) * 100)}%
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-green-500/10 hover-elevate" data-testid="attendance-riding">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm text-muted-foreground">Riding</p>
+                  <p className="text-3xl font-bold text-green-700 dark:text-green-400">
+                    {attendanceOverview.riding}
+                  </p>
+                  {attendanceOverview.total > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {Math.round((attendanceOverview.riding / attendanceOverview.total) * 100)}%
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-red-500/10 hover-elevate" data-testid="attendance-absent">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm text-muted-foreground">Absent</p>
+                  <p className="text-3xl font-bold text-red-700 dark:text-red-400">
+                    {attendanceOverview.absent}
+                  </p>
+                  {attendanceOverview.total > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {Math.round((attendanceOverview.absent / attendanceOverview.total) * 100)}%
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No attendance data available for today
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card>

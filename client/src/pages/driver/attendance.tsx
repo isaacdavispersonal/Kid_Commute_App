@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, XCircle, Users } from "lucide-react";
+import { CheckCircle, XCircle, Users, Clock, Bell } from "lucide-react";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 type Student = {
   id: string;
@@ -13,7 +14,7 @@ type Student = {
   lastName: string;
   grade?: string;
   attendance?: {
-    status: "riding" | "absent";
+    status: "PENDING" | "riding" | "absent";
     markedByUserId: string;
     createdAt: string;
   } | null;
@@ -21,6 +22,7 @@ type Student = {
 
 export default function DriverAttendance() {
   const { toast } = useToast();
+  const { socket } = useWebSocket();
   const today = new Date().toISOString().split('T')[0];
 
   const { data: driverAssignments } = useQuery<any[]>({
@@ -88,9 +90,37 @@ export default function DriverAttendance() {
     );
   }
 
+  // Listen for WebSocket attendance updates from parents
+  useEffect(() => {
+    if (!socket || !currentRoute) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "attendance_update" && data.routeId === currentRoute.routeId && data.date === today) {
+          // Show toast notification (no student identity leaked from server)
+          toast({
+            title: "Attendance Updated",
+            description: "A parent updated attendance for a student on your route",
+          });
+          // Refresh the student list
+          queryClient.invalidateQueries({ queryKey: ["/api/driver/route-students"] });
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
+      }
+    };
+
+    socket.addEventListener("message", handleMessage);
+
+    return () => {
+      socket.removeEventListener("message", handleMessage);
+    };
+  }, [socket, currentRoute, toast]);
+
   const ridingCount = students.filter(s => s.attendance?.status === "riding").length;
   const absentCount = students.filter(s => s.attendance?.status === "absent").length;
-  const unmarkedCount = students.filter(s => !s.attendance).length;
+  const pendingCount = students.filter(s => !s.attendance || s.attendance.status === "PENDING").length;
 
   return (
     <div className="p-6 space-y-6">
@@ -124,11 +154,11 @@ export default function DriverAttendance() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Not Marked</CardTitle>
-            <Users className="w-4 h-4 text-gray-600" />
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <Clock className="w-4 h-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{unmarkedCount}</div>
+            <div className="text-2xl font-bold">{pendingCount}</div>
           </CardContent>
         </Card>
       </div>
@@ -170,7 +200,7 @@ export default function DriverAttendance() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {student.attendance ? (
+                    {student.attendance && student.attendance.status !== "PENDING" ? (
                       <>
                         <Badge
                           variant={student.attendance.status === "riding" ? "default" : "destructive"}

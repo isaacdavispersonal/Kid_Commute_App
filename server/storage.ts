@@ -235,6 +235,10 @@ export interface IStorage {
   updateStudentAttendance(id: string, updates: UpdateStudentAttendance): Promise<StudentAttendance>;
   getAttendanceForDate(date: string): Promise<any[]>;
   getStudentsByRouteForDate(routeId: string, date: string): Promise<any[]>;
+  getAttendanceOverview(date: string): Promise<{ pending: number; riding: number; absent: number; total: number }>;
+  getStudentAbsenceReport(studentId: string, startDate: string, endDate: string): Promise<any[]>;
+  getAttendanceAnalytics(startDate: string, endDate: string): Promise<any[]>;
+  getMonthlyAttendanceStats(year: number, month: number): Promise<any>;
 
   // Statistics
   getStats(): Promise<any>;
@@ -2458,6 +2462,148 @@ export class DatabaseStorage implements IStorage {
       ...student,
       attendance: attendanceMap.get(student.id) || null,
     }));
+  }
+
+  async getAttendanceOverview(date: string): Promise<{ pending: number; riding: number; absent: number; total: number }> {
+    // Get all active students
+    const allStudents = await db.select().from(students);
+    const total = allStudents.length;
+
+    // Get attendance records for this date
+    const records = await db
+      .select()
+      .from(studentAttendance)
+      .where(eq(studentAttendance.date, date));
+
+    const statusCounts = {
+      PENDING: 0,
+      riding: 0,
+      absent: 0,
+    };
+
+    // Count each status
+    records.forEach(record => {
+      if (record.status in statusCounts) {
+        statusCounts[record.status as keyof typeof statusCounts]++;
+      }
+    });
+
+    // Students without attendance records are considered PENDING
+    const pending = total - records.length + statusCounts.PENDING;
+
+    return {
+      pending,
+      riding: statusCounts.riding,
+      absent: statusCounts.absent,
+      total,
+    };
+  }
+
+  async getStudentAbsenceReport(studentId: string, startDate: string, endDate: string): Promise<any[]> {
+    const absences = await db
+      .select()
+      .from(studentAttendance)
+      .where(
+        and(
+          eq(studentAttendance.studentId, studentId),
+          eq(studentAttendance.status, "absent"),
+          gte(studentAttendance.date, startDate),
+          lte(studentAttendance.date, endDate)
+        )
+      )
+      .orderBy(studentAttendance.date);
+
+    return absences;
+  }
+
+  async getAttendanceAnalytics(startDate: string, endDate: string): Promise<any[]> {
+    // Get all attendance records in date range with student and route info
+    const records = await db
+      .select({
+        attendance: studentAttendance,
+        student: students,
+        route: routes,
+      })
+      .from(studentAttendance)
+      .leftJoin(students, eq(studentAttendance.studentId, students.id))
+      .leftJoin(routes, eq(students.assignedRouteId, routes.id))
+      .where(
+        and(
+          gte(studentAttendance.date, startDate),
+          lte(studentAttendance.date, endDate)
+        )
+      )
+      .orderBy(studentAttendance.date, students.lastName);
+
+    return records.map(r => ({
+      date: r.attendance.date,
+      status: r.attendance.status,
+      studentId: r.student?.id,
+      studentName: r.student ? `${r.student.firstName} ${r.student.lastName}` : 'Unknown',
+      routeId: r.route?.id,
+      routeName: r.route?.name,
+      notes: r.attendance.notes,
+    }));
+  }
+
+  async getMonthlyAttendanceStats(year: number, month: number): Promise<any> {
+    // Format start and end dates for the month
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    // Get all attendance records for this month
+    const records = await db
+      .select({
+        attendance: studentAttendance,
+        student: {
+          id: students.id,
+          firstName: students.firstName,
+          lastName: students.lastName,
+        },
+      })
+      .from(studentAttendance)
+      .leftJoin(students, eq(studentAttendance.studentId, students.id))
+      .where(
+        and(
+          gte(studentAttendance.date, startDate),
+          lte(studentAttendance.date, endDate)
+        )
+      );
+
+    // Group by student
+    const studentStats = new Map<string, any>();
+
+    records.forEach(r => {
+      if (!r.student) return;
+
+      const studentId = r.student.id;
+      if (!studentStats.has(studentId)) {
+        studentStats.set(studentId, {
+          studentId: r.student.id,
+          studentName: `${r.student.firstName} ${r.student.lastName}`,
+          pending: 0,
+          riding: 0,
+          absent: 0,
+          total: 0,
+        });
+      }
+
+      const stats = studentStats.get(studentId);
+      stats.total++;
+
+      if (r.attendance.status === "PENDING") stats.pending++;
+      else if (r.attendance.status === "riding") stats.riding++;
+      else if (r.attendance.status === "absent") stats.absent++;
+    });
+
+    return {
+      month,
+      year,
+      startDate,
+      endDate,
+      students: Array.from(studentStats.values()),
+    };
   }
 
   // ============ Audit Log Operations ============
