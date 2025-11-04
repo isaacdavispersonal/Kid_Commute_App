@@ -14,7 +14,8 @@ import {
   User,
   FileText,
   Megaphone,
-  Package
+  Package,
+  Activity
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -101,6 +102,11 @@ const adminMenuSections = [
         title: "Audit Log",
         url: "/admin/audit-log",
         icon: FileText,
+      },
+      {
+        title: "Route Health",
+        url: "/admin/route-health",
+        icon: Activity,
       },
     ],
   },

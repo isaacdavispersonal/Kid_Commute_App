@@ -36,6 +36,7 @@ import AdminTimeManagement from "@/pages/admin/time-management";
 import AdminIncidents from "@/pages/admin/incidents";
 import AdminAuditLog from "@/pages/admin/audit-log";
 import AdminDriverUtilities from "@/pages/admin/driver-utilities";
+import AdminRouteHealth from "@/pages/admin/route-health";
 
 import DriverDashboard from "@/pages/driver/dashboard";
 import DriverRoutes from "@/pages/driver/routes";
@@ -156,6 +157,7 @@ function Router() {
                   <Route path="/admin/incidents" component={AdminIncidents} />
                   <Route path="/admin/audit-log" component={AdminAuditLog} />
                   <Route path="/admin/driver-utilities" component={AdminDriverUtilities} />
+                  <Route path="/admin/route-health" component={AdminRouteHealth} />
                   <Route path="/admin/time-exceptions">
                     {() => {
                       window.location.href = "/admin/time-management";
