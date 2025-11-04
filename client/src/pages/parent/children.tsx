@@ -805,41 +805,6 @@ export default function ConnectChildrenPage() {
                         </div>
                       </div>
 
-                      {student.pickupStop && (
-                        <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
-                          <MapPin className="h-5 w-5 text-success mt-0.5" />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">Pickup</p>
-                            <p className="text-sm text-muted-foreground">
-                              {student.pickupStop.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {student.pickupStop.scheduledTime}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {student.dropoffStop && (
-                        <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
-                          <MapPin className="h-5 w-5 text-destructive mt-0.5" />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">Dropoff</p>
-                            <p className="text-sm text-muted-foreground">
-                              {student.dropoffStop.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {student.dropoffStop.scheduledTime}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      <RouteProgressSection 
-                        studentId={student.id} 
-                        pickupStopId={student.pickupStop?.id || null}
-                      />
-
                       <AttendanceSection student={student} />
                     </div>
                   ) : (
