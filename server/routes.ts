@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
 import { NotFoundError, ValidationError } from "./errors";
 import express from "express";
+import memoizee from "memoizee";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -117,7 +118,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get unread counts for current user
+  // Get unread counts for current user (with 3-second cache to reduce DB load)
+  const getUnreadCountsCached = memoizee(
+    async (userId: string, userRole: string) => {
+      const messageCount = await storage.getUnreadMessageCount(userId);
+      const messageCounts = await storage.getUnreadCountsBySender(userId);
+      let announcementCount = 0;
+      let notificationCount = 0;
+
+      if (userRole === "driver" || userRole === "parent") {
+        announcementCount = await storage.getUnreadAnnouncementCount(userId, userRole);
+      }
+
+      if (userRole === "driver") {
+        notificationCount = await storage.getUnreadDriverNotificationCount(userId);
+      }
+
+      return {
+        messages: messageCount,
+        announcements: announcementCount,
+        notifications: notificationCount,
+        messageBySender: messageCounts,
+      };
+    },
+    {
+      maxAge: 3000, // Cache for 3 seconds
+      promise: true,
+      primitive: true,
+    }
+  );
+
   app.get("/api/user/unread-counts", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -127,26 +157,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const messageCount = await storage.getUnreadMessageCount(userId);
-      const messageCounts = await storage.getUnreadCountsBySender(userId);
-      let announcementCount = 0;
-      let notificationCount = 0;
-
-      if (user.role === "driver" || user.role === "parent") {
-        announcementCount = await storage.getUnreadAnnouncementCount(userId, user.role);
-      }
-
-      // Get driver notification count for drivers only
-      if (user.role === "driver") {
-        notificationCount = await storage.getUnreadDriverNotificationCount(userId);
-      }
-
-      res.json({
-        messages: messageCount,
-        announcements: announcementCount,
-        notifications: notificationCount,
-        messageBySender: messageCounts,
-      });
+      const counts = await getUnreadCountsCached(userId, user.role);
+      res.json(counts);
     } catch (error) {
       console.error("Error fetching unread counts:", error);
       res.status(500).json({ message: "Failed to fetch unread counts" });

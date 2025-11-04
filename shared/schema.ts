@@ -421,12 +421,20 @@ export const insertShiftSchema = createInsertSchema(shifts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  plannedStart: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Time must be in HH:MM format"),
+  plannedEnd: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Time must be in HH:MM format"),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
 });
 
 export const updateShiftSchema = createInsertSchema(shifts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  plannedStart: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Time must be in HH:MM format").optional(),
+  plannedEnd: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Time must be in HH:MM format").optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format").optional(),
 }).partial();
 
 export type InsertShift = z.infer<typeof insertShiftSchema>;
@@ -465,6 +473,7 @@ export const clockEvents = pgTable(
   (table) => [
     index("idx_clock_events_driver_timestamp").on(table.driverId, table.timestamp),
     index("idx_clock_events_shift").on(table.shiftId),
+    index("idx_clock_events_is_resolved").on(table.isResolved),
   ]
 );
 
@@ -687,7 +696,10 @@ export const messages = pgTable("messages", {
   forwardedFromConversationId: varchar("forwarded_from_conversation_id"),
   forwardedByAdminId: varchar("forwarded_by_admin_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_messages_recipient_is_read").on(table.recipientId, table.isRead),
+  index("idx_messages_sender").on(table.senderId),
+]);
 
 export const insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
@@ -752,7 +764,10 @@ export const announcementReads = pgTable("announcement_reads", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_announcement_reads_user").on(table.userId),
+  index("idx_announcement_reads_announcement").on(table.announcementId),
+]);
 
 export const insertAnnouncementReadSchema = createInsertSchema(announcementReads).omit({
   id: true,

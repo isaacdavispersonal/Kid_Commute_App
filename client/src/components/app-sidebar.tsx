@@ -237,7 +237,7 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
     notifications: number;
   }>({
     queryKey: ["/api/user/unread-counts"],
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 15000, // Refresh every 15 seconds (reduced from 10s for better performance)
   });
 
   const totalUnread = (unreadCounts?.messages || 0) + (unreadCounts?.announcements || 0) + (unreadCounts?.notifications || 0);
