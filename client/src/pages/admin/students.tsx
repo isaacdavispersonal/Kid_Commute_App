@@ -630,36 +630,6 @@ export default function AdminStudentsPage() {
                       </p>
                     </div>
                   </div>
-                  
-                  {student.pickupStop && (
-                    <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
-                      <MapPin className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">Pickup</p>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {student.pickupStop.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {student.pickupStop.scheduledTime}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {student.dropoffStop && (
-                    <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
-                      <MapPin className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">Dropoff</p>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {student.dropoffStop.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {student.dropoffStop.scheduledTime}
-                        </p>
-                      </div>
-                    </div>
-                  )}
 
                   <AttendanceSection student={student} />
 
