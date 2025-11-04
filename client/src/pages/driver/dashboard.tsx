@@ -4,7 +4,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, MapPin, Users, LogIn, LogOut, Timer, Calendar, AlertCircle, Coffee, Play } from "lucide-react";
+import { Clock, MapPin, Users, LogIn, LogOut, Timer, Calendar, AlertCircle, Coffee, Play, MessageSquare } from "lucide-react";
+import { Link } from "wouter";
 import { StatusBadge } from "@/components/status-badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -627,6 +628,17 @@ export default function DriverDashboard() {
           </Card>
         )}
       </div>
+
+      {/* Quick Feedback Floating Action Button */}
+      <Link href="/driver/feedback">
+        <Button
+          size="icon"
+          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg hover:shadow-xl z-50"
+          data-testid="button-quick-feedback"
+        >
+          <MessageSquare className="h-6 w-6" />
+        </Button>
+      </Link>
     </div>
   );
 }
