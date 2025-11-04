@@ -545,6 +545,107 @@ export type InsertRouteProgress = z.infer<typeof insertRouteProgressSchema>;
 export type UpdateRouteProgress = z.infer<typeof updateRouteProgressSchema>;
 export type RouteProgress = typeof routeProgress.$inferSelect;
 
+// ============ Driver Utility Tables ============
+
+// Supplies requests table - drivers can request supplies from admin
+export const suppliesRequestStatusEnum = pgEnum("supplies_request_status", ["PENDING", "APPROVED", "ORDERED", "DELIVERED", "REJECTED"]);
+
+export const suppliesRequests = pgTable("supplies_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  itemName: varchar("item_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  urgency: varchar("urgency").notNull(), // LOW, MEDIUM, HIGH
+  reason: text("reason"),
+  status: suppliesRequestStatusEnum("status").notNull().default("PENDING"),
+  adminNotes: text("admin_notes"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertSuppliesRequestSchema = createInsertSchema(suppliesRequests).omit({
+  id: true,
+  status: true,
+  adminNotes: true,
+  approvedBy: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSuppliesRequest = z.infer<typeof insertSuppliesRequestSchema>;
+export type SuppliesRequest = typeof suppliesRequests.$inferSelect;
+
+// Vehicle checklists table - pre/post-trip inspections
+export const checklistTypeEnum = pgEnum("checklist_type", ["PRE_TRIP", "POST_TRIP"]);
+
+export const vehicleChecklists = pgTable("vehicle_checklists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  vehicleId: varchar("vehicle_id")
+    .notNull()
+    .references(() => vehicles.id, { onDelete: "cascade" }),
+  shiftId: varchar("shift_id").references(() => shifts.id, { onDelete: "cascade" }),
+  checklistType: checklistTypeEnum("checklist_type").notNull(),
+  // Checklist items (true = OK, false = issue found)
+  tiresOk: boolean("tires_ok").notNull(),
+  lightsOk: boolean("lights_ok").notNull(),
+  brakesOk: boolean("brakes_ok").notNull(),
+  fluidLevelsOk: boolean("fluid_levels_ok").notNull(),
+  interiorCleanOk: boolean("interior_clean_ok").notNull(),
+  emergencyEquipmentOk: boolean("emergency_equipment_ok").notNull(),
+  mirrorsOk: boolean("mirrors_ok").notNull(),
+  seatsOk: boolean("seats_ok").notNull(),
+  // Optional fields
+  odometerReading: integer("odometer_reading"),
+  fuelLevel: varchar("fuel_level"), // EMPTY, QUARTER, HALF, THREE_QUARTER, FULL
+  issues: text("issues"), // Description of any issues found
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertVehicleChecklistSchema = createInsertSchema(vehicleChecklists).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertVehicleChecklist = z.infer<typeof insertVehicleChecklistSchema>;
+export type VehicleChecklist = typeof vehicleChecklists.$inferSelect;
+
+// Driver feedback table - drivers can provide feedback and suggestions
+export const feedbackCategoryEnum = pgEnum("feedback_category", ["UI_ISSUE", "FEATURE_REQUEST", "BUG_REPORT", "GENERAL"]);
+export const feedbackStatusEnum = pgEnum("feedback_status", ["NEW", "REVIEWING", "PLANNED", "COMPLETED", "DISMISSED"]);
+
+export const driverFeedback = pgTable("driver_feedback", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  category: feedbackCategoryEnum("category").notNull(),
+  subject: varchar("subject").notNull(),
+  description: text("description").notNull(),
+  status: feedbackStatusEnum("status").notNull().default("NEW"),
+  adminResponse: text("admin_response"),
+  respondedBy: varchar("responded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertDriverFeedbackSchema = createInsertSchema(driverFeedback).omit({
+  id: true,
+  status: true,
+  adminResponse: true,
+  respondedBy: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertDriverFeedback = z.infer<typeof insertDriverFeedbackSchema>;
+export type DriverFeedback = typeof driverFeedback.$inferSelect;
+
 // ============ Time Tracking Tables ============
 
 // Time entries table (clock in/out) - DEPRECATED in favor of shifts + clockEvents
