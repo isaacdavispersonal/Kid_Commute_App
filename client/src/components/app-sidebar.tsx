@@ -12,7 +12,9 @@ import {
   ClipboardCheck,
   Shield,
   User,
-  FileText
+  FileText,
+  Megaphone,
+  Package
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -99,46 +101,91 @@ const adminMenuSections = [
   },
 ];
 
-const driverMenuItems = [
+const driverMenuSections = [
   {
-    title: "Dashboard",
-    url: "/driver",
-    icon: LayoutDashboard,
+    label: "Dashboard",
+    items: [
+      {
+        title: "Dashboard",
+        url: "/driver",
+        icon: LayoutDashboard,
+      },
+    ],
   },
   {
-    title: "My Routes",
-    url: "/driver/routes",
-    icon: RouteIcon,
+    label: "Routes & Schedule",
+    items: [
+      {
+        title: "My Routes",
+        url: "/driver/routes",
+        icon: RouteIcon,
+      },
+      {
+        title: "My Schedule",
+        url: "/driver/schedule",
+        icon: Calendar,
+      },
+      {
+        title: "Attendance",
+        url: "/driver/attendance",
+        icon: ClipboardCheck,
+      },
+    ],
   },
   {
-    title: "My Schedule",
-    url: "/driver/schedule",
-    icon: Calendar,
+    label: "Time & Communication",
+    items: [
+      {
+        title: "Time History",
+        url: "/driver/time-history",
+        icon: Clock,
+      },
+      {
+        title: "Messages",
+        url: "/driver/messages",
+        icon: MessageSquare,
+      },
+      {
+        title: "Announcements",
+        url: "/driver/announcements",
+        icon: Megaphone,
+      },
+    ],
   },
   {
-    title: "Attendance",
-    url: "/driver/attendance",
-    icon: ClipboardCheck,
+    label: "Utilities",
+    items: [
+      {
+        title: "Vehicle Checklist",
+        url: "/driver/checklist",
+        icon: ClipboardCheck,
+      },
+      {
+        title: "Supplies Request",
+        url: "/driver/supplies",
+        icon: Package,
+      },
+      {
+        title: "Send Feedback",
+        url: "/driver/feedback",
+        icon: MessageSquare,
+      },
+    ],
   },
   {
-    title: "Time History",
-    url: "/driver/time-history",
-    icon: Clock,
-  },
-  {
-    title: "Messages",
-    url: "/driver/messages",
-    icon: MessageSquare,
-  },
-  {
-    title: "Vehicle Check",
-    url: "/driver/inspection",
-    icon: ClipboardCheck,
-  },
-  {
-    title: "Report Incident",
-    url: "/driver/incident",
-    icon: AlertTriangle,
+    label: "Reports",
+    items: [
+      {
+        title: "Vehicle Check",
+        url: "/driver/inspection",
+        icon: ClipboardCheck,
+      },
+      {
+        title: "Report Incident",
+        url: "/driver/incident",
+        icon: AlertTriangle,
+      },
+    ],
   },
 ];
 
@@ -222,7 +269,7 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
             Kid Connect
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            {userRole === "admin" ? (
+            {userRole === "admin" && (
               <>
                 {adminMenuSections.map((section, sectionIndex) => (
                   <div key={sectionIndex}>
@@ -235,9 +282,29 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
                   </div>
                 ))}
               </>
-            ) : (
+            )}
+            {userRole === "driver" && (
+              <>
+                {driverMenuSections.map((section, sectionIndex) => (
+                  <div key={sectionIndex}>
+                    {section.label && sectionIndex > 0 && (
+                      <SidebarGroupLabel className="mt-4 mb-2 text-xs font-medium text-muted-foreground px-2">
+                        {section.label}
+                      </SidebarGroupLabel>
+                    )}
+                    <SidebarMenu>
+                      {section.items.map(renderMenuItem)}
+                    </SidebarMenu>
+                    {sectionIndex < driverMenuSections.length - 1 && sectionIndex === 0 && (
+                      <SidebarSeparator className="my-2" />
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
+            {userRole === "parent" && (
               <SidebarMenu>
-                {(userRole === "driver" ? driverMenuItems : parentMenuItems).map(renderMenuItem)}
+                {parentMenuItems.map(renderMenuItem)}
               </SidebarMenu>
             )}
           </SidebarGroupContent>
