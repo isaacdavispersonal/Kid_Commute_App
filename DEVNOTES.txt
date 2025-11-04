@@ -33,6 +33,12 @@
 
       Tie conversation to route and not to drivers
 
+      Message blast to specific routes
+
+      Some kind of route tracking to mark their stops, 
+
+      stop system to know how many stops away a kid is from a parent
+
 
     ADMIN DASH
       

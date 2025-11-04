@@ -721,6 +721,52 @@ export const insertIncidentSchema = createInsertSchema(incidents).omit({
 export type InsertIncident = z.infer<typeof insertIncidentSchema>;
 export type Incident = typeof incidents.$inferSelect;
 
+// ============ Audit Log Tables ============
+
+// Audit log action enum - tracks types of actions logged
+export const auditActionEnum = pgEnum("audit_action", [
+  "created",
+  "updated",
+  "deleted",
+  "marked_attendance",
+  "reported_incident",
+  "updated_profile",
+  "changed_phone",
+  "updated_student",
+]);
+
+// Audit log entity enum - tracks what type of entity was affected
+export const auditEntityEnum = pgEnum("audit_entity", [
+  "student",
+  "attendance",
+  "incident",
+  "profile",
+  "user",
+]);
+
+// Audit logs table - tracks all user changes for admin review
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  userRole: userRoleEnum("user_role").notNull(),
+  action: auditActionEnum("action").notNull(),
+  entityType: auditEntityEnum("entity_type").notNull(),
+  entityId: varchar("entity_id"),
+  description: text("description").notNull(),
+  changes: jsonb("changes"), // Stores before/after values or additional details
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+
 // ============ Vehicle Inspection Tables ============
 
 // Vehicle inspections table
