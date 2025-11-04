@@ -111,6 +111,8 @@ export default function AdminRoutes() {
     defaultValues: {
       name: "",
       address: "",
+      latitude: null,
+      longitude: null,
     },
   });
 
@@ -119,6 +121,8 @@ export default function AdminRoutes() {
     defaultValues: {
       name: "",
       address: "",
+      latitude: null,
+      longitude: null,
     },
   });
 
@@ -371,6 +375,8 @@ export default function AdminRoutes() {
     editStopForm.reset({
       name: stop.name,
       address: stop.address,
+      latitude: stop.latitude ?? null,
+      longitude: stop.longitude ?? null,
     });
     setIsEditStopDialogOpen(true);
   };
@@ -733,6 +739,56 @@ export default function AdminRoutes() {
                       )}
                     />
 
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={createStopForm.control}
+                        name="latitude"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Latitude (Optional)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="any"
+                                placeholder="e.g., 40.7128"
+                                data-testid="input-stop-latitude"
+                                {...field}
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={createStopForm.control}
+                        name="longitude"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Longitude (Optional)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="any"
+                                placeholder="e.g., -74.0060"
+                                data-testid="input-stop-longitude"
+                                {...field}
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      GPS coordinates are optional and reserved for future vehicle tracking integration
+                    </p>
+
                     <div className="flex justify-end gap-2 pt-4">
                       <Button
                         type="button"
@@ -1042,6 +1098,56 @@ export default function AdminRoutes() {
                   </FormItem>
                 )}
               />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editStopForm.control}
+                  name="latitude"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Latitude (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="any"
+                          placeholder="e.g., 40.7128"
+                          data-testid="input-edit-stop-latitude"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={editStopForm.control}
+                  name="longitude"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Longitude (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="any"
+                          placeholder="e.g., -74.0060"
+                          data-testid="input-edit-stop-longitude"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                GPS coordinates are optional and reserved for future vehicle tracking integration
+              </p>
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button
