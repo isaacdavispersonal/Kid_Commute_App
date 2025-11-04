@@ -3239,11 +3239,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const route = await storage.getRoute(student.assignedRouteId);
               routeName = route?.name || null;
 
-              // Get current driver assignment for this route
+              // Get current driver assignment for this route (assignments are ongoing, not date-specific)
               const assignments = await storage.getDriverAssignmentsByRoute(student.assignedRouteId);
-              const todayAssignment = assignments.find(a => a.startTime <= today && a.endTime >= today);
-              if (todayAssignment) {
-                const driver = await storage.getUser(todayAssignment.driverId);
+              const activeAssignment = assignments.find(a => a.isActive !== false);
+              if (activeAssignment) {
+                const driver = await storage.getUser(activeAssignment.driverId);
                 if (driver) {
                   driverId = driver.id;
                   driverName = `${driver.firstName} ${driver.lastName}`;
@@ -4845,7 +4845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Query session from database using raw SQL
           const sessionResult = await db.execute(
-            sql`SELECT sess FROM session WHERE sid = ${unsignedSessionId}`
+            sql`SELECT sess FROM sessions WHERE sid = ${unsignedSessionId}`
           );
           
           if (sessionResult.rows.length > 0) {

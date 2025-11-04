@@ -143,6 +143,7 @@ export interface IStorage {
   getAllDriverAssignments(): Promise<DriverAssignment[]>;
   getDriverAssignment(id: string): Promise<DriverAssignment | undefined>;
   getDriverAssignmentsByDriver(driverId: string): Promise<DriverAssignment[]>;
+  getDriverAssignmentsByRoute(routeId: string): Promise<DriverAssignment[]>;
   getDriverAssignmentForToday(driverId: string): Promise<DriverAssignment | undefined>;
   createDriverAssignment(assignment: InsertDriverAssignment): Promise<DriverAssignment>;
   updateDriverAssignment(id: string, updates: Partial<InsertDriverAssignment>): Promise<DriverAssignment>;
@@ -790,6 +791,14 @@ export class DatabaseStorage implements IStorage {
       .orderBy(driverAssignments.createdAt);
   }
 
+  async getDriverAssignmentsByRoute(routeId: string): Promise<DriverAssignment[]> {
+    return await db
+      .select()
+      .from(driverAssignments)
+      .where(eq(driverAssignments.routeId, routeId))
+      .orderBy(driverAssignments.createdAt);
+  }
+
   async getDriverAssignmentForToday(driverId: string): Promise<DriverAssignment | undefined> {
     // With the new schema, driver assignments are general - they don't have specific dates
     // Return the first assignment for the driver
@@ -1196,6 +1205,13 @@ export class DatabaseStorage implements IStorage {
 
       // Calculate shift end time + grace period
       const shiftEndDateTime = new Date(`${shift.date}T${shift.plannedEnd}`);
+      
+      // Validate the date is valid before proceeding
+      if (isNaN(shiftEndDateTime.getTime())) {
+        console.warn(`Invalid shift end time for shift ${shift.id}: ${shift.date}T${shift.plannedEnd}`);
+        continue;
+      }
+      
       const graceEndTime = new Date(shiftEndDateTime.getTime() + graceHours * 60 * 60 * 1000);
 
       // Only auto-clockout if grace period has passed
