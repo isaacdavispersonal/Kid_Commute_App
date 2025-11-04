@@ -204,6 +204,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get route health overview
+  app.get(
+    "/api/admin/route-health",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const routes = await storage.getAllRoutes();
+        const today = new Date().toISOString().split('T')[0];
+        
+        const routeHealth = await Promise.all(
+          routes.map(async (route) => {
+            // Get assigned driver for today
+            const assignments = await storage.getDriverAssignmentsByRoute(route.id);
+            const todayAssignment = assignments.find(a => a.startTime <= today && a.endTime >= today);
+            let assignedDriver = null;
+            if (todayAssignment) {
+              assignedDriver = await storage.getUser(todayAssignment.driverId);
+            }
+
+            // Get student count
+            const students = await storage.getStudentsByRoute(route.id);
+            
+            // Get unresolved incidents
+            const incidents = await storage.getIncidentsByRoute(route.id);
+            const unresolvedIncidents = incidents.filter(i => i.status === "REPORTED").length;
+
+            // Determine driver status
+            let driverStatus = "NOT_STARTED";
+            if (!assignedDriver) {
+              driverStatus = "NO_DRIVER";
+            } else {
+              // Check if driver has active shift today
+              const shifts = await storage.getShiftsByDate(today, today);
+              const driverShift = shifts.find(s => s.driverId === assignedDriver.id && s.routeId === route.id);
+              if (driverShift) {
+                driverStatus = driverShift.status === "ACTIVE" ? "ON_TIME" : "NOT_STARTED";
+              }
+            }
+
+            return {
+              routeId: route.id,
+              routeName: route.name,
+              isActive: route.isActive,
+              assignedDriver: assignedDriver ? {
+                id: assignedDriver.id,
+                firstName: assignedDriver.firstName,
+                lastName: assignedDriver.lastName,
+              } : null,
+              driverStatus,
+              studentCount: students.length,
+              unresolvedIncidents,
+              lastActivity: null, // Could be enhanced to track last GPS update or shift activity
+            };
+          })
+        );
+
+        res.json(routeHealth);
+      } catch (error) {
+        console.error("Error fetching route health:", error);
+        res.status(500).json({ message: "Failed to fetch route health" });
+      }
+    }
+  );
+
   // Get active drivers
   app.get(
     "/api/admin/active-drivers",
@@ -4168,6 +4233,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error creating announcement:", error);
         res.status(500).json({ message: "Failed to create announcement" });
+      }
+    }
+  );
+
+  // Admin: Create route-specific announcement
+  app.post(
+    "/api/admin/route-announcements",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const adminId = req.user.claims.sub;
+        const { routeId, title, content } = req.body;
+
+        if (!routeId || !title || !content) {
+          return res.status(400).json({ message: "Route ID, title, and content are required" });
+        }
+
+        // Create route announcement (will be visible to all parents on this route)
+        const announcement = await storage.createRouteAnnouncement({
+          routeId,
+          driverId: adminId, // Use admin ID as driverId for admin-created announcements
+          title,
+          content,
+        });
+
+        res.json(announcement);
+      } catch (error) {
+        console.error("Error creating route announcement:", error);
+        res.status(500).json({ message: "Failed to create route announcement" });
       }
     }
   );

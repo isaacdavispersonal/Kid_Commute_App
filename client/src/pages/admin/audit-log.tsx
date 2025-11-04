@@ -28,6 +28,9 @@ import {
   AlertCircle,
   Edit,
   Search,
+  Clock,
+  MessageSquare,
+  UserCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -56,12 +59,33 @@ export default function AdminAuditLogPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [quickFilter, setQuickFilter] = useState<"all" | "time_exceptions" | "attendance" | "messages">("all");
 
   const { data: logs, isLoading } = useQuery<AuditLog[]>({
     queryKey: ["/api/admin/audit-logs"],
   });
 
   const filteredLogs = logs?.filter((log) => {
+    // Quick filters
+    if (quickFilter === "time_exceptions") {
+      const timeRelated = log.entityType === "shift" || log.entityType === "clock_event" || 
+                          log.action === "clocked_in" || log.action === "clocked_out" ||
+                          log.description.toLowerCase().includes("clock") ||
+                          log.description.toLowerCase().includes("shift") ||
+                          log.description.toLowerCase().includes("time");
+      if (!timeRelated) return false;
+    } else if (quickFilter === "attendance") {
+      const attendanceRelated = log.action === "marked_attendance" ||
+                                log.entityType === "attendance" ||
+                                log.description.toLowerCase().includes("attendance");
+      if (!attendanceRelated) return false;
+    } else if (quickFilter === "messages") {
+      const messageRelated = log.entityType === "message" ||
+                             log.action === "sent_message" ||
+                             log.description.toLowerCase().includes("message");
+      if (!messageRelated) return false;
+    }
+    
     if (roleFilter !== "all" && log.userRole !== roleFilter) return false;
     if (actionFilter !== "all" && log.action !== actionFilter) return false;
     
@@ -152,6 +176,45 @@ export default function AdminAuditLogPage() {
                 Activity Log ({filteredLogs?.length || 0})
               </CardTitle>
             </div>
+            
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant={quickFilter === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setQuickFilter("all")}
+                data-testid="button-filter-all"
+              >
+                All Logs
+              </Button>
+              <Button
+                variant={quickFilter === "time_exceptions" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setQuickFilter("time_exceptions")}
+                data-testid="button-filter-time"
+              >
+                <Clock className="w-4 h-4 mr-1" />
+                Time Exceptions
+              </Button>
+              <Button
+                variant={quickFilter === "attendance" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setQuickFilter("attendance")}
+                data-testid="button-filter-attendance"
+              >
+                <UserCheck className="w-4 h-4 mr-1" />
+                Attendance Updates
+              </Button>
+              <Button
+                variant={quickFilter === "messages" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setQuickFilter("messages")}
+                data-testid="button-filter-messages"
+              >
+                <MessageSquare className="w-4 h-4 mr-1" />
+                Route Messages
+              </Button>
+            </div>
+            
             <div className="flex gap-2 flex-wrap">
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
