@@ -1,5 +1,6 @@
 // WebSocket hook for real-time messaging - Reference: WebSocket blueprint
 import { useEffect, useRef, useState } from "react";
+import { getWebSocketUrl } from "@/lib/config";
 
 export function useWebSocket() {
   const socketRef = useRef<WebSocket | null>(null);
@@ -7,8 +8,7 @@ export function useWebSocket() {
 
   useEffect(() => {
     // Connect to WebSocket server
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const wsUrl = getWebSocketUrl();
 
     try {
       const socket = new WebSocket(wsUrl);
