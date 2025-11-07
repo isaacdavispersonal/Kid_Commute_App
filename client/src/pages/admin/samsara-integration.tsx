@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Check, Loader2, Link2, AlertCircle, CheckCircle2, Activity, RefreshCw } from "lucide-react";
+import { Copy, Check, Loader2, AlertCircle, CheckCircle2, Activity, RefreshCw } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -46,9 +46,7 @@ export default function AdminSamsaraIntegration() {
 
   const syncVehiclesMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/api/admin/samsara/sync-vehicles", {
-        method: "POST",
-      });
+      const response = await apiRequest("POST", "/api/admin/samsara/sync-vehicles");
       const data: SyncResults = await response.json();
       return data;
     },
@@ -108,9 +106,9 @@ export default function AdminSamsaraIntegration() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Samsara Integration</h1>
+        <h1 className="text-3xl font-bold">Samsara Fleet Integration</h1>
         <p className="text-muted-foreground mt-2">
-          Connect your Samsara fleet tracking to receive real-time vehicle locations
+          Two-part integration: Real-time GPS tracking for parent ETAs, and automatic vehicle fleet sync
         </p>
       </div>
 
@@ -123,10 +121,10 @@ export default function AdminSamsaraIntegration() {
         <Alert className={isFullyConfigured ? "border-primary/50 bg-primary/5" : "border-yellow-500/50 bg-yellow-500/5"}>
           <Activity className={`h-4 w-4 ${isFullyConfigured ? "text-primary" : "text-yellow-600"}`} />
           <AlertTitle className={isFullyConfigured ? "text-primary" : "text-yellow-600"}>
-            Integration Status
+            {isFullyConfigured ? "✓ Integration Active" : "Setup Required"}
           </AlertTitle>
           <AlertDescription>
-            <div className="grid grid-cols-2 gap-4 mt-2">
+            <div className="space-y-2 mt-2">
               <div className="flex items-center gap-2">
                 {status?.webhookConfigured ? (
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -134,7 +132,7 @@ export default function AdminSamsaraIntegration() {
                   <AlertCircle className="h-4 w-4 text-yellow-600" />
                 )}
                 <span className="text-sm">
-                  Webhook Secret: {status?.webhookConfigured ? "Configured" : "Not Set"}
+                  <strong>Real-Time GPS:</strong> {status?.webhookConfigured ? "Connected - Parents receiving live ETAs" : "Not configured - No live tracking"}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -144,7 +142,7 @@ export default function AdminSamsaraIntegration() {
                   <AlertCircle className="h-4 w-4 text-yellow-600" />
                 )}
                 <span className="text-sm">
-                  API Token: {status?.apiTokenConfigured ? "Configured" : "Not Set"}
+                  <strong>Vehicle Sync:</strong> {status?.apiTokenConfigured ? "Ready to sync fleet" : "API token required"}
                 </span>
               </div>
             </div>
@@ -155,11 +153,11 @@ export default function AdminSamsaraIntegration() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Link2 className="h-5 w-5" />
-            Webhook Configuration
+            <Activity className="h-5 w-5" />
+            Real-Time GPS Tracking
           </CardTitle>
           <CardDescription>
-            Configure Samsara to send vehicle location updates to FleetTrack
+            Enable live parent ETAs like "Your child will be picked up in 8 minutes"
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -223,10 +221,10 @@ export default function AdminSamsaraIntegration() {
 
           <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Important</AlertTitle>
+            <AlertTitle>Why Webhooks?</AlertTitle>
             <AlertDescription>
-              Webhooks are more efficient than API polling (66-100× faster) and provide instant real-time updates.
-              Once configured, parent ETAs will update automatically when vehicles are on routes.
+              Webhooks push location updates instantly (66-100× faster than polling). Parents see live ETAs like "8 minutes away" 
+              with no delays. Without webhooks, there's no real-time tracking.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -236,9 +234,12 @@ export default function AdminSamsaraIntegration() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Vehicle Mappings</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <RefreshCw className="h-5 w-5" />
+                Vehicle Fleet Sync
+              </CardTitle>
               <CardDescription>
-                FleetTrack vehicles linked to Samsara fleet
+                Add vehicles to FleetTrack when you install GPS in new vans
               </CardDescription>
             </div>
             <Button
@@ -254,13 +255,22 @@ export default function AdminSamsaraIntegration() {
               ) : (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  Sync from Samsara
+                  Sync Vehicles
                 </>
               )}
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
+          <Alert>
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertTitle>How It Works</AlertTitle>
+            <AlertDescription>
+              Click "Sync Vehicles" to pull your complete Samsara fleet into FleetTrack. New vehicles are created automatically 
+              with their name, license plate, and GPS tracking enabled. Use this whenever you add new vans to your Samsara account.
+            </AlertDescription>
+          </Alert>
+          
           {syncResults && (
             <div className="space-y-3" data-testid="sync-results">
               {syncResults.created.length > 0 && (
@@ -317,50 +327,53 @@ export default function AdminSamsaraIntegration() {
             </div>
           )}
           
-          {vehiclesLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : vehicles && vehicles.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Vehicle Name</TableHead>
-                  <TableHead>License Plate</TableHead>
-                  <TableHead>Samsara Status</TableHead>
-                  <TableHead>Last Sync</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {vehicles.map((vehicle) => (
-                  <TableRow key={vehicle.id} data-testid={`row-vehicle-${vehicle.id}`}>
-                    <TableCell className="font-medium">{vehicle.name}</TableCell>
-                    <TableCell>{vehicle.plateNumber}</TableCell>
-                    <TableCell>
-                      {vehicle.samsaraVehicleId ? (
-                        <Badge variant="default" data-testid={`badge-linked-${vehicle.id}`}>
-                          Linked
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" data-testid={`badge-not-linked-${vehicle.id}`}>
-                          Not Linked
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {vehicle.samsaraLastSync
-                        ? new Date(vehicle.samsaraLastSync).toLocaleString()
-                        : "Never"}
-                    </TableCell>
+          <div>
+            <h3 className="font-semibold mb-3">Current Fleet Status</h3>
+            {vehiclesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : vehicles && vehicles.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Vehicle</TableHead>
+                    <TableHead>Plate</TableHead>
+                    <TableHead>GPS Tracking</TableHead>
+                    <TableHead>Last Synced</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No vehicles found
-            </div>
-          )}
+                </TableHeader>
+                <TableBody>
+                  {vehicles.map((vehicle) => (
+                    <TableRow key={vehicle.id} data-testid={`row-vehicle-${vehicle.id}`}>
+                      <TableCell className="font-medium">{vehicle.name}</TableCell>
+                      <TableCell>{vehicle.plateNumber}</TableCell>
+                      <TableCell>
+                        {vehicle.samsaraVehicleId ? (
+                          <Badge variant="default" data-testid={`badge-linked-${vehicle.id}`}>
+                            ✓ Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" data-testid={`badge-not-linked-${vehicle.id}`}>
+                            Not Synced
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {vehicle.samsaraLastSync
+                          ? new Date(vehicle.samsaraLastSync).toLocaleString()
+                          : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                No vehicles found. Click "Sync Vehicles" to import your Samsara fleet.
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
