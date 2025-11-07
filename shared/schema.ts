@@ -94,6 +94,8 @@ export const vehicles = pgTable("vehicles", {
   currentLat: decimal("current_lat", { precision: 10, scale: 7 }),
   currentLng: decimal("current_lng", { precision: 10, scale: 7 }),
   lastLocationUpdate: timestamp("last_location_update"),
+  samsaraVehicleId: varchar("samsara_vehicle_id").unique(),
+  samsaraLastSync: timestamp("samsara_last_sync"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
