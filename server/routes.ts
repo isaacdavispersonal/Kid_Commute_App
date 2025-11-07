@@ -332,6 +332,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get GPS webhook configuration status
+  app.get(
+    "/api/admin/gps-webhook-status",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const hasSecret = !!process.env.GPS_WEBHOOK_SECRET;
+        res.json({ 
+          configured: hasSecret,
+          webhookUrl: `${req.protocol}://${req.get('host')}/api/vehicles/gps-update`
+        });
+      } catch (error) {
+        console.error("Error fetching GPS webhook status:", error);
+        res.status(500).json({ message: "Failed to fetch GPS webhook status" });
+      }
+    }
+  );
+
   // Get route health overview
   app.get(
     "/api/admin/route-health",

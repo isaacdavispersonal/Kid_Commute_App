@@ -15,7 +15,8 @@ import {
   FileText,
   Megaphone,
   Package,
-  Activity
+  Activity,
+  Navigation
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -107,6 +108,11 @@ const adminMenuSections = [
         title: "Route Health",
         url: "/admin/route-health",
         icon: Activity,
+      },
+      {
+        title: "GPS Settings",
+        url: "/admin/gps-settings",
+        icon: Navigation,
       },
     ],
   },
