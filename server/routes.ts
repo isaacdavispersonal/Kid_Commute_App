@@ -218,13 +218,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ============ GPS/Vehicle Tracking (No Auth - External Webhook) ============
+  // ============ GPS/Vehicle Tracking (No Auth - External Webhooks) ============
 
-  // Webhook endpoint for GPS updates from navigation software
+  // Import and mount Samsara webhook router
+  const samsaraWebhookRouter = (await import("./samsara-webhook")).default;
+  app.use("/api/webhooks", samsaraWebhookRouter);
+
+  // Generic webhook endpoint for GPS updates from navigation software (Google Maps, Waze, etc.)
   app.post("/api/vehicles/gps-update", verifyWebhookToken, async (req: any, res) => {
     try {
-      const { gpsUpdateSchema, vehicles } = await import("@shared/schema");
-      const { eq } = await import("drizzle-orm");
+      const { gpsUpdateSchema } = await import("@shared/schema");
+      const { gpsIngestionPipeline } = await import("./gps-pipeline");
+      const { CanonicalGPSUpdate } = await import("./gps-pipeline");
       
       // Validate GPS data
       const result = gpsUpdateSchema.safeParse(req.body);
@@ -237,40 +242,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const gpsData = result.data;
       
-      // Find vehicle by ID or plate number
-      let vehicle;
-      if (gpsData.vehicle_id) {
-        vehicle = await storage.getVehicle(gpsData.vehicle_id);
-      } else if (gpsData.plate_number) {
-        const [foundVehicle] = await db
-          .select()
-          .from(vehicles)
-          .where(eq(vehicles.plateNumber, gpsData.plate_number));
-        vehicle = foundVehicle;
-      }
+      // Convert to canonical format
+      const canonicalUpdate = {
+        latitude: gpsData.latitude,
+        longitude: gpsData.longitude,
+        speed: gpsData.speed,
+        heading: gpsData.heading,
+        timestamp: gpsData.timestamp ? new Date(gpsData.timestamp) : new Date(),
+        source: "generic" as const,
+        vehicleIdentifier: {
+          fleetTrackId: gpsData.vehicle_id,
+          plateNumber: gpsData.plate_number,
+        },
+        provenance: {
+          rawPayload: gpsData,
+        },
+      };
 
-      if (!vehicle) {
-        return res.status(404).json({ 
-          message: "Vehicle not found",
-          vehicle_id: gpsData.vehicle_id,
-          plate_number: gpsData.plate_number
-        });
-      }
-
-      // Update vehicle location
-      await storage.updateVehicleLocation(
-        vehicle.id,
-        gpsData.latitude.toString(),
-        gpsData.longitude.toString()
-      );
-
-      console.log(`[GPS Update] Vehicle ${vehicle.name} (${vehicle.plateNumber}) updated to ${gpsData.latitude}, ${gpsData.longitude}`);
+      await gpsIngestionPipeline.ingest(canonicalUpdate);
 
       res.json({ 
         success: true,
-        message: "Location updated",
-        vehicle_id: vehicle.id,
-        vehicle_name: vehicle.name
+        message: "Location updated"
       });
     } catch (error: any) {
       console.error("Error updating GPS location:", error);
