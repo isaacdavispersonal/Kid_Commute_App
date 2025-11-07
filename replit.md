@@ -12,7 +12,7 @@ Preferred communication style: Simple, everyday language.
 - **Frontend Framework**: React with TypeScript, Vite, Wouter.
 - **Component Library**: shadcn/ui (New York variant) with Radix UI and Tailwind CSS.
 - **Role-Based Interfaces**:
-    - **Admin Dashboard**: Desktop-optimized with sidebar navigation for CRUD operations across users, students, vehicles, routes, schedules, and communication. Features data tables, fleet maps, and compact schedule calendar.
+    - **Admin Dashboard**: Desktop-optimized with sidebar navigation for CRUD operations across users, students, vehicles, routes, schedules, and communication. Features data tables, fleet maps, and compact schedule calendar. GPS-related features (GPS Settings and Samsara Integration) are grouped under a "GPS & Tracking" labeled section in the admin sidebar.
     - **Driver Interface**: Mobile-first design for clock in/out and route management.
     - **Parent Portal**: Real-time tracking and messaging capabilities.
 - **Real-time Features**: WebSocket integration for messaging, Leaflet.js for map visualization, and polling for statistics.
