@@ -110,6 +110,11 @@ const adminMenuSections = [
         url: "/admin/route-health",
         icon: Activity,
       },
+    ],
+  },
+  {
+    label: "GPS & Tracking",
+    items: [
       {
         title: "GPS Settings",
         url: "/admin/gps-settings",
@@ -296,6 +301,11 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
               <>
                 {adminMenuSections.map((section, sectionIndex) => (
                   <div key={sectionIndex}>
+                    {section.label && (
+                      <SidebarGroupLabel className="mt-4 mb-2 text-xs font-medium text-muted-foreground px-2">
+                        {section.label}
+                      </SidebarGroupLabel>
+                    )}
                     <SidebarMenu>
                       {section.items.map(renderMenuItem)}
                     </SidebarMenu>
