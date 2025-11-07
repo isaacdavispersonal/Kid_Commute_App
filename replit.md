@@ -63,7 +63,8 @@ Preferred communication style: Simple, everyday language.
   - **Samsara Integration**: 
     - **Webhook Endpoint**: POST `/api/webhooks/samsara-webhook` receives `VehicleUpdated` events with HMAC-SHA256 signature validation using Base64-decoded secret
     - **Auto-Matching**: Vehicles automatically linked by Samsara ID or license plate
-    - **Admin UI**: Configuration status, vehicle mappings, and setup instructions at `/admin/samsara-integration`
+    - **Vehicle Fleet Sync**: POST `/api/admin/samsara/sync-vehicles` endpoint pulls vehicles from Samsara API and creates/updates FleetTrack vehicles with matching by Samsara ID then plate number
+    - **Admin UI**: Reorganized page at `/admin/samsara-integration` with two clear sections: Real-Time GPS Tracking (webhooks for parent ETAs) and Vehicle Fleet Sync (API for importing new vehicles)
     - **Database Fields**: `samsara_vehicle_id` and `samsara_last_sync` track integration status
   - **Generic GPS Webhook**: POST `/api/vehicles/gps-update` endpoint with Bearer token authentication for Google Maps, Waze, or other navigation software
   - **Distance Calculation**: Haversine formula implementation in `server/gps-utils.ts` calculates accurate distances between GPS coordinates accounting for Earth's curvature
