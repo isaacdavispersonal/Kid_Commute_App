@@ -187,3 +187,5 @@
     Enable push notifications for messages, clock-in reminders, and route updates.
 
     Prioritize performance, simplicity, and minimal load times.
+
+    different reroutable locations to take to different apps
