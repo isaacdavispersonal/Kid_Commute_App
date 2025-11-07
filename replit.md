@@ -58,12 +58,19 @@ Preferred communication style: Simple, everyday language.
 - **Admin Audit Log**: Tracks all driver and parent actions (create, update, delete) with user context, entity type, description, and JSON change details, accessible via an admin UI with filtering and quick filters for Time Exceptions, Attendance Updates, and Route Messages.
 - **Route Progress Tracking**: Real-time tracking of driver route progress with parent visibility, showing completed/skipped stops and estimated arrival times.
 - **Real-Time Navigation Tracking**: Comprehensive GPS-based vehicle tracking system enabling live ETA calculations for parents:
-  - **GPS Webhook Integration**: POST `/api/vehicles/gps-update` endpoint receives real-time location updates from external navigation software (e.g., Google Maps, Waze) with vehicle ID/plate number, latitude/longitude coordinates, and timestamps
+  - **Webhook-First Architecture**: Dual-webhook system supporting both Samsara fleet tracking and generic GPS providers
+  - **Source-Agnostic GPS Pipeline** (`server/gps-pipeline.ts`): Unified ingestion system normalizing GPS data from multiple sources into canonical format with deduplication (5-second window), vehicle resolution (Samsara ID/plate/FleetTrack ID), and provenance tracking
+  - **Samsara Integration**: 
+    - **Webhook Endpoint**: POST `/api/webhooks/samsara-webhook` receives `VehicleUpdated` events with HMAC-SHA256 signature validation using Base64-decoded secret
+    - **Auto-Matching**: Vehicles automatically linked by Samsara ID or license plate
+    - **Admin UI**: Configuration status, vehicle mappings, and setup instructions at `/admin/samsara-integration`
+    - **Database Fields**: `samsara_vehicle_id` and `samsara_last_sync` track integration status
+  - **Generic GPS Webhook**: POST `/api/vehicles/gps-update` endpoint with Bearer token authentication for Google Maps, Waze, or other navigation software
   - **Distance Calculation**: Haversine formula implementation in `server/gps-utils.ts` calculates accurate distances between GPS coordinates accounting for Earth's curvature
   - **ETA Calculation**: Estimates arrival time based on current vehicle location, pickup stop coordinates, distance, and average speed (default 25 mph in urban areas)
   - **Parent Pickup Stop Selection**: Parents can view and select their preferred pickup stop from their child's assigned route via dropdown selector with real-time stop availability
   - **Live ETA Banner**: Auto-refreshing dashboard banner (30-second intervals) displays "Your child will be picked up in X minutes" with distance, stop name, and vehicle information when routes are active
-  - **Security**: All parent endpoints enforce household ownership verification ensuring parents only access their own children's data
+  - **Security**: All parent endpoints enforce household ownership verification ensuring parents only access their own children's data; webhook endpoints protected by HMAC signatures or Bearer tokens
   - **Data Format**: GPS webhook accepts JSON with `vehicle_id` or `plate_number`, `latitude`/`longitude` (decimal degrees), and `timestamp` (ISO 8601)
 - **Lead Driver Permissions**: `isLeadDriver` flag provides enhanced permissions for senior drivers, managed via the admin UI. Lead drivers are visually identified with a badge on their dashboard.
 - **Driver Utilities System**: Comprehensive system for drivers to request supplies, submit vehicle inspection checklists, and provide feedback, with full admin management capabilities:

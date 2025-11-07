@@ -344,6 +344,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Get Samsara integration status
+  app.get(
+    "/api/admin/samsara/status",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const webhookConfigured = !!process.env.SAMSARA_WEBHOOK_SECRET;
+        const apiTokenConfigured = !!process.env.SAMSARA_API_TOKEN;
+        
+        res.json({ 
+          webhookConfigured,
+          apiTokenConfigured,
+          webhookUrl: `${req.protocol}://${req.get('host')}/api/webhooks/samsara-webhook`
+        });
+      } catch (error) {
+        console.error("Error fetching Samsara status:", error);
+        res.status(500).json({ message: "Failed to fetch Samsara status" });
+      }
+    }
+  );
+
+  // Get Samsara vehicle mappings
+  app.get(
+    "/api/admin/samsara/vehicle-mappings",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const allVehicles = await storage.getAllVehicles();
+        
+        const mappings = allVehicles.map(vehicle => ({
+          id: vehicle.id,
+          name: vehicle.name,
+          plateNumber: vehicle.plateNumber,
+          samsaraVehicleId: vehicle.samsaraVehicleId,
+          samsaraLastSync: vehicle.samsaraLastSync,
+        }));
+        
+        res.json(mappings);
+      } catch (error) {
+        console.error("Error fetching Samsara vehicle mappings:", error);
+        res.status(500).json({ message: "Failed to fetch vehicle mappings" });
+      }
+    }
+  );
+
   // Get route health overview
   app.get(
     "/api/admin/route-health",

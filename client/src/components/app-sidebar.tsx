@@ -16,7 +16,8 @@ import {
   Megaphone,
   Package,
   Activity,
-  Navigation
+  Navigation,
+  Link2
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -113,6 +114,11 @@ const adminMenuSections = [
         title: "GPS Settings",
         url: "/admin/gps-settings",
         icon: Navigation,
+      },
+      {
+        title: "Samsara Integration",
+        url: "/admin/samsara-integration",
+        icon: Link2,
       },
     ],
   },

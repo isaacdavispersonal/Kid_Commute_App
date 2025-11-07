@@ -73,10 +73,18 @@ router.post(
         return;
       }
 
-      const rawBody = JSON.stringify(req.body);
+      const rawBody = (req as any).rawBody;
+      
+      if (!rawBody) {
+        log("[samsara-webhook] Raw body not available", "error");
+        res.status(500).send("Raw body capture failed");
+        return;
+      }
+
+      const rawBodyString = rawBody.toString('utf8');
       
       const isValid = verifySamsaraSignature(
-        rawBody,
+        rawBodyString,
         timestamp,
         signature,
         samsaraWebhookSecret
