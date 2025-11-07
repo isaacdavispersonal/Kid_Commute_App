@@ -105,7 +105,10 @@ export interface IStorage {
   // Vehicle operations
   getAllVehicles(): Promise<Vehicle[]>;
   getVehicle(id: string): Promise<Vehicle | undefined>;
+  getVehicleByPlate(plateNumber: string): Promise<Vehicle | undefined>;
+  getVehicleBySamsaraId(samsaraId: string): Promise<Vehicle | undefined>;
   createVehicle(vehicle: InsertVehicle): Promise<Vehicle>;
+  updateVehicle(id: string, updates: Partial<InsertVehicle>): Promise<Vehicle>;
   updateVehicleLocation(id: string, lat: string, lng: string): Promise<void>;
 
   // Route operations
@@ -454,9 +457,33 @@ export class DatabaseStorage implements IStorage {
     return vehicle;
   }
 
+  async getVehicleByPlate(plateNumber: string): Promise<Vehicle | undefined> {
+    const [vehicle] = await db.select().from(vehicles).where(eq(vehicles.plateNumber, plateNumber));
+    return vehicle;
+  }
+
+  async getVehicleBySamsaraId(samsaraId: string): Promise<Vehicle | undefined> {
+    const [vehicle] = await db.select().from(vehicles).where(eq(vehicles.samsaraVehicleId, samsaraId));
+    return vehicle;
+  }
+
   async createVehicle(vehicle: InsertVehicle): Promise<Vehicle> {
     const [newVehicle] = await db.insert(vehicles).values(vehicle).returning();
     return newVehicle;
+  }
+
+  async updateVehicle(id: string, updates: Partial<InsertVehicle>): Promise<Vehicle> {
+    const [updatedVehicle] = await db
+      .update(vehicles)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(vehicles.id, id))
+      .returning();
+    
+    if (!updatedVehicle) {
+      throw new NotFoundError("Vehicle not found");
+    }
+    
+    return updatedVehicle;
   }
 
   async updateVehicleLocation(id: string, lat: string, lng: string): Promise<void> {

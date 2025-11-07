@@ -391,6 +391,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Sync vehicles from Samsara
+  app.post(
+    "/api/admin/samsara/sync-vehicles",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { samsaraClient } = await import("./samsara-client");
+        
+        if (!samsaraClient) {
+          return res.status(400).json({ message: "Samsara API token not configured" });
+        }
+
+        // Fetch all vehicles from Samsara
+        const samsaraVehicles = await samsaraClient.getAllVehicles();
+        
+        const results = {
+          created: [] as string[],
+          updated: [] as string[],
+          skipped: [] as string[],
+          errors: [] as { vehicle: string; error: string }[]
+        };
+
+        for (const samsaraVehicle of samsaraVehicles) {
+          try {
+            // Check if vehicle exists by Samsara ID or plate number
+            let existingVehicle = samsaraVehicle.samsaraId 
+              ? await storage.getVehicleBySamsaraId(samsaraVehicle.samsaraId)
+              : undefined;
+            
+            if (!existingVehicle && samsaraVehicle.licensePlate) {
+              existingVehicle = await storage.getVehicleByPlate(samsaraVehicle.licensePlate);
+            }
+
+            if (existingVehicle) {
+              // Update existing vehicle with Samsara ID if not already set
+              if (!existingVehicle.samsaraVehicleId && samsaraVehicle.samsaraId) {
+                await storage.updateVehicle(existingVehicle.id, {
+                  samsaraVehicleId: samsaraVehicle.samsaraId,
+                  samsaraLastSync: new Date(),
+                });
+                results.updated.push(`${samsaraVehicle.name} (${samsaraVehicle.licensePlate || 'No plate'})`);
+              } else {
+                // Just update the sync timestamp
+                await storage.updateVehicle(existingVehicle.id, {
+                  samsaraLastSync: new Date(),
+                });
+                results.skipped.push(`${samsaraVehicle.name} (${samsaraVehicle.licensePlate || 'No plate'}) - already synced`);
+              }
+            } else {
+              // Create new vehicle
+              if (!samsaraVehicle.licensePlate) {
+                results.errors.push({
+                  vehicle: samsaraVehicle.name,
+                  error: "No license plate - cannot create vehicle without plate number"
+                });
+                continue;
+              }
+
+              await storage.createVehicle({
+                name: samsaraVehicle.name,
+                plateNumber: samsaraVehicle.licensePlate,
+                capacity: 12, // Default capacity
+                status: "active",
+                samsaraVehicleId: samsaraVehicle.samsaraId,
+                samsaraLastSync: new Date(),
+              });
+              results.created.push(`${samsaraVehicle.name} (${samsaraVehicle.licensePlate})`);
+            }
+          } catch (error: any) {
+            results.errors.push({
+              vehicle: samsaraVehicle.name,
+              error: error.message || "Unknown error"
+            });
+          }
+        }
+
+        res.json(results);
+      } catch (error) {
+        console.error("Error syncing Samsara vehicles:", error);
+        res.status(500).json({ message: "Failed to sync vehicles from Samsara" });
+      }
+    }
+  );
+
   // Get route health overview
   app.get(
     "/api/admin/route-health",

@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Check, Loader2, Link2, AlertCircle, CheckCircle2, Activity } from "lucide-react";
+import { Copy, Check, Loader2, Link2, AlertCircle, CheckCircle2, Activity, RefreshCw } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface SamsaraStatus {
   webhookConfigured: boolean;
@@ -23,9 +24,17 @@ interface VehicleMapping {
   samsaraLastSync: string | null;
 }
 
+interface SyncResults {
+  created: string[];
+  updated: string[];
+  skipped: string[];
+  errors: { vehicle: string; error: string }[];
+}
+
 export default function AdminSamsaraIntegration() {
   const { toast } = useToast();
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [syncResults, setSyncResults] = useState<SyncResults | null>(null);
 
   const { data: status, isLoading: statusLoading } = useQuery<SamsaraStatus>({
     queryKey: ["/api/admin/samsara/status"],
@@ -33,6 +42,46 @@ export default function AdminSamsaraIntegration() {
 
   const { data: vehicles, isLoading: vehiclesLoading } = useQuery<VehicleMapping[]>({
     queryKey: ["/api/admin/samsara/vehicle-mappings"],
+  });
+
+  const syncVehiclesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("/api/admin/samsara/sync-vehicles", {
+        method: "POST",
+      });
+      const data: SyncResults = await response.json();
+      return data;
+    },
+    onSuccess: (data: SyncResults) => {
+      setSyncResults(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/samsara/vehicle-mappings"] });
+      
+      const totalChanges = data.created.length + data.updated.length;
+      if (totalChanges > 0) {
+        toast({
+          title: "Sync Complete!",
+          description: `${totalChanges} vehicle(s) synced successfully`,
+        });
+      } else if (data.errors.length > 0) {
+        toast({
+          title: "Sync completed with errors",
+          description: `${data.errors.length} error(s) occurred`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Already up to date",
+          description: "All vehicles are already synced",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Sync failed",
+        description: error.message || "Failed to sync vehicles from Samsara",
+        variant: "destructive",
+      });
+    },
   });
 
   const copyToClipboard = async (text: string, field: string) => {
@@ -185,12 +234,89 @@ export default function AdminSamsaraIntegration() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Vehicle Mappings</CardTitle>
-          <CardDescription>
-            FleetTrack vehicles linked to Samsara fleet
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Vehicle Mappings</CardTitle>
+              <CardDescription>
+                FleetTrack vehicles linked to Samsara fleet
+              </CardDescription>
+            </div>
+            <Button
+              onClick={() => syncVehiclesMutation.mutate()}
+              disabled={!status?.apiTokenConfigured || syncVehiclesMutation.isPending}
+              data-testid="button-sync-vehicles"
+            >
+              {syncVehiclesMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Sync from Samsara
+                </>
+              )}
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          {syncResults && (
+            <div className="space-y-3" data-testid="sync-results">
+              {syncResults.created.length > 0 && (
+                <Alert className="border-green-500/50 bg-green-500/5">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <AlertTitle className="text-green-600">Created {syncResults.created.length} vehicle(s)</AlertTitle>
+                  <AlertDescription>
+                    <ul className="list-disc list-inside mt-2 text-sm">
+                      {syncResults.created.map((vehicle, i) => (
+                        <li key={i}>{vehicle}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {syncResults.updated.length > 0 && (
+                <Alert className="border-primary/50 bg-primary/5">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  <AlertTitle className="text-primary">Updated {syncResults.updated.length} vehicle(s)</AlertTitle>
+                  <AlertDescription>
+                    <ul className="list-disc list-inside mt-2 text-sm">
+                      {syncResults.updated.map((vehicle, i) => (
+                        <li key={i}>{vehicle}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {syncResults.errors.length > 0 && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Errors ({syncResults.errors.length})</AlertTitle>
+                  <AlertDescription>
+                    <ul className="list-disc list-inside mt-2 text-sm">
+                      {syncResults.errors.map((error, i) => (
+                        <li key={i}>{error.vehicle}: {error.error}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {syncResults.created.length === 0 && syncResults.updated.length === 0 && syncResults.errors.length === 0 && (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertTitle>All vehicles up to date</AlertTitle>
+                  <AlertDescription>
+                    No changes needed. All vehicles are already synced with Samsara.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+          
           {vehiclesLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin" />
