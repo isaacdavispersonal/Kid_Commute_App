@@ -107,6 +107,24 @@ export const insertVehicleSchema = createInsertSchema(vehicles).omit({
 export type InsertVehicle = z.infer<typeof insertVehicleSchema>;
 export type Vehicle = typeof vehicles.$inferSelect;
 
+// GPS location update schema for navigation webhook
+export const gpsUpdateSchema = z.object({
+  vehicle_id: z.string().optional(),
+  plate_number: z.string().optional(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  timestamp: z.string().datetime().optional(),
+  speed: z.number().optional(),
+  heading: z.number().min(0).max(360).optional(),
+}).refine(
+  (data) => data.vehicle_id || data.plate_number,
+  {
+    message: "Either vehicle_id or plate_number must be provided",
+  }
+);
+
+export type GpsUpdate = z.infer<typeof gpsUpdateSchema>;
+
 // ============ Route Management Tables ============
 
 // Route type enum

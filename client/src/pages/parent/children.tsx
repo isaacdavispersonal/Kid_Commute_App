@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link2, AlertCircle, CheckCircle, Phone, UserCircle, MapPin, Route as RouteIcon, Edit, Plus, X, XCircle, Calendar, Navigation, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -467,6 +468,177 @@ function RouteProgressSection({ studentId, pickupStopId }: { studentId: string; 
   );
 }
 
+interface Stop {
+  id: string;
+  name: string;
+  address: string;
+  scheduledTime?: string;
+  stopOrder?: number;
+}
+
+interface ETAData {
+  available: boolean;
+  distanceMiles?: number;
+  distanceFormatted?: string;
+  etaMinutes?: number;
+  etaFormatted?: string;
+  vehicleName?: string;
+  stopName?: string;
+  message?: string;
+}
+
+function ETABanner({ students }: { students: EnrichedStudent[] }) {
+  // Get ETA data for all students with pickup stops
+  const studentsWithStops = students.filter(s => s.pickupStop && s.assignedRouteId);
+  
+  const etaQueries = useQuery({
+    queryKey: ["/api/parent/eta-all", ...studentsWithStops.map(s => s.id)],
+    queryFn: async () => {
+      if (studentsWithStops.length === 0) return [];
+      
+      const results = await Promise.all(
+        studentsWithStops.map(async (student) => {
+          try {
+            const response = await fetch(`/api/parent/eta/${student.id}`);
+            if (!response.ok) return null;
+            const data: ETAData = await response.json();
+            return { student, eta: data };
+          } catch {
+            return null;
+          }
+        })
+      );
+      
+      return results.filter(r => r !== null && r.eta.available);
+    },
+    enabled: studentsWithStops.length > 0,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  const activeETAs = etaQueries.data || [];
+
+  if (activeETAs.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-3">
+      {activeETAs.map((item) => {
+        if (!item) return null;
+        const { student, eta } = item;
+        return (
+        <Alert key={student.id} className="border-primary/50 bg-primary/5">
+          <Navigation className="h-4 w-4 text-primary" />
+          <AlertTitle className="text-primary font-semibold">
+            {student.firstName}'s Bus is on the way!
+          </AlertTitle>
+          <AlertDescription className="mt-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Arrives in:</span>
+                <Badge variant="default" className="text-sm">
+                  {eta.etaFormatted}
+                </Badge>
+              </div>
+              <div className="text-muted-foreground hidden sm:block">•</div>
+              <div className="text-muted-foreground">
+                {eta.distanceFormatted} away
+              </div>
+              <div className="text-muted-foreground hidden sm:block">•</div>
+              <div className="text-muted-foreground">
+                Stop: {eta.stopName}
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+        );
+      })}
+    </div>
+  );
+}
+
+function PickupStopSelector({ student }: { student: EnrichedStudent }) {
+  const { toast } = useToast();
+  const [selectedStopId, setSelectedStopId] = useState<string>(student.pickupStop?.id || "");
+
+  // Fetch available stops for this route
+  const { data: availableStops, isLoading } = useQuery<Stop[]>({
+    queryKey: ["/api/parent/students", student.id, "available-stops"],
+    queryFn: async () => {
+      const response = await fetch(`/api/parent/students/${student.id}/available-stops`);
+      if (!response.ok) throw new Error("Failed to fetch stops");
+      return response.json();
+    },
+    enabled: !!student.assignedRouteId,
+  });
+
+  const updateStopMutation = useMutation({
+    mutationFn: async (pickupStopId: string) => {
+      return await apiRequest("PATCH", `/api/parent/students/${student.id}/pickup-stop`, {
+        pickupStopId,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/students"] });
+      toast({
+        title: "Success",
+        description: "Pickup stop updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update pickup stop",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleStopChange = (stopId: string) => {
+    setSelectedStopId(stopId);
+    updateStopMutation.mutate(stopId);
+  };
+
+  if (!student.assignedRouteId || isLoading) {
+    return null;
+  }
+
+  if (!availableStops || availableStops.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
+      <MapPin className="h-5 w-5 text-primary mt-0.5" />
+      <div className="flex-1 space-y-2">
+        <p className="text-sm font-medium">Pickup Stop</p>
+        <Select
+          value={selectedStopId}
+          onValueChange={handleStopChange}
+          disabled={updateStopMutation.isPending}
+        >
+          <SelectTrigger className="w-full" data-testid={`select-pickup-stop-${student.id}`}>
+            <SelectValue placeholder="Select a pickup stop" />
+          </SelectTrigger>
+          <SelectContent>
+            {availableStops.map((stop) => (
+              <SelectItem key={stop.id} value={stop.id} data-testid={`option-stop-${stop.id}`}>
+                {stop.name}
+                {stop.scheduledTime && ` - ${stop.scheduledTime}`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {student.pickupStop && (
+          <p className="text-xs text-muted-foreground">
+            Current: {student.pickupStop.name}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AttendanceSection({ student }: { student: EnrichedStudent }) {
   const { toast } = useToast();
   const [showDateRangeDialog, setShowDateRangeDialog] = useState(false);
@@ -763,6 +935,8 @@ export default function ConnectChildrenPage() {
             </p>
           </div>
 
+          <ETABanner students={students} />
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {students.map((student) => (
               <Card key={student.id} className="hover-elevate" data-testid={`card-student-${student.id}`}>
@@ -804,6 +978,8 @@ export default function ConnectChildrenPage() {
                           </p>
                         </div>
                       </div>
+
+                      <PickupStopSelector student={student} />
 
                       <AttendanceSection student={student} />
                     </div>

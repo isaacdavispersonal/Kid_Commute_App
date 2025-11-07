@@ -188,6 +188,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ GPS/Vehicle Tracking (No Auth - External Webhook) ============
+
+  // Webhook endpoint for GPS updates from navigation software
+  app.post("/api/vehicles/gps-update", async (req: any, res) => {
+    try {
+      const { gpsUpdateSchema, vehicles } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      
+      // Validate GPS data
+      const result = gpsUpdateSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid GPS data", 
+          errors: result.error.errors 
+        });
+      }
+
+      const gpsData = result.data;
+      
+      // Find vehicle by ID or plate number
+      let vehicle;
+      if (gpsData.vehicle_id) {
+        vehicle = await storage.getVehicle(gpsData.vehicle_id);
+      } else if (gpsData.plate_number) {
+        const [foundVehicle] = await db
+          .select()
+          .from(vehicles)
+          .where(eq(vehicles.plateNumber, gpsData.plate_number));
+        vehicle = foundVehicle;
+      }
+
+      if (!vehicle) {
+        return res.status(404).json({ 
+          message: "Vehicle not found",
+          vehicle_id: gpsData.vehicle_id,
+          plate_number: gpsData.plate_number
+        });
+      }
+
+      // Update vehicle location
+      await storage.updateVehicleLocation(
+        vehicle.id,
+        gpsData.latitude.toString(),
+        gpsData.longitude.toString()
+      );
+
+      console.log(`[GPS Update] Vehicle ${vehicle.name} (${vehicle.plateNumber}) updated to ${gpsData.latitude}, ${gpsData.longitude}`);
+
+      res.json({ 
+        success: true,
+        message: "Location updated",
+        vehicle_id: vehicle.id,
+        vehicle_name: vehicle.name
+      });
+    } catch (error: any) {
+      console.error("Error updating GPS location:", error);
+      res.status(500).json({ message: "Failed to update location" });
+    }
+  });
+
   // Mark messages as read
   app.post("/api/messages/mark-read", isAuthenticated, async (req: any, res) => {
     try {
@@ -3532,6 +3592,174 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error: any) {
         console.error("Error deleting student:", error);
         res.status(500).json({ message: "Failed to delete student" });
+      }
+    }
+  );
+
+  // Get available stops for student's route (for pickup stop selection)
+  app.get(
+    "/api/parent/students/:id/available-stops",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.claims.sub;
+        const studentId = req.params.id;
+        
+        // Verify the student belongs to this parent's household
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        const parentHousehold = await storage.getUserHousehold(parentId);
+        if (!parentHousehold || student.householdId !== parentHousehold.id) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+
+        // If student is not assigned to a route, return empty list
+        if (!student.assignedRouteId) {
+          return res.json([]);
+        }
+
+        // Get all stops on the student's route
+        const stops = await storage.getRouteStops(student.assignedRouteId);
+        res.json(stops);
+      } catch (error: any) {
+        console.error("Error fetching available stops:", error);
+        res.status(500).json({ message: "Failed to fetch available stops" });
+      }
+    }
+  );
+
+  // Update student's pickup stop
+  app.patch(
+    "/api/parent/students/:id/pickup-stop",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const { students } = await import("@shared/schema");
+        const { eq } = await import("drizzle-orm");
+
+        const parentId = req.user.claims.sub;
+        const studentId = req.params.id;
+        const { pickupStopId } = req.body;
+        
+        // Verify the student belongs to this parent's household
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        const parentHousehold = await storage.getUserHousehold(parentId);
+        if (!parentHousehold || student.householdId !== parentHousehold.id) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+
+        // Validate that the stop belongs to the student's route
+        if (pickupStopId && student.assignedRouteId) {
+          const routeStops = await storage.getRouteStops(student.assignedRouteId);
+          const isValidStop = routeStops.some((s) => s.id === pickupStopId);
+          
+          if (!isValidStop) {
+            return res.status(400).json({ 
+              message: "Selected stop is not on the student's route" 
+            });
+          }
+        }
+
+        // Update the pickup stop
+        await db
+          .update(students)
+          .set({ pickupStopId, updatedAt: new Date() })
+          .where(eq(students.id, studentId));
+
+        const updatedStudent = await storage.getStudent(studentId);
+        res.json(updatedStudent);
+      } catch (error: any) {
+        console.error("Error updating pickup stop:", error);
+        res.status(500).json({ message: "Failed to update pickup stop" });
+      }
+    }
+  );
+
+  // Get ETA to student's pickup stop
+  app.get(
+    "/api/parent/eta/:studentId",
+    isAuthenticated,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const { calculateDistance, calculateETA, formatDistance, formatETA } = await import("./gps-utils");
+
+        const parentId = req.user.claims.sub;
+        const { studentId } = req.params;
+        
+        // Verify the student belongs to this parent's household
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        const parentHousehold = await storage.getUserHousehold(parentId);
+        if (!parentHousehold || student.householdId !== parentHousehold.id) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+
+        // Check if student has a pickup stop and route
+        if (!student.pickupStopId || !student.assignedRouteId) {
+          return res.json({ available: false, message: "No pickup stop selected" });
+        }
+
+        // Get pickup stop coordinates
+        const stop = await storage.getStop(student.pickupStopId);
+        if (!stop || !stop.latitude || !stop.longitude) {
+          return res.json({ available: false, message: "Stop location not available" });
+        }
+
+        // Get current driver assignment for this route
+        const today = new Date().toISOString().split('T')[0];
+        const assignments = await storage.getAllDriverAssignments();
+        const todayAssignment = assignments.find(
+          (a) =>
+            a.routeId === student.assignedRouteId &&
+            a.date === today &&
+            a.isActive
+        );
+
+        if (!todayAssignment) {
+          return res.json({ available: false, message: "No active route today" });
+        }
+
+        // Get vehicle location
+        const vehicle = await storage.getVehicle(todayAssignment.vehicleId);
+        if (!vehicle || !vehicle.currentLat || !vehicle.currentLng) {
+          return res.json({ available: false, message: "Vehicle location not available" });
+        }
+
+        // Calculate distance and ETA
+        const vehicleLat = parseFloat(vehicle.currentLat);
+        const vehicleLng = parseFloat(vehicle.currentLng);
+        const stopLat = parseFloat(stop.latitude);
+        const stopLng = parseFloat(stop.longitude);
+
+        const distanceMiles = calculateDistance(vehicleLat, vehicleLng, stopLat, stopLng);
+        const etaMinutes = calculateETA(distanceMiles, 25); // Default 25 mph average speed
+
+        res.json({
+          available: true,
+          distanceMiles: parseFloat(distanceMiles.toFixed(1)),
+          distanceFormatted: formatDistance(distanceMiles),
+          etaMinutes,
+          etaFormatted: formatETA(etaMinutes),
+          vehicleName: vehicle.name,
+          stopName: stop.name,
+          lastUpdate: vehicle.lastLocationUpdate,
+        });
+      } catch (error: any) {
+        console.error("Error calculating ETA:", error);
+        res.status(500).json({ message: "Failed to calculate ETA" });
       }
     }
   );

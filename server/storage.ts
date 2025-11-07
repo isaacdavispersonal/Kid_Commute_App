@@ -116,6 +116,7 @@ export interface IStorage {
   deleteRoute(id: string): Promise<void>;
   getRouteStops(routeId: string): Promise<Stop[]>;
   getAllStops(): Promise<Stop[]>;
+  getStop(id: string): Promise<Stop | undefined>;
   createStop(stop: InsertStop): Promise<Stop>;
   updateStop(id: string, updates: Partial<InsertStop>): Promise<Stop>;
   deleteStop(id: string): Promise<void>;
@@ -533,6 +534,11 @@ export class DatabaseStorage implements IStorage {
 
   async getAllStops(): Promise<Stop[]> {
     return await db.select().from(stops).orderBy(stops.name);
+  }
+
+  async getStop(id: string): Promise<Stop | undefined> {
+    const [stop] = await db.select().from(stops).where(eq(stops.id, id));
+    return stop;
   }
 
   async createStop(stop: InsertStop): Promise<Stop> {
