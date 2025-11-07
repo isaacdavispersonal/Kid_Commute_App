@@ -81,6 +81,8 @@ Preferred communication style: Simple, everyday language.
   - **Admin Management**: Centralized admin page for viewing and managing all driver utilities with status updates and notes
   - **Quick Feedback**: Floating action button on driver dashboard for easy access to feedback submission
 - **Route Health Monitoring**: Real-time admin dashboard page showing active route status, driver availability (on-time, late, not started, no driver), student counts per route, and unresolved incidents with at-a-glance metrics for operational oversight.
+- **Live Fleet Map**: Admin page (`/admin/fleet-map`) displaying real-time vehicle locations on an interactive map with 15-second auto-refresh, color-coded vehicle markers (green=active, orange=maintenance, gray=offline), fleet metrics dashboard, and separate list for vehicles without GPS data.
+- **Vehicle Management**: Full CRUD operations for vehicles including deletion with safety checks (prevents deletion of vehicles assigned to drivers or with active shifts), plate number uniqueness validation, and Samsara integration status tracking.
 - **Session Management**: PostgreSQL-backed sessions with a 7-day TTL and secure cookies.
 
 ## External Dependencies

@@ -17,7 +17,8 @@ import {
   Package,
   Activity,
   Navigation,
-  Link2
+  Link2,
+  Map
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -115,6 +116,11 @@ const adminMenuSections = [
   {
     label: "GPS & Tracking",
     items: [
+      {
+        title: "Live Fleet Map",
+        url: "/admin/fleet-map",
+        icon: Map,
+      },
       {
         title: "GPS Settings",
         url: "/admin/gps-settings",

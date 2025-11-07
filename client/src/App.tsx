@@ -25,6 +25,7 @@ import Profile from "@/pages/profile";
 
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminVehicles from "@/pages/admin/vehicles";
+import AdminFleetMap from "@/pages/admin/fleet-map";
 import AdminRoutes from "@/pages/admin/routes";
 import AdminStops from "@/pages/admin/stops";
 import AdminSchedule from "@/pages/admin/schedule";
@@ -147,6 +148,7 @@ function Router() {
                   <Route path="/admin" component={AdminDashboard} />
                   <Route path="/admin/dashboard" component={AdminDashboard} />
                   <Route path="/admin/vehicles" component={AdminVehicles} />
+                  <Route path="/admin/fleet-map" component={AdminFleetMap} />
                   <Route path="/admin/routes" component={AdminRoutes} />
                   <Route path="/admin/stops" component={AdminStops} />
                   <Route path="/admin/schedule" component={AdminSchedule} />
