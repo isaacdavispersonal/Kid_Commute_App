@@ -961,6 +961,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Delete a vehicle
+  app.delete(
+    "/api/admin/vehicles/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        await storage.deleteVehicle(req.params.id);
+        res.json({ message: "Vehicle deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting vehicle:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to delete vehicle" });
+      }
+    }
+  );
+
   // Get all routes
   app.get(
     "/api/admin/routes",

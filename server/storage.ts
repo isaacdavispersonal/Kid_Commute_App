@@ -110,6 +110,7 @@ export interface IStorage {
   createVehicle(vehicle: InsertVehicle): Promise<Vehicle>;
   updateVehicle(id: string, updates: Partial<InsertVehicle>): Promise<Vehicle>;
   updateVehicleLocation(id: string, lat: string, lng: string): Promise<void>;
+  deleteVehicle(id: string): Promise<void>;
 
   // Route operations
   getAllRoutes(): Promise<Route[]>;
@@ -496,6 +497,37 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(vehicles.id, id));
+  }
+
+  async deleteVehicle(id: string): Promise<void> {
+    // Check if vehicle is assigned to any active driver assignments
+    const assignments = await db
+      .select()
+      .from(driverAssignments)
+      .where(eq(driverAssignments.vehicleId, id));
+    
+    if (assignments.length > 0) {
+      throw new ValidationError("Cannot delete vehicle that is assigned to drivers. Please remove all driver assignments first.");
+    }
+
+    // Check if vehicle is used in any active shifts
+    const activeShifts = await db
+      .select()
+      .from(shifts)
+      .where(and(
+        eq(shifts.vehicleId, id),
+        eq(shifts.status, "ACTIVE")
+      ));
+    
+    if (activeShifts.length > 0) {
+      throw new ValidationError("Cannot delete vehicle with active shifts. Please complete or cancel the shifts first.");
+    }
+
+    const result = await db.delete(vehicles).where(eq(vehicles.id, id));
+    
+    if (result.rowCount === 0) {
+      throw new NotFoundError("Vehicle not found");
+    }
   }
 
   // ============ Route operations ============

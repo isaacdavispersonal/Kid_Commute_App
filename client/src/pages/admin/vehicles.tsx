@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -36,6 +46,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function AdminVehicles() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: vehicles, isLoading } = useQuery({
@@ -74,8 +85,36 @@ export default function AdminVehicles() {
     },
   });
 
+  const deleteVehicleMutation = useMutation({
+    mutationFn: async (vehicleId: string) => {
+      return await apiRequest("DELETE", `/api/admin/vehicles/${vehicleId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/vehicles"] });
+      toast({
+        title: "Success",
+        description: "Vehicle deleted successfully",
+      });
+      setVehicleToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete vehicle",
+        variant: "destructive",
+      });
+      setVehicleToDelete(null);
+    },
+  });
+
   const onSubmit = (data: InsertVehicle) => {
     createVehicleMutation.mutate(data);
+  };
+
+  const handleDeleteVehicle = () => {
+    if (vehicleToDelete) {
+      deleteVehicleMutation.mutate(vehicleToDelete);
+    }
   };
 
   const columns = [
@@ -104,6 +143,20 @@ export default function AdminVehicles() {
         if (!value) return "Never";
         return new Date(value).toLocaleString();
       },
+    },
+    {
+      header: "Actions",
+      accessor: "id",
+      cell: (value: string, row: any) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setVehicleToDelete(value)}
+          data-testid={`button-delete-vehicle-${value}`}
+        >
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      ),
     },
   ];
 
@@ -250,6 +303,29 @@ export default function AdminVehicles() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={vehicleToDelete !== null} onOpenChange={() => setVehicleToDelete(null)}>
+        <AlertDialogContent data-testid="dialog-delete-vehicle">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Vehicle</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this vehicle? This action cannot be undone.
+              The vehicle cannot be deleted if it has active driver assignments or shifts.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteVehicle}
+              disabled={deleteVehicleMutation.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteVehicleMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
