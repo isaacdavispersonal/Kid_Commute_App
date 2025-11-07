@@ -10,6 +10,36 @@ import { NotFoundError, ValidationError } from "./errors";
 import express from "express";
 import memoizee from "memoizee";
 
+// Webhook authentication middleware
+const verifyWebhookToken = (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  const webhookSecret = process.env.GPS_WEBHOOK_SECRET;
+
+  // If no secret is configured, allow (for initial setup)
+  if (!webhookSecret) {
+    console.warn("[Webhook] GPS_WEBHOOK_SECRET not configured - webhook is unsecured!");
+    return next();
+  }
+
+  // Verify Bearer token
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ 
+      message: "Unauthorized - Missing or invalid Authorization header",
+      hint: "Include 'Authorization: Bearer YOUR_SECRET_TOKEN' header"
+    });
+  }
+
+  const token = authHeader.substring(7); // Remove "Bearer " prefix
+  
+  if (token !== webhookSecret) {
+    return res.status(403).json({ 
+      message: "Forbidden - Invalid webhook token"
+    });
+  }
+
+  next();
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
@@ -191,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============ GPS/Vehicle Tracking (No Auth - External Webhook) ============
 
   // Webhook endpoint for GPS updates from navigation software
-  app.post("/api/vehicles/gps-update", async (req: any, res) => {
+  app.post("/api/vehicles/gps-update", verifyWebhookToken, async (req: any, res) => {
     try {
       const { gpsUpdateSchema, vehicles } = await import("@shared/schema");
       const { eq } = await import("drizzle-orm");
