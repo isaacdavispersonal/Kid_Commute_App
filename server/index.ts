@@ -47,7 +47,25 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const server = await registerRoutes(app);
+  const { httpServer: server, wss } = await registerRoutes(app);
+
+  // Initialize notification service with WebSocket server
+  const { notificationService } = await import("./notification-service");
+  const { geofenceDetectionService } = await import("./geofence-service");
+  const { dwellDetectionService } = await import("./dwell-detection-service");
+
+  notificationService.initialize(wss);
+
+  // Register event listeners for geofence and dwell events
+  geofenceDetectionService.onGeofenceEvent((event) => {
+    notificationService.handleGeofenceExit(event);
+  });
+
+  dwellDetectionService.onStopCompletion((event) => {
+    notificationService.handleStopCompletion(event);
+  });
+
+  log("WebSocket notification listeners registered");
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

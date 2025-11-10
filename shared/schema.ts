@@ -551,6 +551,8 @@ export const routeProgress = pgTable(
     status: stopStatusEnum("status").notNull().default("PENDING"),
     completedAt: timestamp("completed_at"),
     notes: text("notes"),
+    autoCompleted: boolean("auto_completed").notNull().default(false),
+    dwellSessionId: varchar("dwell_session_id"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -576,6 +578,135 @@ export const updateRouteProgressSchema = createInsertSchema(routeProgress).omit(
 export type InsertRouteProgress = z.infer<typeof insertRouteProgressSchema>;
 export type UpdateRouteProgress = z.infer<typeof updateRouteProgressSchema>;
 export type RouteProgress = typeof routeProgress.$inferSelect;
+
+// ============ Geofence and GPS Tracking Tables ============
+
+// Geofence type enum
+export const geofenceTypeEnum = pgEnum("geofence_type", ["SCHOOL", "CUSTOM"]);
+
+// Event type enum for geofence transitions
+export const geofenceEventTypeEnum = pgEnum("geofence_event_type", ["ENTRY", "EXIT"]);
+
+// Geofences table - defines geographic boundaries for tracking
+export const geofences = pgTable("geofences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  type: geofenceTypeEnum("type").notNull(),
+  centerLat: decimal("center_lat", { precision: 10, scale: 7 }).notNull(),
+  centerLng: decimal("center_lng", { precision: 10, scale: 7 }).notNull(),
+  radiusMeters: integer("radius_meters").notNull(), // Radius in meters
+  scheduleStartTime: varchar("schedule_start_time"), // Optional: HH:MM format
+  scheduleEndTime: varchar("schedule_end_time"), // Optional: HH:MM format
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertGeofenceSchema = createInsertSchema(geofences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertGeofence = z.infer<typeof insertGeofenceSchema>;
+export type Geofence = typeof geofences.$inferSelect;
+
+// Vehicle geofence state - tracks current state for each vehicle/geofence pair
+export const vehicleGeofenceState = pgTable(
+  "vehicle_geofence_state",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    vehicleId: varchar("vehicle_id")
+      .notNull()
+      .references(() => vehicles.id, { onDelete: "cascade" }),
+    geofenceId: varchar("geofence_id")
+      .notNull()
+      .references(() => geofences.id, { onDelete: "cascade" }),
+    isInside: boolean("is_inside").notNull().default(false),
+    lastTransitionAt: timestamp("last_transition_at"),
+    lastCheckedAt: timestamp("last_checked_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_vehicle_geofence_unique").on(table.vehicleId, table.geofenceId),
+  ]
+);
+
+export type VehicleGeofenceState = typeof vehicleGeofenceState.$inferSelect;
+
+// Geofence events table - logs all entry/exit events
+export const geofenceEvents = pgTable(
+  "geofence_events",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    vehicleId: varchar("vehicle_id")
+      .notNull()
+      .references(() => vehicles.id, { onDelete: "cascade" }),
+    geofenceId: varchar("geofence_id")
+      .notNull()
+      .references(() => geofences.id, { onDelete: "cascade" }),
+    shiftId: varchar("shift_id").references(() => shifts.id, { onDelete: "set null" }),
+    eventType: geofenceEventTypeEnum("event_type").notNull(),
+    latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+    longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+    occurredAt: timestamp("occurred_at").notNull().defaultNow(),
+    payload: jsonb("payload"), // Additional metadata
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_geofence_events_occurred").on(table.occurredAt),
+    index("idx_geofence_events_vehicle").on(table.vehicleId),
+  ]
+);
+
+export const insertGeofenceEventSchema = createInsertSchema(geofenceEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertGeofenceEvent = z.infer<typeof insertGeofenceEventSchema>;
+export type GeofenceEvent = typeof geofenceEvents.$inferSelect;
+
+// Dwell session status enum
+export const dwellSessionStatusEnum = pgEnum("dwell_session_status", ["ACTIVE", "COMPLETED", "ABANDONED"]);
+
+// Vehicle dwell sessions - tracks when vehicles are stationary at stops
+export const vehicleDwellSessions = pgTable(
+  "vehicle_dwell_sessions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    vehicleId: varchar("vehicle_id")
+      .notNull()
+      .references(() => vehicles.id, { onDelete: "cascade" }),
+    shiftId: varchar("shift_id").references(() => shifts.id, { onDelete: "cascade" }),
+    routeStopId: varchar("route_stop_id").references(() => routeStops.id, { onDelete: "set null" }),
+    routeProgressId: varchar("route_progress_id").references(() => routeProgress.id, { onDelete: "set null" }),
+    status: dwellSessionStatusEnum("status").notNull().default("ACTIVE"),
+    arrivalLat: decimal("arrival_lat", { precision: 10, scale: 7 }).notNull(),
+    arrivalLng: decimal("arrival_lng", { precision: 10, scale: 7 }).notNull(),
+    arrivalAt: timestamp("arrival_at").notNull().defaultNow(),
+    departureLat: decimal("departure_lat", { precision: 10, scale: 7 }),
+    departureLng: decimal("departure_lng", { precision: 10, scale: 7 }),
+    departureAt: timestamp("departure_at"),
+    dwellDurationSeconds: integer("dwell_duration_seconds"), // Total stationary time
+    autoCompletedStop: boolean("auto_completed_stop").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_dwell_sessions_vehicle").on(table.vehicleId),
+    index("idx_dwell_sessions_shift_stop").on(table.shiftId, table.routeStopId, table.status),
+  ]
+);
+
+export const insertVehicleDwellSessionSchema = createInsertSchema(vehicleDwellSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertVehicleDwellSession = z.infer<typeof insertVehicleDwellSessionSchema>;
+export type VehicleDwellSession = typeof vehicleDwellSessions.$inferSelect;
 
 // ============ Driver Utility Tables ============
 

@@ -40,7 +40,12 @@ const verifyWebhookToken = (req: any, res: any, next: any) => {
   next();
 };
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export interface RoutesBootstrapResult {
+  httpServer: Server;
+  wss: WebSocketServer;
+}
+
+export async function registerRoutes(app: Express): Promise<RoutesBootstrapResult> {
   // Auth middleware
   await setupAuth(app);
 
@@ -5339,5 +5344,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Store wss for broadcasting from routes
   app.locals.wss = wss;
 
-  return httpServer;
+  return { httpServer, wss };
 }

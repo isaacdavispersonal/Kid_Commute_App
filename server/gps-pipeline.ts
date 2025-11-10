@@ -1,7 +1,9 @@
 import { db } from "./db";
-import { vehicles } from "@shared/schema";
-import { eq, or } from "drizzle-orm";
+import { vehicles, shifts, clockEvents } from "@shared/schema";
+import { eq, or, and, sql } from "drizzle-orm";
 import { log } from "./vite";
+import { geofenceDetectionService } from "./geofence-service";
+import { dwellDetectionService } from "./dwell-detection-service";
 
 export interface CanonicalGPSUpdate {
   latitude: number;
@@ -25,6 +27,77 @@ class GPSIngestionPipeline {
   private processedEvents = new Set<string>();
   private readonly dedupeWindowMs = 5000;
 
+  /**
+   * Get the active shift for a vehicle (if any)
+   * A shift is active if it has a recent CLOCK_IN event but no CLOCK_OUT
+   * Uses timestamp-based comparison to work correctly regardless of server timezone
+   */
+  private async getActiveShift(vehicleId: string): Promise<string | null> {
+    // Look for shifts within the last 24 hours to catch late/overnight shifts
+    const twentyFourHoursAgo = new Date();
+    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+    
+    // Find recent shifts for this vehicle with their most recent clock event
+    // This single query replaces the N+1 pattern
+    const recentShifts = await db
+      .select({
+        shiftId: shifts.id,
+        shiftDate: shifts.date,
+        plannedStart: shifts.plannedStart,
+        plannedEnd: shifts.plannedEnd,
+        eventType: clockEvents.type,
+        eventTime: clockEvents.timestamp,
+      })
+      .from(shifts)
+      .leftJoin(clockEvents, eq(clockEvents.shiftId, shifts.id))
+      .where(eq(shifts.vehicleId, vehicleId))
+      .orderBy(clockEvents.timestamp);
+
+    // Group by shift and find the one with most recent IN event
+    const shiftData = new Map<string, {
+      lastEvent: { type: string; time: Date } | null;
+      date: string;
+      plannedStart: string;
+      plannedEnd: string;
+    }>();
+
+    for (const row of recentShifts) {
+      if (!shiftData.has(row.shiftId)) {
+        shiftData.set(row.shiftId, {
+          lastEvent: null,
+          date: row.shiftDate,
+          plannedStart: row.plannedStart,
+          plannedEnd: row.plannedEnd,
+        });
+      }
+
+      const data = shiftData.get(row.shiftId)!;
+      if (row.eventType && row.eventTime) {
+        if (!data.lastEvent || row.eventTime > data.lastEvent.time) {
+          data.lastEvent = {
+            type: row.eventType,
+            time: row.eventTime,
+          };
+        }
+      }
+    }
+
+    // Find a shift where the most recent event is IN and it's not too old
+    for (const [shiftId, data] of shiftData.entries()) {
+      if (data.lastEvent && data.lastEvent.type === 'IN') {
+        // Check if the clock-in event is recent (within last 24 hours)
+        if (data.lastEvent.time >= twentyFourHoursAgo) {
+          log(`[gps-pipeline] Found active shift ${shiftId} for vehicle ${vehicleId}`, "info");
+          return shiftId;
+        }
+      }
+    }
+
+    // No active shift found - log for telemetry
+    log(`[gps-pipeline] No active shift found for vehicle ${vehicleId}`, "info");
+    return null;
+  }
+
   async ingest(update: CanonicalGPSUpdate): Promise<void> {
     try {
       const dedupeKey = this.generateDedupeKey(update);
@@ -45,6 +118,30 @@ class GPSIngestionPipeline {
       }
 
       await this.updateVehicleLocation(vehicle.id, update);
+
+      // Get active shift once for both services
+      const activeShiftId = await this.getActiveShift(vehicle.id);
+
+      // Only check geofences and dwell if vehicle has an active shift
+      // This prevents null shiftId issues and improves performance
+      if (activeShiftId) {
+        // Check geofences after updating location
+        await geofenceDetectionService.checkVehicleGeofences({
+          vehicleId: vehicle.id,
+          latitude: update.latitude,
+          longitude: update.longitude,
+          shiftId: activeShiftId,
+        });
+
+        // Check for dwell at stops (run after geofence for context)
+        await dwellDetectionService.checkVehicleDwell({
+          vehicleId: vehicle.id,
+          latitude: update.latitude,
+          longitude: update.longitude,
+          shiftId: activeShiftId,
+          speed: update.speed,
+        });
+      }
 
       this.processedEvents.add(dedupeKey);
       
