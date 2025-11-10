@@ -3289,6 +3289,39 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Get comprehensive route context for unified driver dashboard
+  app.get(
+    "/api/driver/route/:shiftId",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { shiftId } = req.params;
+
+        // Get shift and verify ownership
+        const shift = await storage.getShift(shiftId);
+        if (!shift) {
+          return res.status(404).json({ message: "Shift not found" });
+        }
+
+        if (shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Not authorized to view this shift" });
+        }
+
+        // Get comprehensive route context
+        const routeContext = await storage.getShiftRouteContext(shiftId);
+        res.json(routeContext);
+      } catch (error: any) {
+        console.error("Error fetching route context:", error);
+        if (error.name === "NotFoundError") {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to fetch route context" });
+      }
+    }
+  );
+
   // Get today's shifts
   app.get(
     "/api/driver/shifts/today",

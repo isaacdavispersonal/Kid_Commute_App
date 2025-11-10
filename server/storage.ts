@@ -40,6 +40,7 @@ import {
   type InsertRoute,
   type Stop,
   type InsertStop,
+  type RouteStopWithMetadata,
   type RouteStop,
   type InsertRouteStop,
   type Student,
@@ -120,7 +121,7 @@ export interface IStorage {
   createRoute(route: InsertRoute): Promise<Route>;
   updateRoute(id: string, updates: Partial<InsertRoute>): Promise<Route>;
   deleteRoute(id: string): Promise<void>;
-  getRouteStops(routeId: string): Promise<Stop[]>;
+  getRouteStops(routeId: string): Promise<RouteStopWithMetadata[]>;
   getAllStops(): Promise<Stop[]>;
   getStop(id: string): Promise<Stop | undefined>;
   createStop(stop: InsertStop): Promise<Stop>;
@@ -581,7 +582,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(routes).where(eq(routes.id, id));
   }
 
-  async getRouteStops(routeId: string): Promise<any[]> {
+  async getRouteStops(routeId: string): Promise<RouteStopWithMetadata[]> {
     // Get route stops with stop details
     const result = await db
       .select({
@@ -594,11 +595,11 @@ export class DatabaseStorage implements IStorage {
       .orderBy(routeStops.stopOrder);
     
     return result.map(r => ({
-      ...r.stop,
+      ...r.stop!,
       stopOrder: r.routeStop.stopOrder,
       scheduledTime: r.routeStop.scheduledTime,
       routeStopId: r.routeStop.id,
-    }));
+    })) as RouteStopWithMetadata[];
   }
 
   async getAllStops(): Promise<(Stop & { 
@@ -1228,6 +1229,114 @@ export class DatabaseStorage implements IStorage {
   async getDriverTodayShifts(driverId: string): Promise<Shift[]> {
     const today = new Date().toISOString().split('T')[0];
     return await this.getShiftsByDate(today, driverId);
+  }
+
+  async getShiftRouteContext(shiftId: string): Promise<any> {
+    // Get shift
+    const shift = await this.getShift(shiftId);
+    if (!shift) {
+      throw new NotFoundError("Shift not found");
+    }
+
+    // Get route, vehicle
+    const route = shift.routeId ? await this.getRoute(shift.routeId) : null;
+    const vehicle = shift.vehicleId ? await this.getVehicle(shift.vehicleId) : null;
+
+    if (!route) {
+      throw new NotFoundError("Shift has no route assigned");
+    }
+
+    // Get ordered route stops
+    const routeStopsData = await this.getRouteStops(route.id);
+
+    // Get all students for this route
+    const allStudents = await this.getStudentsByRouteForDate(route.id, shift.date);
+
+    // Get route progress for all stops
+    const progressRecords = await db
+      .select()
+      .from(routeProgress)
+      .where(eq(routeProgress.shiftId, shiftId));
+
+    const progressMap = new Map(progressRecords.map(p => [p.routeStopId, p]));
+
+    // Filter students by stop based on route type (morning = pickup, afternoon = dropoff)
+    const isPickup = shift.shiftType === "MORNING";
+    
+    // Enrich each stop with students and progress
+    const enrichedStops = await Promise.all(
+      routeStopsData.map(async (stop, index) => {
+        // Get students for this stop
+        const stopStudents = allStudents.filter(s => {
+          const stopId = isPickup ? s.pickupStopId : s.dropoffStopId;
+          return stopId === stop.id;
+        });
+
+        // Get progress for this stop
+        const progress = progressMap.get(stop.routeStopId);
+        const status = progress?.status || "PENDING";
+
+        // Calculate stops away (number of pending stops before this one)
+        const stopsAway = routeStopsData.slice(0, index).filter((_, i) => {
+          const prog = progressMap.get(routeStopsData[i].routeStopId);
+          return !prog || prog.status === "PENDING";
+        }).length;
+
+        return {
+          ...stop,
+          students: stopStudents.map(s => ({
+            id: s.id,
+            firstName: s.firstName,
+            lastName: s.lastName,
+            attendance: s.attendance,
+          })),
+          progress: {
+            status,
+            completedAt: progress?.completedAt || null,
+            notes: progress?.notes || null,
+          },
+          stopsAway,
+          scheduledTime: stop.scheduledTime,
+        };
+      })
+    );
+
+    // Calculate overall progress
+    const completedStops = enrichedStops.filter(s => s.progress.status === "COMPLETED").length;
+    const totalStops = enrichedStops.length;
+    const activeStop = enrichedStops.find(s => s.progress.status === "PENDING");
+
+    // Inspection status
+    const inspectionComplete = !!shift.inspectionCompletedAt;
+
+    return {
+      shift: {
+        id: shift.id,
+        date: shift.date,
+        shiftType: shift.shiftType,
+        plannedStart: shift.plannedStart,
+        plannedEnd: shift.plannedEnd,
+        status: shift.status,
+        inspectionCompletedAt: shift.inspectionCompletedAt,
+        inspectionComplete,
+      },
+      route: {
+        id: route.id,
+        name: route.name,
+        description: route.description,
+      },
+      vehicle: vehicle ? {
+        id: vehicle.id,
+        name: vehicle.name,
+        plateNumber: vehicle.plateNumber,
+      } : null,
+      stops: enrichedStops,
+      progress: {
+        completedStops,
+        totalStops,
+        activeStopId: activeStop?.routeStopId || null,
+      },
+    };
   }
 
   async checkShiftOverlap(

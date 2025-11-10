@@ -44,6 +44,7 @@ import AdminSamsaraIntegration from "@/pages/admin/samsara-integration";
 
 import DriverDashboard from "@/pages/driver/dashboard";
 import DriverRoutes from "@/pages/driver/routes";
+import DriverRoute from "@/pages/driver/route";
 import DriverSchedule from "@/pages/driver/schedule";
 import DriverTimeHistory from "@/pages/driver/time-history";
 import DriverInspection from "@/pages/driver/inspection";
@@ -180,6 +181,7 @@ function Router() {
                   <Route path="/driver" component={DriverDashboard} />
                   <Route path="/driver/dashboard" component={DriverDashboard} />
                   <Route path="/driver/routes" component={DriverRoutes} />
+                  <Route path="/driver/route/:shiftId" component={DriverRoute} />
                   <Route path="/driver/schedule" component={DriverSchedule} />
                   <Route path="/driver/attendance" component={DriverAttendance} />
                   <Route path="/driver/time-history" component={DriverTimeHistory} />

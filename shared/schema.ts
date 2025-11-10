@@ -179,6 +179,13 @@ export const insertStopSchema = createInsertSchema(stops)
 export type InsertStop = z.infer<typeof insertStopSchema>;
 export type Stop = typeof stops.$inferSelect;
 
+// Enriched route stop type (Stop + route-stop junction metadata)
+export type RouteStopWithMetadata = Stop & {
+  routeStopId: string;
+  stopOrder: number;
+  scheduledTime: string | null;
+};
+
 // Route stops junction table - Links routes to stops with ordering
 export const routeStops = pgTable("route_stops", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

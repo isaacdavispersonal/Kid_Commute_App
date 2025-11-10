@@ -21,6 +21,8 @@ Preferred communication style: Simple, everyday language.
 - **Real-Time Communication**: `ws` WebSocket server for bidirectional messaging and notifications.
 - **Data Storage**: PostgreSQL via Neon serverless with Drizzle ORM for type-safe queries.
 - **Core Data Model**: Includes Users (multi-role), Households, Vehicles, Routes, Stops, Students, Shifts, Clock Events, Messages, Incidents, and Vehicle Inspections.
+- **Type System Enhancements**: `RouteStopWithMetadata` type enriches Stop data with route-stop junction metadata (routeStopId, stopOrder, scheduledTime), enabling proper frontend access to route ordering information.
+- **Vehicle Inspection Tracking**: Shifts table includes `inspectionCompletedAt` timestamp field (server-managed, omitted from insert/update schemas) to enforce pre-route vehicle inspection requirements.
 - **Key Features**:
     - **Reusable Stops System**: Stops are independently defined and assignable to multiple routes.
     - **Phone-Based Household System**: Links parents to students via phone numbers, supporting multi-guardian scenarios.
@@ -42,7 +44,7 @@ Preferred communication style: Simple, everyday language.
     - **Live Fleet Map**: Admin page displaying real-time vehicle locations with auto-refresh and metrics.
     - **Vehicle Management**: CRUD operations for vehicles with safety checks and uniqueness validation.
     - **Geofence Detection System**: Real-time monitoring of vehicles entering/exiting defined geofences (SCHOOL, STOP, CUSTOM) with automatic parent notifications.
-    - **Automatic Stop Geofence Provisioning**: Stops automatically provision 120m STOP-type geofences when created/updated with coordinates. Storage-layer transactions ensure atomic creation, sync on updates (name/coordinate changes), and cleanup on deletion. FK constraint (SET NULL) prevents orphan records.
+    - **Automatic Stop Geofence Provisioning**: Stops automatically provision 100m STOP-type geofences when created/updated with coordinates. Storage-layer transactions ensure atomic creation, sync on updates (name/coordinate changes), and cleanup on deletion. FK constraint (SET NULL) prevents orphan records.
     - **Automatic Stop Detection**: Dwell-based system that auto-completes route stops when vehicles remain stationary at stop locations.
     - **Optimized GPS Pipeline**: Enhanced `server/gps-pipeline.ts` with timezone-aware shift detection, query optimization, and sequential processing.
     - **Session Management**: PostgreSQL-backed sessions with 7-day TTL and secure cookies.
