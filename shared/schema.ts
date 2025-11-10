@@ -152,18 +152,21 @@ export const insertRouteSchema = createInsertSchema(routes).omit({
 export type InsertRoute = z.infer<typeof insertRouteSchema>;
 export type Route = typeof routes.$inferSelect;
 
-// Stops table - Independent, reusable stop locations
+// Note: Forward reference to geofences table defined later in schema
+// geofenceId FK will be validated at runtime by PostgreSQL
 export const stops = pgTable("stops", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   address: text("address").notNull(),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  geofenceId: varchar("geofence_id"), // Auto-created geofence for stop location alerts, FK added below
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertStopSchema = createInsertSchema(stops).omit({
   id: true,
+  geofenceId: true, // Auto-managed by backend
   createdAt: true,
 });
 
@@ -582,7 +585,7 @@ export type RouteProgress = typeof routeProgress.$inferSelect;
 // ============ Geofence and GPS Tracking Tables ============
 
 // Geofence type enum
-export const geofenceTypeEnum = pgEnum("geofence_type", ["SCHOOL", "CUSTOM"]);
+export const geofenceTypeEnum = pgEnum("geofence_type", ["SCHOOL", "CUSTOM", "STOP"]);
 
 // Event type enum for geofence transitions
 export const geofenceEventTypeEnum = pgEnum("geofence_event_type", ["ENTRY", "EXIT"]);

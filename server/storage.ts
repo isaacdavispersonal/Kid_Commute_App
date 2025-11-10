@@ -610,31 +610,160 @@ export class DatabaseStorage implements IStorage {
     return stop;
   }
 
+  /**
+   * Helper: Provision or update a STOP geofence for a stop location
+   * @param stopData - Stop data with name and coordinates
+   * @param tx - Transaction client
+   * @param existingGeofenceId - Existing geofence ID if updating
+   * @returns Created or updated geofence
+   */
+  private async provisionStopGeofence(
+    stopData: { name: string; latitude?: string | null; longitude?: string | null },
+    tx: any,
+    existingGeofenceId?: string | null
+  ): Promise<any> {
+    if (!stopData.latitude || !stopData.longitude) {
+      // No coordinates - delete existing geofence if present
+      if (existingGeofenceId) {
+        await tx.delete(geofences).where(eq(geofences.id, existingGeofenceId));
+      }
+      return null;
+    }
+
+    const geofenceData = {
+      name: `Stop · ${stopData.name}`,
+      type: "STOP" as const,
+      centerLat: stopData.latitude,
+      centerLng: stopData.longitude,
+      radiusMeters: 120, // 120m as recommended by architect
+      scheduleStartTime: null, // Always active
+      scheduleEndTime: null, // Always active
+      isActive: true,
+    };
+
+    if (existingGeofenceId) {
+      // Update existing geofence
+      const [updated] = await tx
+        .update(geofences)
+        .set(geofenceData)
+        .where(eq(geofences.id, existingGeofenceId))
+        .returning();
+      return updated;
+    } else {
+      // Create new geofence
+      const [created] = await tx.insert(geofences).values(geofenceData).returning();
+      return created;
+    }
+  }
+
   async createStop(stop: InsertStop): Promise<Stop> {
-    const [newStop] = await db.insert(stops).values(stop).returning();
-    return newStop;
+    return await db.transaction(async (tx) => {
+      // Create stop
+      const [newStop] = await tx.insert(stops).values(stop).returning();
+
+      // Provision geofence if coordinates provided
+      if (newStop.latitude && newStop.longitude) {
+        const geofence = await this.provisionStopGeofence(newStop, tx);
+        
+        if (geofence) {
+          // Update stop with geofenceId
+          const [stopWithGeofence] = await tx
+            .update(stops)
+            .set({ geofenceId: geofence.id })
+            .where(eq(stops.id, newStop.id))
+            .returning();
+          
+          return stopWithGeofence;
+        }
+      }
+
+      return newStop;
+    });
   }
 
   async updateStop(id: string, updates: Partial<InsertStop>): Promise<Stop> {
-    const [updatedStop] = await db
-      .update(stops)
-      .set(updates)
-      .where(eq(stops.id, id))
-      .returning();
-    
-    if (!updatedStop) {
-      throw new NotFoundError("Stop not found");
-    }
-    
-    return updatedStop;
+    return await db.transaction(async (tx) => {
+      // Get existing stop
+      const [existingStop] = await tx
+        .select()
+        .from(stops)
+        .where(eq(stops.id, id));
+      
+      if (!existingStop) {
+        throw new NotFoundError("Stop not found");
+      }
+
+      // Merge updates with existing data for geofence provisioning
+      const mergedData = {
+        name: updates.name ?? existingStop.name,
+        latitude: updates.latitude ?? existingStop.latitude,
+        longitude: updates.longitude ?? existingStop.longitude,
+      };
+
+      // Check if coordinates or name changed
+      const coordsChanged = 
+        updates.latitude !== undefined || 
+        updates.longitude !== undefined;
+      const nameChanged = updates.name !== undefined;
+
+      // Update stop
+      const [updatedStop] = await tx
+        .update(stops)
+        .set(updates)
+        .where(eq(stops.id, id))
+        .returning();
+
+      // Sync geofence if coordinates or name changed
+      if (coordsChanged || nameChanged) {
+        const geofence = await this.provisionStopGeofence(
+          mergedData,
+          tx,
+          existingStop.geofenceId
+        );
+
+        // Update geofenceId if changed
+        if (geofence && geofence.id !== existingStop.geofenceId) {
+          const [stopWithGeofence] = await tx
+            .update(stops)
+            .set({ geofenceId: geofence.id })
+            .where(eq(stops.id, id))
+            .returning();
+          return stopWithGeofence;
+        } else if (!geofence && existingStop.geofenceId) {
+          // Coords removed - clear geofenceId
+          const [stopWithoutGeofence] = await tx
+            .update(stops)
+            .set({ geofenceId: null })
+            .where(eq(stops.id, id))
+            .returning();
+          return stopWithoutGeofence;
+        }
+      }
+
+      return updatedStop;
+    });
   }
 
   async deleteStop(id: string): Promise<void> {
-    const result = await db.delete(stops).where(eq(stops.id, id)).returning();
-    
-    if (result.length === 0) {
-      throw new NotFoundError("Stop not found");
-    }
+    await db.transaction(async (tx) => {
+      // Get stop to find linked geofence
+      const [stop] = await tx
+        .select()
+        .from(stops)
+        .where(eq(stops.id, id));
+      
+      if (!stop) {
+        throw new NotFoundError("Stop not found");
+      }
+
+      // Delete linked geofence first
+      if (stop.geofenceId) {
+        await tx.delete(geofences).where(eq(geofences.id, stop.geofenceId));
+      }
+
+      // Delete stop
+      await tx.delete(stops).where(eq(stops.id, id));
+    });
   }
 
   // ============ Route Stops (Junction) operations ============
