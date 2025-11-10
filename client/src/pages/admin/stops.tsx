@@ -43,24 +43,23 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable } from "@/components/data-table";
-import { Plus, MapPin, Pencil, Trash2 } from "lucide-react";
+import { Plus, MapPin, Pencil, Trash2, Shield, ShieldOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface EnrichedStop {
   id: string;
-  routeId: string;
   name: string;
   address: string;
-  latitude: string;
-  longitude: string;
-  stopOrder: number;
-  scheduledTime: string;
-  routeName: string;
-}
-
-interface Route {
-  id: string;
-  name: string;
+  latitude: string | null;
+  longitude: string | null;
+  geofenceId: string | null;
+  geofence: {
+    id: string;
+    name: string;
+    radiusMeters: number;
+    isActive: boolean;
+  } | null;
 }
 
 export default function AdminStopsPage() {
@@ -74,33 +73,23 @@ export default function AdminStopsPage() {
     queryKey: ["/api/admin/stops"],
   });
 
-  const { data: routes } = useQuery<Route[]>({
-    queryKey: ["/api/admin/routes"],
-  });
-
   const createForm = useForm<InsertStop>({
     resolver: zodResolver(insertStopSchema),
     defaultValues: {
-      routeId: "",
       name: "",
       address: "",
       latitude: "",
       longitude: "",
-      stopOrder: 1,
-      scheduledTime: "",
     },
   });
 
   const editForm = useForm<InsertStop>({
     resolver: zodResolver(insertStopSchema),
     defaultValues: {
-      routeId: "",
       name: "",
       address: "",
       latitude: "",
       longitude: "",
-      stopOrder: 1,
-      scheduledTime: "",
     },
   });
 
@@ -182,13 +171,10 @@ export default function AdminStopsPage() {
   const handleEditClick = (stop: EnrichedStop) => {
     setSelectedStop(stop);
     editForm.reset({
-      routeId: stop.routeId,
       name: stop.name,
       address: stop.address,
-      latitude: stop.latitude,
-      longitude: stop.longitude,
-      stopOrder: stop.stopOrder,
-      scheduledTime: stop.scheduledTime,
+      latitude: stop.latitude || "",
+      longitude: stop.longitude || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -215,30 +201,47 @@ export default function AdminStopsPage() {
       ),
     },
     {
-      header: "Route",
-      accessor: "routeName",
-    },
-    {
       header: "Address",
       accessor: "address",
     },
     {
-      header: "Order",
-      accessor: "stopOrder",
-      cell: (value: number) => `#${value}`,
-    },
-    {
-      header: "Scheduled Time",
-      accessor: "scheduledTime",
-    },
-    {
       header: "Coordinates",
       accessor: "latitude",
-      cell: (_: string, row: EnrichedStop) => (
-        <span className="text-xs text-muted-foreground font-mono">
-          {parseFloat(row.latitude).toFixed(4)}, {parseFloat(row.longitude).toFixed(4)}
-        </span>
-      ),
+      cell: (_: string | null, row: EnrichedStop) => {
+        if (!row.latitude || !row.longitude) {
+          return <span className="text-xs text-muted-foreground">Not set</span>;
+        }
+        return (
+          <span className="text-xs text-muted-foreground font-mono">
+            {parseFloat(row.latitude).toFixed(4)}, {parseFloat(row.longitude).toFixed(4)}
+          </span>
+        );
+      },
+    },
+    {
+      header: "Geofence",
+      accessor: "geofenceId",
+      cell: (_: string | null, row: EnrichedStop) => {
+        if (!row.geofence) {
+          return (
+            <Badge variant="secondary" className="gap-1">
+              <ShieldOff className="h-3 w-3" />
+              None
+            </Badge>
+          );
+        }
+        return (
+          <div className="flex items-center gap-2">
+            <Badge 
+              variant={row.geofence.isActive ? "default" : "secondary"}
+              className="gap-1"
+            >
+              <Shield className="h-3 w-3" />
+              {row.geofence.radiusMeters}m
+            </Badge>
+          </div>
+        );
+      },
     },
     {
       header: "Actions",
@@ -276,7 +279,7 @@ export default function AdminStopsPage() {
         <div>
           <h1 className="text-2xl font-semibold mb-1">Stop Management</h1>
           <p className="text-sm text-muted-foreground">
-            Create and manage pickup/dropoff stops for routes
+            Manage pickup/dropoff locations. Geofences auto-provision when coordinates are added (120m radius).
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -290,76 +293,28 @@ export default function AdminStopsPage() {
             <DialogHeader>
               <DialogTitle>Create New Stop</DialogTitle>
               <DialogDescription>
-                Add a new pickup or dropoff stop to a route
+                Add a new pickup or dropoff location. Geofences auto-provision when coordinates are provided.
               </DialogDescription>
             </DialogHeader>
             <Form {...createForm}>
               <form onSubmit={createForm.handleSubmit(handleCreateSubmit)} className="space-y-4">
                 <FormField
                   control={createForm.control}
-                  name="routeId"
+                  name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Route</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-route">
-                            <SelectValue placeholder="Select a route" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {routes?.map((route) => (
-                            <SelectItem key={route.id} value={route.id}>
-                              {route.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>Stop Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="E.g., Main St & 5th Ave"
+                          data-testid="input-stop-name"
+                          {...field}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={createForm.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Stop Name</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="E.g., Main St & 5th Ave"
-                            data-testid="input-stop-name"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={createForm.control}
-                    name="stopOrder"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Stop Order</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min="1"
-                            placeholder="1"
-                            data-testid="input-stop-order"
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
                 <FormField
                   control={createForm.control}
@@ -417,24 +372,6 @@ export default function AdminStopsPage() {
                   />
                 </div>
 
-                <FormField
-                  control={createForm.control}
-                  name="scheduledTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Scheduled Time</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="time"
-                          data-testid="input-scheduled-time"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <div className="flex justify-end gap-2 pt-4">
                   <Button
                     type="button"
@@ -470,76 +407,28 @@ export default function AdminStopsPage() {
           <DialogHeader>
             <DialogTitle>Edit Stop</DialogTitle>
             <DialogDescription>
-              Update the stop information
+              Update stop information. Geofence will auto-sync if coordinates change.
             </DialogDescription>
           </DialogHeader>
           <Form {...editForm}>
             <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
               <FormField
                 control={editForm.control}
-                name="routeId"
+                name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Route</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-edit-route">
-                          <SelectValue placeholder="Select a route" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {routes?.map((route) => (
-                          <SelectItem key={route.id} value={route.id}>
-                            {route.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Stop Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="E.g., Main St & 5th Ave"
+                        data-testid="input-edit-stop-name"
+                        {...field}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={editForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Stop Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="E.g., Main St & 5th Ave"
-                          data-testid="input-edit-stop-name"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={editForm.control}
-                  name="stopOrder"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Stop Order</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="1"
-                          placeholder="1"
-                          data-testid="input-edit-stop-order"
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
 
               <FormField
                 control={editForm.control}
@@ -596,24 +485,6 @@ export default function AdminStopsPage() {
                   )}
                 />
               </div>
-
-              <FormField
-                control={editForm.control}
-                name="scheduledTime"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Scheduled Time</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="time"
-                        data-testid="input-edit-scheduled-time"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button

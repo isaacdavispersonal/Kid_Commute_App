@@ -601,8 +601,33 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getAllStops(): Promise<Stop[]> {
-    return await db.select().from(stops).orderBy(stops.name);
+  async getAllStops(): Promise<(Stop & { 
+    geofence: { 
+      id: string; 
+      name: string; 
+      radiusMeters: number; 
+      isActive: boolean;
+    } | null 
+  })[]> {
+    // Join geofence details to show auto-managed geofence metadata
+    const result = await db
+      .select({
+        stop: stops,
+        geofence: geofences,
+      })
+      .from(stops)
+      .leftJoin(geofences, eq(stops.geofenceId, geofences.id))
+      .orderBy(stops.name);
+    
+    return result.map(r => ({
+      ...r.stop,
+      geofence: r.geofence ? {
+        id: r.geofence.id,
+        name: r.geofence.name,
+        radiusMeters: r.geofence.radiusMeters,
+        isActive: r.geofence.isActive,
+      } : null,
+    }));
   }
 
   async getStop(id: string): Promise<Stop | undefined> {
