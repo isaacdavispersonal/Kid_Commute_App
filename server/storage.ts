@@ -41,6 +41,7 @@ import {
   type Stop,
   type InsertStop,
   type RouteStopWithMetadata,
+  type ShiftRouteContext,
   type RouteStop,
   type InsertRouteStop,
   type Student,
@@ -1231,7 +1232,7 @@ export class DatabaseStorage implements IStorage {
     return await this.getShiftsByDate(today, driverId);
   }
 
-  async getShiftRouteContext(shiftId: string): Promise<any> {
+  async getShiftRouteContext(shiftId: string): Promise<ShiftRouteContext> {
     // Get shift
     const shift = await this.getShift(shiftId);
     if (!shift) {

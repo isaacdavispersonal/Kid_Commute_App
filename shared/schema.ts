@@ -186,6 +186,53 @@ export type RouteStopWithMetadata = Stop & {
   scheduledTime: string | null;
 };
 
+// Shift route context type for unified driver route dashboard
+export type ShiftRouteContext = {
+  shift: {
+    id: string;
+    date: string;
+    shiftType: string;
+    plannedStart: string;
+    plannedEnd: string;
+    status: string;
+    inspectionCompletedAt: Date | null;
+    inspectionComplete: boolean;
+  };
+  route: {
+    id: string;
+    name: string;
+    description: string | null;
+  };
+  vehicle: {
+    id: string;
+    name: string;
+    plateNumber: string;
+  } | null;
+  stops: Array<RouteStopWithMetadata & {
+    students: Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      attendance: {
+        status: string;
+        markedByUserId: string;
+        createdAt: string;
+      } | null;
+    }>;
+    progress: {
+      status: string;
+      completedAt: Date | null;
+      notes: string | null;
+    };
+    stopsAway: number;
+  }>;
+  progress: {
+    completedStops: number;
+    totalStops: number;
+    activeStopId: string | null;
+  };
+};
+
 // Route stops junction table - Links routes to stops with ordering
 export const routeStops = pgTable("route_stops", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
