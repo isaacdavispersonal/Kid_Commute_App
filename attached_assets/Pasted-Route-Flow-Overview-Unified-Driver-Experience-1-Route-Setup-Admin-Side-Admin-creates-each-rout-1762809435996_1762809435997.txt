@@ -1,0 +1,129 @@
+Route Flow Overview (Unified Driver Experience)
+1. Route Setup (Admin Side)
+
+Admin creates each route:
+
+Adds all stops with names, addresses, and coordinates.
+
+Assigns a driver and vehicle to that route.
+
+Defines the order of stops and estimated times.
+
+Once published:
+
+The assigned driver can view that route from their app.
+
+Only that driver can start, manage, and complete the route.
+
+2. Before Route Starts
+
+Before beginning:
+
+The driver completes the Vehicle Inspection Checklist.
+
+Once inspection is submitted, the Start Route button activates.
+
+Live GPS tracking starts for parents to see how far the van is from their selected stop.
+
+When Start Route is pressed:
+
+The system opens the Route Dashboard — a single-page interface where the driver manages the entire trip.
+
+From here, everything happens in one place:
+
+The “stops list” appears with progress indicators.
+
+A live counter shows:
+
+“Van is X stops away” and “ETA: ___ minutes.”
+
+3. During the Route (All in One Screen)
+
+Once the route is active, the driver stays on the same page for all tasks.
+
+Each stop appears in order with expandable cards or buttons like:
+
+Stop 1: Oakwood Apartments — ETA 3 min
+[Take Attendance] [Mark Stop Complete]
+
+
+Driver Flow at Each Stop:
+
+The driver arrives and selects the active stop.
+
+Takes attendance (marks which students were dropped off/picked up). (Morning stops should have students listed as picked up, afternoon stop should have students listed as dropped off)
+
+Taps Mark Stop as Complete once done.
+
+When a stop is marked complete:
+
+The stop turns green or collapses.
+
+The next stop becomes active automatically.
+
+The “X stops away” counter and ETAs update automatically for parents — no extra steps needed.
+
+A parent notification is triggered:
+
+“Your student’s stop has been completed.”
+
+This continues until the final stop.
+
+4. Finishing the Route
+
+The last stop is considered the final stop in the route where drivers are returning the van, so no prompt should be needed for attendance or updates for parents
+
+After the final stop is completed:
+
+The screen automatically shows a prompt:
+“All stops completed. Mark Route as Finished?”
+
+When the driver taps Mark Route as Complete:
+
+The session ends and is logged as Completed.
+
+Attendance and timestamps are automatically saved.
+
+Admins see the route marked as done in real time.
+
+Parents see:
+
+“Route Completed.”
+
+5. Parent and Admin Visibility
+
+Parents See:
+
+Real-time van location and ETA to their stop.
+
+“X stops away” counter that updates live.
+
+Notifications when:
+
+The route starts.
+
+Their stop is completed.
+
+The route ends.
+
+Admins See:
+
+All active and completed routes.
+
+Live driver tracking and ETAs.
+
+Attendance records per stop.
+
+Start/end timestamps and route summary.
+
+6. Summary of Driver-Side Simplicity
+
+Everything the driver needs is on one continuous Route Page:
+
+Start Route
+
+Live ETAs and stop list
+
+Attendance and stop completion buttons
+
+Route completion prompt
