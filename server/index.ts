@@ -107,4 +107,8 @@ app.use((req, res, next) => {
   // Then run every hour
   setInterval(runAutoClockout, AUTO_CLOCKOUT_INTERVAL);
   log(`Auto-clockout job scheduled to run every ${AUTO_CLOCKOUT_INTERVAL / 1000 / 60} minutes`);
+
+  // Start GPS polling service for real-time vehicle tracking
+  const { gpsPollingService } = await import("./gps-polling-service");
+  await gpsPollingService.start();
 })();
