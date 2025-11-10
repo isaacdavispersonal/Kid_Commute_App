@@ -47,6 +47,7 @@ Preferred communication style: Simple, everyday language.
     - **Automatic Stop Geofence Provisioning**: Stops automatically provision 100m STOP-type geofences when created/updated with coordinates. Storage-layer transactions ensure atomic creation, sync on updates (name/coordinate changes), and cleanup on deletion. FK constraint (SET NULL) prevents orphan records.
     - **Automatic Stop Detection**: Dwell-based system that auto-completes route stops when vehicles remain stationary at stop locations.
     - **Optimized GPS Pipeline**: Enhanced `server/gps-pipeline.ts` with timezone-aware shift detection, query optimization, and sequential processing.
+    - **Unified Driver Route Dashboard**: Consolidated interface combining route management, attendance tracking, and stop completion. Features include: inspection gate enforcement before route start, stop-by-stop display with student lists, individual student attendance controls (riding/absent), stop completion gating (requires all students marked + inspection complete), auto-advance to next stop via query invalidation, and canonical shift date handling for overnight routes. Backed by typed `ShiftRouteContext` API response with comprehensive route, stop, student, and progress data.
     - **Session Management**: PostgreSQL-backed sessions with 7-day TTL and secure cookies.
 
 ## External Dependencies
