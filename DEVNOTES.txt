@@ -191,3 +191,7 @@
     different reroutable locations to take to different app
 
     https://06e89b9f-cb60-4a4a-a64f-8bf34a7e53af-00-3kq4uf0mbogt3.riker.replit.dev/api/webhooks/samsara-webhook
+
+    vehicle inspections also check to see if the driver is using the same vehicle as the one they're assigned, and if they're not then it'll update their current van they're using
+
+    admin dashboard for vehicle information
