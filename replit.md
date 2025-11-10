@@ -34,7 +34,7 @@ Preferred communication style: Simple, everyday language.
     - **Student Attendance Tracking**: Comprehensive system (PENDING, riding, absent) with live admin overview, real-time notifications, and analytics.
     - **Parent Dashboard Enhancements**: Live ETA countdown, quick contact actions, driver information display, payment/billing section, and account management (including deletion).
     - **Admin Audit Log**: Tracks all driver and parent actions with filtering capabilities.
-    - **Route Progress Tracking**: Real-time driver route progress with parent visibility.
+    - **Route Progress Tracking**: Comprehensive system showing real-time driver route progress with parent visibility. Backend API enriches `/api/parent/students` with active shift status, stops remaining counter (pending stops before pickup), total/completed stops, route completion percentage, and pickup confirmation flags. Parent dashboard displays live progress bars, "X stops away" counter, and "Picked up at HH:MM" status. Includes shift progress caching to optimize queries when multiple children share routes, and graceful handling of inactive routes and edge cases.
     - **Real-Time Navigation Tracking**: GPS-based system for live ETA calculations, supporting Samsara and generic GPS providers via a webhook-first architecture. Features source-agnostic GPS pipeline, Haversine formula for distance, and parent pickup stop selection.
     - **Lead Driver Permissions**: `isLeadDriver` flag for enhanced senior driver permissions.
     - **Driver Utilities System**: Drivers can request supplies, submit vehicle inspection checklists, and provide feedback, with admin management.

@@ -1,7 +1,7 @@
 // Parent dashboard with student overview
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserCircle, MapPin, Clock, Bus, Phone, MessageSquare, Bell } from "lucide-react";
+import { UserCircle, MapPin, Clock, Bus, Phone, MessageSquare, Bell, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,7 +11,10 @@ import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner"
 import { NoChildrenBanner } from "@/components/no-children-banner";
 import { ParentTutorialBanner } from "@/components/parent-tutorial-banner";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { useState, useEffect } from "react";
+import { queryClient } from "@/lib/queryClient";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface StudentData {
   id: string;
@@ -31,6 +34,13 @@ interface StudentData {
   driverId?: string;
   driverName?: string;
   driverPhone?: string;
+  activeShiftId?: string | null;
+  stopsRemaining?: number | null;
+  totalStops?: number | null;
+  stopsCompleted?: number | null;
+  routeProgressPct?: number | null;
+  studentPickedUp?: boolean;
+  routeStatus?: "active" | "inactive";
 }
 
 // Calculate ETA based on scheduled pickup time
@@ -66,10 +76,38 @@ function calculateETA(scheduledTime: string): { minutes: number; isApproaching: 
 
 export default function ParentDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const { socket, isConnected } = useWebSocket();
   
   const { data: students, isLoading } = useQuery<StudentData[]>({
     queryKey: ["/api/parent/students"],
+    refetchInterval: 120000, // Fallback refetch every 2 minutes (WebSocket is primary)
+    refetchIntervalInBackground: true,
   });
+
+  // Listen for WebSocket route progress updates
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Invalidate student data on stop completion or route progress updates
+        if (data.category === "stop_completion" || data.type === "route_progress_update") {
+          console.log("[parent-dashboard] Route progress update received, refreshing student data");
+          queryClient.invalidateQueries({ queryKey: ["/api/parent/students"] });
+        }
+      } catch (error) {
+        // Ignore parse errors
+      }
+    };
+
+    socket.addEventListener("message", handleMessage);
+    
+    return () => {
+      socket.removeEventListener("message", handleMessage);
+    };
+  }, [socket, isConnected]);
 
   // Update countdown every minute
   useEffect(() => {
@@ -163,6 +201,80 @@ export default function ParentDashboard() {
                         </div>
                         <StatusBadge status="active" />
                       </div>
+
+                      {/* Route Progress Tracking */}
+                      {student.routeStatus === "active" && student.totalStops != null && (
+                        <div className={`p-3 rounded-md border ${
+                          student.studentPickedUp 
+                            ? 'bg-success/5 border-success/20' 
+                            : 'bg-primary/5 border-primary/20'
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <Navigation className={`h-4 w-4 ${student.studentPickedUp ? 'text-success' : 'text-primary'}`} />
+                              <p className="text-sm font-medium">Route Progress</p>
+                            </div>
+                            <Badge 
+                              variant="outline" 
+                              className={
+                                student.studentPickedUp
+                                  ? "bg-success/10 text-success border-success/30"
+                                  : "bg-primary/10 text-primary border-primary/30"
+                              }
+                              data-testid={`badge-route-status-${student.id}`}
+                            >
+                              {student.studentPickedUp ? "Picked Up" : "En Route"}
+                            </Badge>
+                          </div>
+                          
+                          {student.studentPickedUp ? (
+                            <div className="flex items-center gap-2 text-success">
+                              <Bell className="h-4 w-4" />
+                              <p className="text-sm font-semibold" data-testid={`text-picked-up-${student.id}`}>
+                                Picked up at {student.pickupStop?.scheduledTime || ""}
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-muted-foreground">Progress</span>
+                                  <span className="font-medium" data-testid={`text-progress-pct-${student.id}`}>
+                                    {student.routeProgressPct || 0}%
+                                  </span>
+                                </div>
+                                <Progress 
+                                  value={student.routeProgressPct || 0} 
+                                  className="h-2"
+                                  data-testid={`progress-bar-route-${student.id}`}
+                                />
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-muted-foreground">
+                                    {student.stopsCompleted || 0} of {student.totalStops} stops completed
+                                  </span>
+                                  <span 
+                                    className="font-semibold text-primary"
+                                    data-testid={`text-stops-remaining-${student.id}`}
+                                  >
+                                    {student.stopsRemaining || 0} stop{student.stopsRemaining !== 1 ? 's' : ''} away
+                                  </span>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {student.routeStatus === "inactive" && (
+                        <div className="p-3 rounded-md bg-muted/50 border border-muted">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Clock className="h-4 w-4" />
+                            <p className="text-sm" data-testid={`text-route-inactive-${student.id}`}>
+                              Route not currently active
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       {student.pickupStop && (
                         <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">

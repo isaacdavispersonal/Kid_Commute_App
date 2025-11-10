@@ -3614,7 +3614,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const students = await storage.getStudentsByParent(parentId);
         const today = new Date().toISOString().split('T')[0];
 
-        // Enrich with route, stop details, driver info, and attendance
+        // Cache for route progress by shiftId to avoid duplicate queries
+        const shiftProgressCache = new Map();
+
+        // Enrich with route, stop details, driver info, attendance, and route progress
         const enrichedStudents = await Promise.all(
           students.map(async (student) => {
             let routeName = null;
@@ -3623,6 +3626,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             let driverId = null;
             let driverName = null;
             let driverPhone = null;
+            let activeShiftId = null;
+            let stopsRemaining = null;
+            let totalStops = null;
+            let stopsCompleted = null;
+            let routeProgressPct = null;
+            let studentPickedUp = false;
+            let routeStatus = "inactive";
 
             if (student.assignedRouteId) {
               const route = await storage.getRoute(student.assignedRouteId);
@@ -3637,6 +3647,52 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
                   driverId = driver.id;
                   driverName = `${driver.firstName} ${driver.lastName}`;
                   driverPhone = driver.phone || null;
+
+                  // Find active shift for this driver to get route progress
+                  const driverShifts = await storage.getShiftsByDriver(driver.id);
+                  const activeShift = driverShifts.find(shift => 
+                    shift.routeId === student.assignedRouteId && 
+                    shift.status === "ACTIVE"
+                  );
+
+                  if (activeShift) {
+                    activeShiftId = activeShift.id;
+                    routeStatus = "active";
+
+                    // Get or fetch route progress from cache
+                    let routeProgress = shiftProgressCache.get(activeShift.id);
+                    if (!routeProgress) {
+                      routeProgress = await storage.getRouteProgress(activeShift.id);
+                      shiftProgressCache.set(activeShift.id, routeProgress);
+                    }
+
+                    if (routeProgress && routeProgress.length > 0) {
+                      totalStops = routeProgress.length;
+                      stopsCompleted = routeProgress.filter((p: any) => p.progress.status === "COMPLETED").length;
+                      routeProgressPct = Math.round((stopsCompleted / totalStops) * 100);
+
+                      // Calculate stops remaining before pickup
+                      if (student.pickupStopId) {
+                        // Find pickup stop's order
+                        const pickupProgress = routeProgress.find((p: any) => p.routeStop.stopId === student.pickupStopId);
+                        if (pickupProgress) {
+                          const pickupOrder = pickupProgress.routeStop.stopOrder;
+                          
+                          // Check if student was already picked up
+                          if (pickupProgress.progress.status === "COMPLETED") {
+                            studentPickedUp = true;
+                            stopsRemaining = 0;
+                          } else {
+                            // Count pending stops before pickup
+                            stopsRemaining = routeProgress.filter((p: any) => 
+                              p.routeStop.stopOrder < pickupOrder && 
+                              p.progress.status === "PENDING"
+                            ).length;
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -3667,6 +3723,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               driverName,
               driverPhone,
               attendance,
+              activeShiftId,
+              stopsRemaining,
+              totalStops,
+              stopsCompleted,
+              routeProgressPct,
+              studentPickedUp,
+              routeStatus,
             };
           })
         );
