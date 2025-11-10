@@ -41,7 +41,8 @@ Preferred communication style: Simple, everyday language.
     - **Route Health Monitoring**: Admin dashboard for active route status, driver availability, and student counts.
     - **Live Fleet Map**: Admin page displaying real-time vehicle locations with auto-refresh and metrics.
     - **Vehicle Management**: CRUD operations for vehicles with safety checks and uniqueness validation.
-    - **Geofence Detection System**: Real-time monitoring of vehicles entering/exiting defined geofences (SCHOOL, CUSTOM) with automatic parent notifications.
+    - **Geofence Detection System**: Real-time monitoring of vehicles entering/exiting defined geofences (SCHOOL, STOP, CUSTOM) with automatic parent notifications.
+    - **Automatic Stop Geofence Provisioning**: Stops automatically provision 120m STOP-type geofences when created/updated with coordinates. Storage-layer transactions ensure atomic creation, sync on updates (name/coordinate changes), and cleanup on deletion. FK constraint (SET NULL) prevents orphan records.
     - **Automatic Stop Detection**: Dwell-based system that auto-completes route stops when vehicles remain stationary at stop locations.
     - **Optimized GPS Pipeline**: Enhanced `server/gps-pipeline.ts` with timezone-aware shift detection, query optimization, and sequential processing.
     - **Session Management**: PostgreSQL-backed sessions with 7-day TTL and secure cookies.
