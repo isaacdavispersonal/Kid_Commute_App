@@ -60,11 +60,10 @@ export default function DriverRoutePage() {
       studentId: string;
       status: "riding" | "absent";
     }) => {
-      if (!shiftId) throw new Error("No shift ID");
-      const today = new Date().toISOString().split("T")[0];
+      if (!shiftId || !routeContext) throw new Error("Missing shift context");
       return apiRequest("POST", "/api/attendance", {
         studentId,
-        date: today,
+        date: routeContext.shift.date,
         status,
       });
     },
