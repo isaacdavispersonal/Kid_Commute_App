@@ -164,11 +164,17 @@ export const stops = pgTable("stops", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertStopSchema = createInsertSchema(stops).omit({
-  id: true,
-  geofenceId: true, // Auto-managed by backend
-  createdAt: true,
-});
+export const insertStopSchema = createInsertSchema(stops)
+  .omit({
+    id: true,
+    geofenceId: true, // Auto-managed by backend
+    createdAt: true,
+  })
+  .extend({
+    // Transform empty strings to null for coordinates
+    latitude: z.string().transform(val => val === "" ? null : val).nullable().optional(),
+    longitude: z.string().transform(val => val === "" ? null : val).nullable().optional(),
+  });
 
 export type InsertStop = z.infer<typeof insertStopSchema>;
 export type Stop = typeof stops.$inferSelect;
