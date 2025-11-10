@@ -58,7 +58,12 @@ app.use((req, res, next) => {
 
   // Register event listeners for geofence and dwell events
   geofenceDetectionService.onGeofenceEvent((event) => {
-    notificationService.handleGeofenceExit(event);
+    // Handle both ENTRY (approaching stop) and EXIT (departing) events
+    if (event.type === "ENTRY") {
+      notificationService.handleGeofenceEntry(event);
+    } else if (event.type === "EXIT") {
+      notificationService.handleGeofenceExit(event);
+    }
   });
 
   dwellDetectionService.onStopCompletion((event) => {

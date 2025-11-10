@@ -8,7 +8,7 @@ import type { StopCompletionEvent } from "./dwell-detection-service";
 
 interface WebSocketNotification {
   type: "notification";
-  category: "geofence_exit" | "stop_completion";
+  category: "geofence_exit" | "stop_completion" | "stop_approaching";
   shiftId: string;
   routeId?: string;
   routeStopId?: string;
@@ -124,7 +124,61 @@ class NotificationService {
   }
 
   /**
-   * Handle geofence EXIT event - notify parents when van leaves school
+   * Handle geofence ENTRY event - notify parents when approaching stop
+   */
+  async handleGeofenceEntry(event: GeofenceEvent) {
+    try {
+      if (event.type !== "ENTRY" || !event.shiftId) {
+        return;
+      }
+
+      // Only notify for STOP geofences (120m proximity)
+      if (event.geofenceType !== "STOP") {
+        return;
+      }
+
+      // Get the route from the shift
+      const [shift] = await db
+        .select()
+        .from(shifts)
+        .where(eq(shifts.id, event.shiftId))
+        .limit(1);
+
+      if (!shift?.routeId) {
+        return;
+      }
+
+      // Get parents for this route
+      const parentIds = await this.getParentsForRoute(shift.routeId);
+
+      if (parentIds.size === 0) {
+        return;
+      }
+
+      const notification: WebSocketNotification = {
+        type: "notification",
+        category: "stop_approaching",
+        shiftId: event.shiftId,
+        routeId: shift.routeId,
+        message: `Bus is approaching ${event.geofenceName}.`,
+        occurredAt: event.occurredAt.toISOString(),
+        meta: {
+          geofenceId: event.geofenceId,
+          geofenceName: event.geofenceName,
+          geofenceType: event.geofenceType,
+          vehicleId: event.vehicleId,
+        },
+      };
+
+      this.broadcastToUsers(notification, parentIds);
+      log(`[notifications] Stop approaching: ${event.geofenceName} (route: ${shift.routeId})`, "info");
+    } catch (error) {
+      log(`[notifications] Error handling geofence entry: ${error}`, "error");
+    }
+  }
+
+  /**
+   * Handle geofence EXIT event - notify parents when van leaves school/stop
    */
   async handleGeofenceExit(event: GeofenceEvent) {
     try {
@@ -150,12 +204,22 @@ class NotificationService {
         return;
       }
 
+      // Differentiate message by geofence type
+      let message: string;
+      if (event.geofenceType === "SCHOOL") {
+        message = `Route is departing ${event.geofenceName}. Live ETAs now available.`;
+      } else if (event.geofenceType === "STOP") {
+        message = `Bus has departed ${event.geofenceName}.`;
+      } else {
+        message = `Route is departing ${event.geofenceName}.`;
+      }
+
       const notification: WebSocketNotification = {
         type: "notification",
         category: "geofence_exit",
         shiftId: event.shiftId,
         routeId: shift.routeId,
-        message: `Route is departing ${event.geofenceName}. Live ETAs now available.`,
+        message,
         occurredAt: event.occurredAt.toISOString(),
         meta: {
           geofenceId: event.geofenceId,
