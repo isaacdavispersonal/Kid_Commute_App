@@ -28,6 +28,7 @@ import AdminVehicles from "@/pages/admin/vehicles";
 import AdminFleetMap from "@/pages/admin/fleet-map";
 import AdminRoutes from "@/pages/admin/routes";
 import AdminStops from "@/pages/admin/stops";
+import AdminGeofences from "@/pages/admin/geofences";
 import AdminSchedule from "@/pages/admin/schedule";
 import AdminUsers from "@/pages/admin/users";
 import AdminStudents from "@/pages/admin/students";
@@ -151,6 +152,7 @@ function Router() {
                   <Route path="/admin/fleet-map" component={AdminFleetMap} />
                   <Route path="/admin/routes" component={AdminRoutes} />
                   <Route path="/admin/stops" component={AdminStops} />
+                  <Route path="/admin/geofences" component={AdminGeofences} />
                   <Route path="/admin/schedule" component={AdminSchedule} />
                   <Route path="/admin/users" component={AdminUsers} />
                   <Route path="/admin/students" component={AdminStudents} />

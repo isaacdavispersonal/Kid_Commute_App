@@ -74,7 +74,8 @@ class GeofenceDetectionService {
   }
 
   /**
-   * Check if a point is inside a geofence based on schedule
+   * Check if a geofence is active now based on schedule
+   * Handles overnight time windows (e.g., 22:00-06:00) correctly
    */
   private isGeofenceActiveNow(geofence: Geofence): boolean {
     if (!geofence.scheduleStartTime || !geofence.scheduleEndTime) {
@@ -82,9 +83,22 @@ class GeofenceDetectionService {
     }
 
     const now = new Date();
-    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
     
-    return currentTime >= geofence.scheduleStartTime && currentTime <= geofence.scheduleEndTime;
+    // Parse start and end times to minutes since midnight
+    const [startHour, startMin] = geofence.scheduleStartTime.split(':').map(Number);
+    const [endHour, endMin] = geofence.scheduleEndTime.split(':').map(Number);
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    // Handle overnight windows (e.g., 22:00-06:00)
+    if (startMinutes > endMinutes) {
+      // Overnight: active if current time is after start OR before end
+      return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+    } else {
+      // Same-day: active if current time is between start and end
+      return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+    }
   }
 
   /**
