@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { vehicles, shifts, clockEvents } from "@shared/schema";
-import { eq, or, and, sql } from "drizzle-orm";
+import { eq, or, and, sql, gte, desc } from "drizzle-orm";
 import { log } from "./vite";
 import { geofenceDetectionService } from "./geofence-service";
 import { dwellDetectionService } from "./dwell-detection-service";
@@ -37,8 +37,8 @@ class GPSIngestionPipeline {
     const twentyFourHoursAgo = new Date();
     twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
     
-    // Find recent shifts for this vehicle with their most recent clock event
-    // This single query replaces the N+1 pattern
+    // Find recent shifts for this vehicle with their clock events
+    // Filter clock events server-side to reduce data transfer
     const recentShifts = await db
       .select({
         shiftId: shifts.id,
@@ -49,9 +49,14 @@ class GPSIngestionPipeline {
         eventTime: clockEvents.timestamp,
       })
       .from(shifts)
-      .leftJoin(clockEvents, eq(clockEvents.shiftId, shifts.id))
+      .leftJoin(clockEvents, 
+        and(
+          eq(clockEvents.shiftId, shifts.id),
+          gte(clockEvents.timestamp, twentyFourHoursAgo) // Server-side filter
+        )
+      )
       .where(eq(shifts.vehicleId, vehicleId))
-      .orderBy(clockEvents.timestamp);
+      .orderBy(desc(clockEvents.timestamp)); // Most recent first
 
     // Group by shift and find the one with most recent IN event
     const shiftData = new Map<string, {
@@ -72,24 +77,20 @@ class GPSIngestionPipeline {
       }
 
       const data = shiftData.get(row.shiftId)!;
-      if (row.eventType && row.eventTime) {
-        if (!data.lastEvent || row.eventTime > data.lastEvent.time) {
-          data.lastEvent = {
-            type: row.eventType,
-            time: row.eventTime,
-          };
-        }
+      // Since we ordered DESC, first event we see is the most recent
+      if (row.eventType && row.eventTime && !data.lastEvent) {
+        data.lastEvent = {
+          type: row.eventType,
+          time: row.eventTime,
+        };
       }
     }
 
-    // Find a shift where the most recent event is IN and it's not too old
+    // Find a shift where the most recent event is IN
     for (const [shiftId, data] of shiftData.entries()) {
       if (data.lastEvent && data.lastEvent.type === 'IN') {
-        // Check if the clock-in event is recent (within last 24 hours)
-        if (data.lastEvent.time >= twentyFourHoursAgo) {
-          log(`[gps-pipeline] Found active shift ${shiftId} for vehicle ${vehicleId}`, "info");
-          return shiftId;
-        }
+        log(`[gps-pipeline] Found active shift ${shiftId} for vehicle ${vehicleId}`, "info");
+        return shiftId;
       }
     }
 

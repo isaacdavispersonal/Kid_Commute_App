@@ -29,6 +29,8 @@ import {
   suppliesRequests,
   vehicleChecklists,
   driverFeedback,
+  geofences,
+  geofenceEvents,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -296,6 +298,14 @@ export interface IStorage {
     adminResponse?: string,
     respondedBy?: string
   ): Promise<DriverFeedback>;
+
+  // Geofence operations
+  getAllGeofences(): Promise<any[]>;
+  getGeofence(id: string): Promise<any | undefined>;
+  createGeofence(geofence: any): Promise<any>;
+  updateGeofence(id: string, updates: any): Promise<any>;
+  deleteGeofence(id: string): Promise<void>;
+  getGeofenceEvents(limit?: number): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3103,6 +3113,81 @@ export class DatabaseStorage implements IStorage {
       .where(eq(driverFeedback.id, id))
       .returning();
     return updated;
+  }
+
+  // ============ Geofence operations ============
+
+  async getAllGeofences(): Promise<any[]> {
+    return await db.select().from(geofences).orderBy(geofences.name);
+  }
+
+  async getGeofence(id: string): Promise<any | undefined> {
+    const [geofence] = await db
+      .select()
+      .from(geofences)
+      .where(eq(geofences.id, id));
+    return geofence;
+  }
+
+  async createGeofence(geofenceData: any): Promise<any> {
+    const [newGeofence] = await db
+      .insert(geofences)
+      .values({
+        ...geofenceData,
+        updatedAt: new Date(),
+      })
+      .returning();
+    return newGeofence;
+  }
+
+  async updateGeofence(id: string, updates: any): Promise<any> {
+    const [updated] = await db
+      .update(geofences)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(geofences.id, id))
+      .returning();
+    
+    if (!updated) {
+      throw new NotFoundError(`Geofence with ID ${id} not found`);
+    }
+    
+    return updated;
+  }
+
+  async deleteGeofence(id: string): Promise<void> {
+    const result = await db
+      .delete(geofences)
+      .where(eq(geofences.id, id))
+      .returning();
+    
+    if (result.length === 0) {
+      throw new NotFoundError(`Geofence with ID ${id} not found`);
+    }
+  }
+
+  async getGeofenceEvents(limit: number = 100): Promise<any[]> {
+    return await db
+      .select({
+        id: geofenceEvents.id,
+        vehicleId: geofenceEvents.vehicleId,
+        geofenceId: geofenceEvents.geofenceId,
+        eventType: geofenceEvents.eventType,
+        createdAt: geofenceEvents.createdAt,
+        shiftId: geofenceEvents.shiftId,
+        latitude: geofenceEvents.latitude,
+        longitude: geofenceEvents.longitude,
+        vehiclePlate: vehicles.plateNumber,
+        geofenceName: geofences.name,
+        geofenceType: geofences.type,
+      })
+      .from(geofenceEvents)
+      .leftJoin(vehicles, eq(geofenceEvents.vehicleId, vehicles.id))
+      .leftJoin(geofences, eq(geofenceEvents.geofenceId, geofences.id))
+      .orderBy(desc(geofenceEvents.createdAt))
+      .limit(limit);
   }
 }
 

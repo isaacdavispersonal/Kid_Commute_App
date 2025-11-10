@@ -991,6 +991,119 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Get all geofences
+  app.get(
+    "/api/admin/geofences",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const geofences = await storage.getAllGeofences();
+        res.json(geofences);
+      } catch (error) {
+        console.error("Error fetching geofences:", error);
+        res.status(500).json({ message: "Failed to fetch geofences" });
+      }
+    }
+  );
+
+  // Create a new geofence
+  app.post(
+    "/api/admin/geofences",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { insertGeofenceSchema } = await import("@shared/schema");
+        
+        // Validate request body
+        const result = insertGeofenceSchema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid geofence data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const newGeofence = await storage.createGeofence(result.data);
+        res.json(newGeofence);
+      } catch (error: any) {
+        console.error("Error creating geofence:", error);
+        res.status(500).json({ message: "Failed to create geofence" });
+      }
+    }
+  );
+
+  // Update a geofence
+  app.patch(
+    "/api/admin/geofences/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { insertGeofenceSchema } = await import("@shared/schema");
+        
+        // Validate request body (partial update)
+        const result = insertGeofenceSchema.partial().safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid geofence data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const updatedGeofence = await storage.updateGeofence(id, result.data);
+        res.json(updatedGeofence);
+      } catch (error: any) {
+        console.error("Error updating geofence:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update geofence" });
+      }
+    }
+  );
+
+  // Delete a geofence
+  app.delete(
+    "/api/admin/geofences/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        await storage.deleteGeofence(req.params.id);
+        res.json({ message: "Geofence deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting geofence:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to delete geofence" });
+      }
+    }
+  );
+
+  // Get geofence events (audit log)
+  app.get(
+    "/api/admin/geofence-events",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const events = await storage.getGeofenceEvents();
+        res.json(events);
+      } catch (error) {
+        console.error("Error fetching geofence events:", error);
+        res.status(500).json({ message: "Failed to fetch geofence events" });
+      }
+    }
+  );
+
   // Get all routes
   app.get(
     "/api/admin/routes",
