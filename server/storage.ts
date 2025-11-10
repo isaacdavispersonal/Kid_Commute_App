@@ -660,7 +660,7 @@ export class DatabaseStorage implements IStorage {
       type: "STOP" as const,
       centerLat: stopData.latitude,
       centerLng: stopData.longitude,
-      radiusMeters: 120, // 120m as recommended by architect
+      radiusMeters: 100, // 100m radius for stop geofences
       scheduleStartTime: null, // Always active
       scheduleEndTime: null, // Always active
       isActive: true,

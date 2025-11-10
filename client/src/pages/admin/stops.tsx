@@ -279,7 +279,7 @@ export default function AdminStopsPage() {
         <div>
           <h1 className="text-2xl font-semibold mb-1">Stop Management</h1>
           <p className="text-sm text-muted-foreground">
-            Manage pickup/dropoff locations. Geofences auto-provision when coordinates are added (120m radius).
+            Manage pickup/dropoff locations. Geofences auto-provision when coordinates are added (100m radius).
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
