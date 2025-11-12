@@ -1,0 +1,77 @@
+# Fastfile for Kid Commute iOS
+default_platform(:ios)
+
+platform :ios do
+  desc "Push a new beta build to TestFlight"
+  lane :beta do
+    # Note: setup_ci is NOT called because GitHub Actions workflow
+    # already handles keychain and certificate installation.
+    # Calling setup_ci would delete the keychain we just created.
+    
+    # Configure App Store Connect API Key
+    app_store_connect_api_key(
+      key_id: ENV['APPLE_KEY_ID'],
+      issuer_id: ENV['APPLE_ISSUER_ID'],
+      key_content: ENV['APPLE_KEY_CONTENT'],
+      duration: 1200, # 20 minutes
+      in_house: false
+    )
+
+    # Increment build number (optional - comment out if managing manually)
+    # increment_build_number(
+    #   xcodeproj: "App.xcodeproj"
+    # )
+
+    # Build the app
+    # Note: Provisioning profile is already installed by GitHub Actions workflow
+    # Xcode will automatically select the correct profile based on bundle ID
+    build_app(
+      workspace: "App.xcworkspace",
+      scheme: "App",
+      export_method: "app-store",
+      clean: true,
+      output_directory: "./",
+      output_name: "KidCommute.ipa"
+    )
+
+    # Upload to TestFlight
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      distribute_external: false,
+      notify_external_testers: false
+    )
+
+    # Clean up build artifacts (optional)
+    # clean_build_artifacts
+  end
+
+  desc "Build for release"
+  lane :release do
+    # Note: setup_ci is NOT called because GitHub Actions workflow
+    # already handles keychain and certificate installation.
+    
+    app_store_connect_api_key(
+      key_id: ENV['APPLE_KEY_ID'],
+      issuer_id: ENV['APPLE_ISSUER_ID'],
+      key_content: ENV['APPLE_KEY_CONTENT'],
+      duration: 1200,
+      in_house: false
+    )
+
+    build_app(
+      workspace: "App.xcworkspace",
+      scheme: "App",
+      export_method: "app-store",
+      clean: true,
+      output_directory: "./",
+      output_name: "KidCommute.ipa"
+    )
+
+    upload_to_app_store(
+      skip_metadata: true,
+      skip_screenshots: true,
+      submit_for_review: false
+    )
+  end
+end

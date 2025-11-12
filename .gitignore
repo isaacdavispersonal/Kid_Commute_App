@@ -4,3 +4,34 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# iOS signing
+*.p12
+*.cer
+*.mobileprovision
+*.certSigningRequest
+ios/App/*.ipa
+ios/App/*.dSYM.zip
+
+# Android signing
+*.keystore
+*.jks
+android/app/release.keystore
+android/app/*.keystore
+android/app/build/
+android/build/
+*.aab
+*.apk
+
+# Fastlane
+ios/App/fastlane/report.xml
+ios/App/fastlane/Preview.html
+ios/App/fastlane/test_output/
+ios/App/fastlane/.env
+
+# Google Services
+android/app/google-services.json
+
+# Environment files with secrets
+.env.local
+.env.production
