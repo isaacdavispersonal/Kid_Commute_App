@@ -75,6 +75,45 @@ export const updateProfileSchema = createInsertSchema(users).pick({
 
 export type UpdateProfile = z.infer<typeof updateProfileSchema>;
 
+// Device platform enum for push notifications
+export const devicePlatformEnum = pgEnum("device_platform", ["ios", "android"]);
+
+// Device tokens table for push notifications
+export const deviceTokens = pgTable("device_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  platform: devicePlatformEnum("platform").notNull(),
+  token: text("token").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  deviceModel: varchar("device_model"),
+  osVersion: varchar("os_version"),
+  appVersion: varchar("app_version"),
+  failureCount: integer("failure_count").notNull().default(0),
+  lastFailureAt: timestamp("last_failure_at"),
+  deactivatedAt: timestamp("deactivated_at"),
+  lastUsedAt: timestamp("last_used_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_device_tokens_user_active").on(table.userId, table.isActive),
+]);
+
+export const insertDeviceTokenSchema = createInsertSchema(deviceTokens).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  failureCount: true,
+  lastFailureAt: true,
+  deactivatedAt: true,
+  lastUsedAt: true,
+}).extend({
+  token: z.string().min(1, "Token is required"),
+  platform: z.enum(["ios", "android"]),
+});
+
+export type InsertDeviceToken = z.infer<typeof insertDeviceTokenSchema>;
+export type DeviceToken = typeof deviceTokens.$inferSelect;
+
 // ============ Fleet Management Tables ============
 
 // Vehicle status enum
@@ -1215,6 +1254,14 @@ export const usersRelations = relations(users, ({ many }) => ({
   incidents: many(incidents),
   timeEntries: many(timeEntries),
   vehicleInspections: many(vehicleInspections),
+  deviceTokens: many(deviceTokens),
+}));
+
+export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [deviceTokens.userId],
+    references: [users.id],
+  }),
 }));
 
 export const vehiclesRelations = relations(vehicles, ({ many }) => ({
