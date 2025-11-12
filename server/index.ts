@@ -51,10 +51,12 @@ app.use((req, res, next) => {
 
   // Initialize notification service with WebSocket server
   const { notificationService } = await import("./notification-service");
+  const { pushNotificationService } = await import("./push-notification-service");
   const { geofenceDetectionService } = await import("./geofence-service");
   const { dwellDetectionService } = await import("./dwell-detection-service");
 
   notificationService.initialize(wss);
+  pushNotificationService.initialize();
 
   // Register event listeners for geofence and dwell events
   geofenceDetectionService.onGeofenceEvent((event) => {

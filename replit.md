@@ -49,6 +49,7 @@ Preferred communication style: Simple, everyday language.
     - **Optimized GPS Pipeline**: Enhanced `server/gps-pipeline.ts` with timezone-aware shift detection, query optimization, and sequential processing.
     - **Unified Driver Route Dashboard**: Consolidated interface combining route management, attendance tracking, and stop completion. Features include: inspection gate enforcement before route start, stop-by-stop display with student lists, individual student attendance controls (riding/absent), stop completion gating (requires all students marked + inspection complete), auto-advance to next stop via query invalidation, and canonical shift date handling for overnight routes. Backed by typed `ShiftRouteContext` API response with comprehensive route, stop, student, and progress data.
     - **Session Management**: PostgreSQL-backed sessions with 7-day TTL and secure cookies.
+    - **Push Notifications**: Mobile app support for iOS/Android via Firebase Cloud Messaging. Device token management with platform detection (ios/android), automatic upsert/delete handling, and failure tracking. Backend service (`push-notification-service.ts`) integrates Firebase Admin SDK for cross-platform notification delivery. API endpoints: POST /api/push-tokens (register device), DELETE /api/push-tokens/:token (unregister). Requires FIREBASE_SERVICE_ACCOUNT_JSON environment variable for production use.
 
 ## External Dependencies
 
@@ -57,6 +58,7 @@ Preferred communication style: Simple, everyday language.
 - **Neon Database**: Serverless PostgreSQL hosting.
 - **Leaflet.js**: Mapping library.
 - **Google Fonts**: Inter font family.
+- **Firebase Cloud Messaging**: Push notification service for iOS and Android mobile apps.
 
 ### Key NPM Packages
 - `drizzle-orm`, `drizzle-kit`: ORM and migrations.

@@ -31,6 +31,7 @@ import {
   driverFeedback,
   geofences,
   geofenceEvents,
+  deviceTokens,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -92,6 +93,8 @@ import {
   type InsertVehicleChecklist,
   type DriverFeedback,
   type InsertDriverFeedback,
+  type DeviceToken,
+  type InsertDeviceToken,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne, lt } from "drizzle-orm";
@@ -105,6 +108,11 @@ export interface IStorage {
   getUsersByRole(role: "admin" | "driver" | "parent"): Promise<User[]>;
   updateUserRole(userId: string, newRole: "admin" | "driver" | "parent"): Promise<User>;
   updateUserProfile(userId: string, profile: UpdateProfile): Promise<User>;
+
+  // Device token operations (for push notifications)
+  upsertDeviceToken(token: Omit<InsertDeviceToken, "userId"> & { userId: string }): Promise<DeviceToken>;
+  deleteDeviceToken(userId: string, token: string): Promise<void>;
+  getDeviceTokensByUser(userId: string): Promise<DeviceToken[]>;
 
   // Vehicle operations
   getAllVehicles(): Promise<Vehicle[]>;
@@ -457,6 +465,49 @@ export class DatabaseStorage implements IStorage {
     }
     
     return updatedUser;
+  }
+
+  // ============ Device token operations ============
+
+  async upsertDeviceToken(token: Omit<InsertDeviceToken, "userId"> & { userId: string }): Promise<DeviceToken> {
+    const [deviceToken] = await db
+      .insert(deviceTokens)
+      .values(token)
+      .onConflictDoUpdate({
+        target: deviceTokens.token,
+        set: {
+          userId: token.userId,
+          platform: token.platform,
+          isActive: true,
+          failureCount: 0,
+          lastFailureAt: null,
+          deactivatedAt: null,
+          deviceModel: token.deviceModel,
+          osVersion: token.osVersion,
+          appVersion: token.appVersion,
+          lastUsedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    
+    return deviceToken;
+  }
+
+  async deleteDeviceToken(userId: string, token: string): Promise<void> {
+    await db
+      .delete(deviceTokens)
+      .where(and(
+        eq(deviceTokens.userId, userId),
+        eq(deviceTokens.token, token)
+      ));
+  }
+
+  async getDeviceTokensByUser(userId: string): Promise<DeviceToken[]> {
+    return await db
+      .select()
+      .from(deviceTokens)
+      .where(eq(deviceTokens.userId, userId));
   }
 
   // ============ Vehicle operations ============

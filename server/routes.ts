@@ -153,6 +153,49 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   });
 
+  // ============ Push Notification Device Token Routes ============
+
+  // Register or update device token for push notifications
+  app.post("/api/push-tokens", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { insertDeviceTokenSchema } = await import("@shared/schema");
+      
+      const result = insertDeviceTokenSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Invalid device token data",
+          errors: result.error.errors
+        });
+      }
+
+      const tokenData = {
+        ...result.data,
+        userId,
+      };
+
+      const deviceToken = await storage.upsertDeviceToken(tokenData);
+      res.json(deviceToken);
+    } catch (error: any) {
+      console.error("Error registering device token:", error);
+      res.status(500).json({ message: "Failed to register device token" });
+    }
+  });
+
+  // Delete device token (when user logs out of device)
+  app.delete("/api/push-tokens/:token", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { token } = req.params;
+
+      await storage.deleteDeviceToken(userId, token);
+      res.json({ success: true, message: "Device token deleted" });
+    } catch (error: any) {
+      console.error("Error deleting device token:", error);
+      res.status(500).json({ message: "Failed to delete device token" });
+    }
+  });
+
   // Get unread counts for current user (with 3-second cache to reduce DB load)
   const getUnreadCountsCached = memoizee(
     async (userId: string, userRole: string) => {
