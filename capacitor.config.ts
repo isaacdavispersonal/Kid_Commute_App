@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.fleettrack.app',
-  appName: 'FleetTrack',
+  appName: 'Kid Commute',
   webDir: 'dist/public',
   server: {
     androidScheme: 'https',

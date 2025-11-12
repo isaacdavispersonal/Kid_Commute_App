@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">FleetTrack</string>
-    <string name="title_activity_main">FleetTrack</string>
+    <string name="app_name">Kid Commute</string>
+    <string name="title_activity_main">Kid Commute</string>
     <string name="package_name">com.fleettrack.app</string>
     <string name="custom_url_scheme">com.fleettrack.app</string>
 </resources>
