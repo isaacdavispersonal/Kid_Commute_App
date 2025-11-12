@@ -316,6 +316,13 @@ export interface IStorage {
   updateGeofence(id: string, updates: any): Promise<any>;
   deleteGeofence(id: string): Promise<void>;
   getGeofenceEvents(limit?: number): Promise<any[]>;
+
+  // Data retention operations
+  cleanupOldMessages(retentionDays: number): Promise<number>;
+  cleanupOldGeofenceEvents(retentionDays: number): Promise<number>;
+  cleanupOldAuditLogs(retentionDays: number): Promise<number>;
+  cleanupOldDismissedAnnouncements(retentionDays: number): Promise<number>;
+  cleanupInactiveDeviceTokens(retentionDays: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3503,6 +3510,85 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(geofences, eq(geofenceEvents.geofenceId, geofences.id))
       .orderBy(desc(geofenceEvents.createdAt))
       .limit(limit);
+  }
+
+  // ============ Data retention operations ============
+
+  async cleanupOldMessages(retentionDays: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    const deleted = await db
+      .delete(messages)
+      .where(lt(messages.createdAt, cutoffDate))
+      .returning({ id: messages.id });
+
+    return deleted.length;
+  }
+
+  async cleanupOldGeofenceEvents(retentionDays: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    const deleted = await db
+      .delete(geofenceEvents)
+      .where(lt(geofenceEvents.occurredAt, cutoffDate))
+      .returning({ id: geofenceEvents.id });
+
+    return deleted.length;
+  }
+
+  async cleanupOldAuditLogs(retentionDays: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    const deleted = await db
+      .delete(auditLogs)
+      .where(lt(auditLogs.createdAt, cutoffDate))
+      .returning({ id: auditLogs.id });
+
+    return deleted.length;
+  }
+
+  async cleanupOldDismissedAnnouncements(retentionDays: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    // Delete announcement dismissals older than retention period
+    const deletedDismissals = await db
+      .delete(announcementDismissals)
+      .where(lt(announcementDismissals.dismissedAt, cutoffDate))
+      .returning({ id: announcementDismissals.id });
+
+    // Delete route announcement dismissals older than retention period
+    const deletedRouteDismissals = await db
+      .delete(routeAnnouncementDismissals)
+      .where(lt(routeAnnouncementDismissals.dismissedAt, cutoffDate))
+      .returning({ id: routeAnnouncementDismissals.id });
+
+    return deletedDismissals.length + deletedRouteDismissals.length;
+  }
+
+  async cleanupInactiveDeviceTokens(retentionDays: number): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    // Delete device tokens that haven't been used for the retention period
+    // or were deactivated longer than the retention period ago
+    const deleted = await db
+      .delete(deviceTokens)
+      .where(
+        or(
+          and(
+            eq(deviceTokens.isActive, false),
+            lt(deviceTokens.deactivatedAt, cutoffDate)
+          ),
+          lt(deviceTokens.lastUsedAt, cutoffDate)
+        )
+      )
+      .returning({ id: deviceTokens.id });
+
+    return deleted.length;
   }
 }
 
