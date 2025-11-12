@@ -213,7 +213,7 @@ export default function AdminSamsaraIntegration() {
               <li>
                 <strong>Map Vehicles:</strong>
                 <p className="ml-6 mt-1 text-muted-foreground">
-                  FleetTrack will automatically match vehicles by license plate, or you can manually set Samsara Vehicle IDs below
+                  Kid Commute will automatically match vehicles by license plate, or you can manually set Samsara Vehicle IDs below
                 </p>
               </li>
             </ol>
@@ -266,7 +266,7 @@ export default function AdminSamsaraIntegration() {
             <CheckCircle2 className="h-4 w-4" />
             <AlertTitle>How It Works</AlertTitle>
             <AlertDescription>
-              Click "Sync Vehicles" to pull your complete Samsara fleet into FleetTrack. New vehicles are created automatically 
+              Click "Sync Vehicles" to pull your complete Samsara fleet into Kid Commute. New vehicles are created automatically 
               with their name, license plate, and GPS tracking enabled. Use this whenever you add new vans to your Samsara account.
             </AlertDescription>
           </Alert>

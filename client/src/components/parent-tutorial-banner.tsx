@@ -29,7 +29,7 @@ export function ParentTutorialBanner() {
       <Info className="h-4 w-4 text-primary" />
       <div className="flex-1">
         <AlertTitle className="text-primary font-semibold flex items-center gap-2">
-          Welcome to FleetTrack!
+          Welcome to Kid Commute!
           <Button
             variant="ghost"
             size="sm"

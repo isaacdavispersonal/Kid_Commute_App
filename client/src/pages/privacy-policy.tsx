@@ -12,7 +12,7 @@ export default function PrivacyPolicy() {
           <section>
             <h2 className="text-2xl font-semibold mb-3">Introduction</h2>
             <p>
-              FleetTrack ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our transportation service management system, including our mobile applications and web services.
+              Kid Commute ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our transportation service management system, including our mobile applications and web services.
             </p>
           </section>
 
@@ -107,17 +107,17 @@ export default function PrivacyPolicy() {
               <li><strong>Data Portability:</strong> Request your data in a machine-readable format</li>
             </ul>
             <p className="mt-3">
-              To exercise these rights, contact us at <a href="mailto:privacy@fleettrack.com" className="text-primary hover:underline">privacy@fleettrack.com</a>
+              To exercise these rights, contact us at <a href="mailto:privacy@kidcommute.com" className="text-primary hover:underline">privacy@kidcommute.com</a>
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold mb-3">Children's Privacy</h2>
             <p>
-              FleetTrack is not directed to children under 13. Our services are intended for parents, drivers, and administrators—not for direct use by children. We do collect information about students (names, routes, attendance) as necessary to provide our transportation services, but this data is managed by parents and administrators, not collected directly from children.
+              Kid Commute is not directed to children under 13. Our services are intended for parents, drivers, and administrators—not for direct use by children. We do collect information about students (names, routes, attendance) as necessary to provide our transportation services, but this data is managed by parents and administrators, not collected directly from children.
             </p>
             <p className="mt-2">
-              If you believe we have inadvertently collected information directly from a child under 13, please contact us immediately at <a href="mailto:privacy@fleettrack.com" className="text-primary hover:underline">privacy@fleettrack.com</a>.
+              If you believe we have inadvertently collected information directly from a child under 13, please contact us immediately at <a href="mailto:privacy@kidcommute.com" className="text-primary hover:underline">privacy@kidcommute.com</a>.
             </p>
           </section>
 
@@ -156,7 +156,7 @@ export default function PrivacyPolicy() {
           <section>
             <h2 className="text-2xl font-semibold mb-3">International Users</h2>
             <p>
-              FleetTrack is operated in the United States. If you are located outside the United States, please be aware that information we collect will be transferred to and processed in the United States. By using our services, you consent to this transfer.
+              Kid Commute is operated in the United States. If you are located outside the United States, please be aware that information we collect will be transferred to and processed in the United States. By using our services, you consent to this transfer.
             </p>
           </section>
 
@@ -171,14 +171,14 @@ export default function PrivacyPolicy() {
             <h2 className="text-2xl font-semibold mb-3">Contact Us</h2>
             <p>If you have questions about this Privacy Policy or our data practices, please contact us:</p>
             <div className="mt-3 space-y-1">
-              <p><strong>Email:</strong> <a href="mailto:privacy@fleettrack.com" className="text-primary hover:underline">privacy@fleettrack.com</a></p>
-              <p><strong>Support:</strong> <a href="mailto:support@fleettrack.com" className="text-primary hover:underline">support@fleettrack.com</a></p>
+              <p><strong>Email:</strong> <a href="mailto:privacy@kidcommute.com" className="text-primary hover:underline">privacy@kidcommute.com</a></p>
+              <p><strong>Support:</strong> <a href="mailto:support@kidcommute.com" className="text-primary hover:underline">support@kidcommute.com</a></p>
             </div>
           </section>
 
           <div className="mt-8 pt-6 border-t text-sm text-muted-foreground">
             <p>
-              This Privacy Policy is effective as of the date stated above and applies to all users of FleetTrack services, including web and mobile applications.
+              This Privacy Policy is effective as of the date stated above and applies to all users of Kid Commute services, including web and mobile applications.
             </p>
           </div>
         </CardContent>

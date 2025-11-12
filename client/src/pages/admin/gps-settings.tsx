@@ -49,7 +49,7 @@ export default function AdminGPSSettings() {
       <div>
         <h1 className="text-3xl font-bold mb-2">GPS Integration Settings</h1>
         <p className="text-muted-foreground">
-          Configure your navigation software to send real-time vehicle locations to FleetTrack
+          Configure your navigation software to send real-time vehicle locations to Kid Commute
         </p>
       </div>
 
@@ -211,7 +211,7 @@ export default function AdminGPSSettings() {
                     }, null, 2)}</pre>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    You can use either <code className="bg-muted px-1 rounded">vehicle_id</code> (UUID from FleetTrack) or <code className="bg-muted px-1 rounded">plate_number</code> to identify the vehicle.
+                    You can use either <code className="bg-muted px-1 rounded">vehicle_id</code> (UUID from Kid Commute) or <code className="bg-muted px-1 rounded">plate_number</code> to identify the vehicle.
                   </p>
                 </div>
               </AccordionContent>

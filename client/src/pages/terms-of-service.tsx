@@ -12,14 +12,14 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-2xl font-semibold mb-3">Agreement to Terms</h2>
             <p>
-              By accessing or using FleetTrack ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you disagree with any part of these terms, you may not access the Service.
+              By accessing or using Kid Commute ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you disagree with any part of these terms, you may not access the Service.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold mb-3">Description of Service</h2>
             <p>
-              FleetTrack is a transportation service management system that provides:
+              Kid Commute is a transportation service management system that provides:
             </p>
             <ul className="list-disc pl-6 space-y-1">
               <li>Real-time vehicle tracking and estimated arrival times</li>
@@ -34,7 +34,7 @@ export default function TermsOfService() {
             <h2 className="text-2xl font-semibold mb-3">User Accounts</h2>
             
             <h3 className="text-xl font-semibold mt-4 mb-2">Registration</h3>
-            <p>To use FleetTrack, you must:</p>
+            <p>To use Kid Commute, you must:</p>
             <ul className="list-disc pl-6 space-y-1">
               <li>Be at least 18 years old</li>
               <li>Provide accurate and complete registration information</li>
@@ -90,7 +90,7 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-2xl font-semibold mb-3">Privacy and Data</h2>
             <p>
-              Your use of FleetTrack is also governed by our <a href="/privacy-policy" className="text-primary hover:underline">Privacy Policy</a>. By using the Service, you consent to our collection and use of personal data as outlined in the Privacy Policy.
+              Your use of Kid Commute is also governed by our <a href="/privacy-policy" className="text-primary hover:underline">Privacy Policy</a>. By using the Service, you consent to our collection and use of personal data as outlined in the Privacy Policy.
             </p>
             
             <h3 className="text-xl font-semibold mt-4 mb-2">Student Information</h3>
@@ -123,7 +123,7 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-2xl font-semibold mb-3">Intellectual Property</h2>
             <p>
-              The Service and its original content, features, and functionality are owned by FleetTrack and are protected by international copyright, trademark, patent, trade secret, and other intellectual property laws.
+              The Service and its original content, features, and functionality are owned by Kid Commute and are protected by international copyright, trademark, patent, trade secret, and other intellectual property laws.
             </p>
             <p className="mt-2">
               You may not copy, modify, distribute, sell, or lease any part of our Service without express written permission.
@@ -133,7 +133,7 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-2xl font-semibold mb-3">Limitation of Liability</h2>
             <p>
-              TO THE MAXIMUM EXTENT PERMITTED BY LAW, FLEETTRACK SHALL NOT BE LIABLE FOR:
+              TO THE MAXIMUM EXTENT PERMITTED BY LAW, KID COMMUTE SHALL NOT BE LIABLE FOR:
             </p>
             <ul className="list-disc pl-6 space-y-1">
               <li>Indirect, incidental, special, consequential, or punitive damages</li>
@@ -163,7 +163,7 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-2xl font-semibold mb-3">Indemnification</h2>
             <p>
-              You agree to defend, indemnify, and hold harmless FleetTrack and its officers, directors, employees, and agents from any claims, damages, losses, liabilities, and expenses (including attorney fees) arising from:
+              You agree to defend, indemnify, and hold harmless Kid Commute and its officers, directors, employees, and agents from any claims, damages, losses, liabilities, and expenses (including attorney fees) arising from:
             </p>
             <ul className="list-disc pl-6 space-y-1">
               <li>Your use or misuse of the Service</li>
@@ -185,7 +185,7 @@ export default function TermsOfService() {
               <li>Discontinuation of the Service</li>
             </ul>
             <p className="mt-2">
-              You may terminate your account at any time by contacting us at <a href="mailto:support@fleettrack.com" className="text-primary hover:underline">support@fleettrack.com</a>. Upon termination, your right to use the Service will immediately cease.
+              You may terminate your account at any time by contacting us at <a href="mailto:support@kidcommute.com" className="text-primary hover:underline">support@kidcommute.com</a>. Upon termination, your right to use the Service will immediately cease.
             </p>
           </section>
 
@@ -224,7 +224,7 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-2xl font-semibold mb-3">Entire Agreement</h2>
             <p>
-              These Terms, together with our Privacy Policy, constitute the entire agreement between you and FleetTrack regarding the Service and supersede all prior agreements and understandings.
+              These Terms, together with our Privacy Policy, constitute the entire agreement between you and Kid Commute regarding the Service and supersede all prior agreements and understandings.
             </p>
           </section>
 
@@ -232,14 +232,14 @@ export default function TermsOfService() {
             <h2 className="text-2xl font-semibold mb-3">Contact Information</h2>
             <p>If you have questions about these Terms, please contact us:</p>
             <div className="mt-3 space-y-1">
-              <p><strong>Email:</strong> <a href="mailto:legal@fleettrack.com" className="text-primary hover:underline">legal@fleettrack.com</a></p>
-              <p><strong>Support:</strong> <a href="mailto:support@fleettrack.com" className="text-primary hover:underline">support@fleettrack.com</a></p>
+              <p><strong>Email:</strong> <a href="mailto:legal@kidcommute.com" className="text-primary hover:underline">legal@kidcommute.com</a></p>
+              <p><strong>Support:</strong> <a href="mailto:support@kidcommute.com" className="text-primary hover:underline">support@kidcommute.com</a></p>
             </div>
           </section>
 
           <div className="mt-8 pt-6 border-t text-sm text-muted-foreground">
             <p>
-              By using FleetTrack, you acknowledge that you have read, understood, and agree to be bound by these Terms of Service.
+              By using Kid Commute, you acknowledge that you have read, understood, and agree to be bound by these Terms of Service.
             </p>
           </div>
         </CardContent>
