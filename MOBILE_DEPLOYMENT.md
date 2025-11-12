@@ -1,17 +1,17 @@
-# FleetTrack Mobile Deployment Guide
+# Kid Commute Mobile Deployment Guide
 
-This guide explains how to build and deploy FleetTrack to the iOS App Store and Google Play Store using Capacitor.
+This guide explains how to build and deploy Kid Commute to the iOS App Store and Google Play Store using Capacitor.
 
 ## ✅ Setup Complete
 
-Your FleetTrack app has been successfully configured for mobile deployment with:
+Your Kid Commute app has been successfully configured for mobile deployment with:
 - **Capacitor Core**: Installed and initialized
 - **iOS Platform**: Native Xcode project created in `/ios`
 - **Android Platform**: Native Android Studio project created in `/android`
 - **Essential Plugins**: App, Splash Screen, and Status Bar
 - **App Configuration**:
   - App ID: `com.fleettrack.app`
-  - App Name: `FleetTrack`
+  - App Name: `Kid Commute`
   - Web Directory: `dist/public`
 
 ## 📋 Prerequisites

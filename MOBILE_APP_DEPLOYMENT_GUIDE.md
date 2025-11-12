@@ -1,10 +1,10 @@
-# FleetTrack Mobile App Deployment Guide
+# Kid Commute Mobile App Deployment Guide
 
-This guide outlines **what FleetTrack handles on the backend** versus **what you need to do externally** to deploy iOS and Android mobile apps to the App Store and Google Play.
+This guide outlines **what Kid Commute handles on the backend** versus **what you need to do externally** to deploy iOS and Android mobile apps to the App Store and Google Play.
 
 ---
 
-## ✅ What We're Implementing in FleetTrack (Backend Ready)
+## ✅ What We're Implementing in Kid Commute (Backend Ready)
 
 ### 1. Legal Pages ✅ IMPLEMENTING NOW
 **Status:** Being added to web application

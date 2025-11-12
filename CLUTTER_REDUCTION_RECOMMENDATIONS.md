@@ -1,7 +1,7 @@
 # Visual Clutter Reduction Recommendations
 
 ## Summary
-This document outlines opportunities to reduce visual clutter across FleetTrack's admin, driver, and parent interfaces. With approximately 20 drivers and their associated data, visual clarity is crucial for efficient operations.
+This document outlines opportunities to reduce visual clutter across Kid Commute's admin, driver, and parent interfaces. With approximately 20 drivers and their associated data, visual clarity is crucial for efficient operations.
 
 ---
 

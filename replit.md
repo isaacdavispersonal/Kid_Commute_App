@@ -1,7 +1,7 @@
-# FleetTrack - Transportation Service Management System
+# Kid Commute - Transportation Service Management System
 
 ## Overview
-FleetTrack is a comprehensive transportation service management system designed to enhance efficiency, safety, and communication for fleet operations. It provides real-time vehicle tracking, efficient route management, and seamless communication for administrators, drivers, and parents. The system aims to improve overall transportation service management.
+Kid Commute is a comprehensive transportation service management system designed to enhance efficiency, safety, and communication for fleet operations. It provides real-time vehicle tracking, efficient route management, and seamless communication for administrators, drivers, and parents. The system aims to improve overall transportation service management.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
