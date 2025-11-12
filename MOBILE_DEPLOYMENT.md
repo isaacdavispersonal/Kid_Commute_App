@@ -72,7 +72,7 @@ Opens the project in Android Studio
 2. **In Xcode, configure:**
    - **Bundle Identifier**: Set to `com.fleettrack.app` (or your custom domain)
    - **Team**: Select your Apple Developer account
-   - **Display Name**: FleetTrack
+   - **Display Name**: Kid Commute
    - **Version**: Start with 1.0.0
    - **Build Number**: Start with 1
 
@@ -104,7 +104,7 @@ Opens the project in Android Studio
    - Go to [appstoreconnect.apple.com](https://appstoreconnect.apple.com)
    - Click "My Apps" → "+" → "New App"
    - Fill in app details:
-     - Name: FleetTrack
+     - Name: Kid Commute
      - Primary Language: English
      - Bundle ID: com.fleettrack.app
      - SKU: com.fleettrack.app.001
@@ -207,7 +207,7 @@ keytool -genkeypair -v -keystore fleettrack-release.keystore \
    - Go to [play.google.com/console](https://play.google.com/console)
    - Click "Create app"
    - Fill in details:
-     - App name: FleetTrack
+     - App name: Kid Commute
      - Default language: English
      - App or game: App
      - Free or paid: Choose based on your model
@@ -238,7 +238,7 @@ keytool -genkeypair -v -keystore fleettrack-release.keystore \
 
 ## 🔄 Updating Your App
 
-When you make changes to FleetTrack:
+When you make changes to Kid Commute:
 
 ### Update Process
 ```bash
@@ -341,11 +341,11 @@ Create the following assets for your app stores:
 
 **⚠️ CRITICAL: This step is required for mobile apps to work!**
 
-FleetTrack uses WebSocket and backend APIs. Mobile apps need to connect to your deployed backend server.
+Kid Commute uses WebSocket and backend APIs. Mobile apps need to connect to your deployed backend server.
 
 ### Step 1: Deploy Your Backend
 
-First, deploy FleetTrack to production using Replit's deployment:
+First, deploy Kid Commute to production using Replit's deployment:
 1. Click "Deploy" in your Replit project
 2. Note your production URL (e.g., `https://your-app-name.replit.app`)
 

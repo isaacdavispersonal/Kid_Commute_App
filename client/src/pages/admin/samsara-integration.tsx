@@ -239,7 +239,7 @@ export default function AdminSamsaraIntegration() {
                 Vehicle Fleet Sync
               </CardTitle>
               <CardDescription>
-                Add vehicles to FleetTrack when you install GPS in new vans
+                Add vehicles to Kid Commute when you install GPS in new vans
               </CardDescription>
             </div>
             <Button

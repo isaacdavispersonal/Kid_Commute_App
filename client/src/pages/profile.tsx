@@ -374,7 +374,7 @@ export default function Profile() {
               <Button 
                 variant="outline" 
                 className="w-full"
-                onClick={() => window.open('mailto:billing@fleettrack.com?subject=Billing%20Inquiry', '_blank')}
+                onClick={() => window.open('mailto:billing@kidcommute.com?subject=Billing%20Inquiry', '_blank')}
                 data-testid="button-contact-billing"
               >
                 <Mail className="h-4 w-4 mr-2" />

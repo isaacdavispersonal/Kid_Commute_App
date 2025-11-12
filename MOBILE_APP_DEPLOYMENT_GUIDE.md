@@ -172,10 +172,10 @@ import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.yourcompany.fleettrack',
-  appName: 'FleetTrack',
+  appName: 'Kid Commute',
   webDir: 'dist',
   server: {
-    url: 'https://your-production-domain.com',  // Point to FleetTrack backend
+    url: 'https://your-production-domain.com',  // Point to Kid Commute backend
     cleartext: false
   },
   plugins: {
@@ -211,10 +211,10 @@ export default config;
 **Permissions (Info.plist):**
 ```xml
 <key>NSLocationWhenInUseUsageDescription</key>
-<string>FleetTrack needs your location to show your bus on the map</string>
+<string>Kid Commute needs your location to show your bus on the map</string>
 
 <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-<string>FleetTrack drivers need background location to track the bus route</string>
+<string>Kid Commute drivers need background location to track the bus route</string>
 
 <key>UIBackgroundModes</key>
 <array>
@@ -298,7 +298,7 @@ npx cap open android
 
 **App Information:**
 ```
-Name: FleetTrack
+Name: Kid Commute
 Subtitle: School Transportation Safety
 Category: Education / Navigation
 Age Rating: 4+ (avoid "made for kids")
@@ -352,7 +352,7 @@ How to Test:
 
 **App Details:**
 ```
-Name: FleetTrack
+Name: Kid Commute
 Short description: Real-time school bus tracking for parents
 Full description: [Marketing copy about features]
 Category: Education
@@ -411,7 +411,7 @@ Children under 13: NO (app is for parents/drivers, not students)
 Cost: ~$20-50/month
 
 Steps:
-1. Push FleetTrack code to GitHub
+1. Push Kid Commute code to GitHub
 2. Connect Railway to repo
 3. Add Postgres plugin
 4. Set environment variables
@@ -428,7 +428,7 @@ Cost: ~$15-40/month
 
 Steps:
 1. Install Fly CLI
-2. flyctl launch (in FleetTrack directory)
+2. flyctl launch (in Kid Commute directory)
 3. Add Postgres via Supabase
 4. Deploy: flyctl deploy
 ```
@@ -480,7 +480,7 @@ Sentry.init({
 ```
 
 **Backend Monitoring:**
-- We'll add Sentry to FleetTrack backend
+- We'll add Sentry to Kid Commute backend
 - Monitor API error rates
 - Alert on GPS webhook failures
 - Track push notification delivery
@@ -501,7 +501,7 @@ Sentry.init({
 # Fastfile
 lane :ios_beta do
   increment_build_number
-  build_app(scheme: "FleetTrack")
+  build_app(scheme: "Kid Commute")
   upload_to_testflight
 end
 
@@ -548,7 +548,7 @@ jobs:
 - [ ] Purchase custom domain
 - [ ] Set up Sentry for crash reporting
 
-### FleetTrack Backend (We Handle):
+### Kid Commute Backend (We Handle):
 - [ ] Privacy Policy page deployed
 - [ ] Terms of Service page deployed
 - [ ] Push notification endpoints ready
@@ -561,7 +561,7 @@ jobs:
 - [ ] Install required plugins
 - [ ] Build parent app UI
 - [ ] Build driver app UI
-- [ ] Integrate with FleetTrack API
+- [ ] Integrate with Kid Commute API
 - [ ] Test push notifications
 - [ ] Test background location
 
@@ -599,7 +599,7 @@ jobs:
 
 **Week 3-6: Mobile Development**
 - Build parent and driver apps using Capacitor
-- Integrate with FleetTrack API
+- Integrate with Kid Commute API
 - Test on devices
 
 **Week 7-8: Polish & Testing**
@@ -621,7 +621,7 @@ jobs:
 
 ## 📞 Need Help?
 
-**FleetTrack Backend Support:**
+**Kid Commute Backend Support:**
 - We handle all backend APIs, push notifications, and data management
 - Contact us for API questions or backend issues
 

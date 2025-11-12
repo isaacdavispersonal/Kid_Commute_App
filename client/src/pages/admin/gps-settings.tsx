@@ -263,7 +263,7 @@ export default function AdminGPSSettings() {
               <AccordionTrigger>Supported Navigation Software</AccordionTrigger>
               <AccordionContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  FleetTrack's webhook works with any GPS tracking software that can send HTTP POST requests. Popular options include:
+                  Kid Commute's webhook works with any GPS tracking software that can send HTTP POST requests. Popular options include:
                 </p>
                 <ul className="space-y-2 text-sm">
                   <li className="flex items-start gap-2">
@@ -308,7 +308,7 @@ export default function AdminGPSSettings() {
                     <div className="font-mono text-sm font-semibold">vehicle_id</div>
                     <p className="text-sm text-muted-foreground">
                       <Badge variant="outline" className="mr-2">Optional</Badge>
-                      The UUID of the vehicle from FleetTrack. Use this OR plate_number.
+                      The UUID of the vehicle from Kid Commute. Use this OR plate_number.
                     </p>
                   </div>
                   <div className="border-l-2 border-primary/30 pl-3 space-y-1">
@@ -370,7 +370,7 @@ export default function AdminGPSSettings() {
               2
             </div>
             <div>
-              <h4 className="font-semibold text-sm">FleetTrack Updates Vehicle Position</h4>
+              <h4 className="font-semibold text-sm">Kid Commute Updates Vehicle Position</h4>
               <p className="text-sm text-muted-foreground">
                 The webhook receives the GPS data, verifies authentication, and updates the vehicle's current location in the database
               </p>
