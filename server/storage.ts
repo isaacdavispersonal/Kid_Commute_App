@@ -3557,13 +3557,13 @@ export class DatabaseStorage implements IStorage {
     // Delete announcement dismissals older than retention period
     const deletedDismissals = await db
       .delete(announcementDismissals)
-      .where(lt(announcementDismissals.dismissedAt, cutoffDate))
+      .where(lt(announcementDismissals.createdAt, cutoffDate))
       .returning({ id: announcementDismissals.id });
 
     // Delete route announcement dismissals older than retention period
     const deletedRouteDismissals = await db
       .delete(routeAnnouncementDismissals)
-      .where(lt(routeAnnouncementDismissals.dismissedAt, cutoffDate))
+      .where(lt(routeAnnouncementDismissals.createdAt, cutoffDate))
       .returning({ id: routeAnnouncementDismissals.id });
 
     return deletedDismissals.length + deletedRouteDismissals.length;

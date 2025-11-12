@@ -133,6 +133,11 @@ app.use((req, res, next) => {
   setInterval(runAutoClockout, AUTO_CLOCKOUT_INTERVAL);
   log(`Auto-clockout job scheduled to run every ${AUTO_CLOCKOUT_INTERVAL / 1000 / 60} minutes`);
 
+  // Setup data retention scheduled job
+  // Run daily to automatically cleanup old data per privacy policy
+  const { initializeDataRetention } = await import("./data-retention-service");
+  initializeDataRetention(24); // Run every 24 hours
+
   // Start GPS polling service for real-time vehicle tracking
   const { gpsPollingService } = await import("./gps-polling-service");
   await gpsPollingService.start();

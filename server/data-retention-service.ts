@@ -53,22 +53,56 @@ export async function runDataRetention(): Promise<RetentionStats> {
       storage.getAdminSetting("retention_device_tokens_days"),
     ]);
 
+    // Helper function to safely parse retention period with validation
+    const parseRetentionPeriod = (
+      setting: any,
+      defaultValue: number,
+      settingName: string
+    ): number => {
+      if (!setting) {
+        return defaultValue;
+      }
+
+      const parsed = parseInt(setting.settingValue, 10);
+      
+      // Validate: must be a positive integer
+      if (isNaN(parsed) || parsed <= 0 || !Number.isFinite(parsed)) {
+        logError(
+          `Invalid retention setting "${settingName}": "${setting.settingValue}" - ` +
+          `must be a positive integer. Using default: ${defaultValue} days`
+        );
+        return defaultValue;
+      }
+
+      return parsed;
+    };
+
     const retentionPeriods = {
-      messages: messagesRetention
-        ? parseInt(messagesRetention.settingValue)
-        : DEFAULT_RETENTION_PERIODS.messages,
-      geofenceEvents: geofenceRetention
-        ? parseInt(geofenceRetention.settingValue)
-        : DEFAULT_RETENTION_PERIODS.geofenceEvents,
-      auditLogs: auditRetention
-        ? parseInt(auditRetention.settingValue)
-        : DEFAULT_RETENTION_PERIODS.auditLogs,
-      dismissedAnnouncements: announcementsRetention
-        ? parseInt(announcementsRetention.settingValue)
-        : DEFAULT_RETENTION_PERIODS.dismissedAnnouncements,
-      deviceTokens: tokensRetention
-        ? parseInt(tokensRetention.settingValue)
-        : DEFAULT_RETENTION_PERIODS.deviceTokens,
+      messages: parseRetentionPeriod(
+        messagesRetention,
+        DEFAULT_RETENTION_PERIODS.messages,
+        "retention_messages_days"
+      ),
+      geofenceEvents: parseRetentionPeriod(
+        geofenceRetention,
+        DEFAULT_RETENTION_PERIODS.geofenceEvents,
+        "retention_geofence_events_days"
+      ),
+      auditLogs: parseRetentionPeriod(
+        auditRetention,
+        DEFAULT_RETENTION_PERIODS.auditLogs,
+        "retention_audit_logs_days"
+      ),
+      dismissedAnnouncements: parseRetentionPeriod(
+        announcementsRetention,
+        DEFAULT_RETENTION_PERIODS.dismissedAnnouncements,
+        "retention_announcements_days"
+      ),
+      deviceTokens: parseRetentionPeriod(
+        tokensRetention,
+        DEFAULT_RETENTION_PERIODS.deviceTokens,
+        "retention_device_tokens_days"
+      ),
     };
 
     log(`Using retention periods: ${JSON.stringify(retentionPeriods)}`);
