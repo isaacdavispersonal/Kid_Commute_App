@@ -45,6 +45,107 @@ export interface RoutesBootstrapResult {
   wss: WebSocketServer;
 }
 
+// Helper function to calculate net hours worked for a single shift
+// Reuses the same state machine logic as calculatePayrollData
+async function calculateShiftHours(shiftId: string, driverName: string): Promise<{
+  netHours: number;
+  breakMinutes: number;
+}> {
+  const events = await storage.getClockEventsByShift(shiftId);
+  const shift = await storage.getShift(shiftId);
+  
+  if (events.length === 0 || !shift) {
+    return { netHours: 0, breakMinutes: 0 };
+  }
+
+  // Sort events by timestamp
+  events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // State machine for clock events
+  type ClockState = "CLOCKED_OUT" | "CLOCKED_IN";
+  let clockState: ClockState = "CLOCKED_OUT";
+  let currentInEvent: typeof events[0] | null = null;
+  let shiftHours = 0;
+
+  // Break tracking with stack
+  const breakStack: typeof events = [];
+  let shiftBreakMinutes = 0;
+
+  // Process clock events
+  for (const event of events) {
+    if (event.type === "IN") {
+      if (clockState === "CLOCKED_IN") {
+        console.warn(`[Payroll Export] Duplicate IN event ignored - Driver: ${driverName}, Shift: ${shiftId}, Event: ${event.id}`);
+        continue;
+      }
+      clockState = "CLOCKED_IN";
+      currentInEvent = event;
+    } 
+    else if (event.type === "OUT") {
+      if (clockState === "CLOCKED_OUT") {
+        console.warn(`[Payroll Export] OUT without IN ignored - Driver: ${driverName}, Shift: ${shiftId}, Event: ${event.id}`);
+        continue;
+      }
+      if (!currentInEvent) {
+        console.warn(`[Payroll Export] OUT event without matching IN - Driver: ${driverName}, Shift: ${shiftId}, Event: ${event.id}`);
+        continue;
+      }
+      const inTime = new Date(currentInEvent.timestamp);
+      const outTime = new Date(event.timestamp);
+      const hoursWorked = (outTime.getTime() - inTime.getTime()) / (1000 * 60 * 60);
+      shiftHours += hoursWorked;
+      clockState = "CLOCKED_OUT";
+      currentInEvent = null;
+    }
+    else if (event.type === "BREAK_START") {
+      breakStack.push(event);
+    }
+    else if (event.type === "BREAK_END") {
+      if (breakStack.length === 0) {
+        console.warn(`[Payroll Export] Unpaired BREAK_END ignored - Driver: ${driverName}, Shift: ${shiftId}, Event: ${event.id}`);
+        continue;
+      }
+      const breakStart = breakStack.pop()!;
+      const breakStartTime = new Date(breakStart.timestamp);
+      const breakEndTime = new Date(event.timestamp);
+      const breakMinutes = (breakEndTime.getTime() - breakStartTime.getTime()) / (1000 * 60);
+      shiftBreakMinutes += breakMinutes;
+    }
+  }
+
+  // Handle orphaned IN (still clocked in at end of shift)
+  if (clockState === "CLOCKED_IN" && currentInEvent) {
+    if (shift.plannedEnd) {
+      const inTime = new Date(currentInEvent.timestamp);
+      const shiftEndDateTime = new Date(`${shift.date}T${shift.plannedEnd}`);
+      const hoursWorked = (shiftEndDateTime.getTime() - inTime.getTime()) / (1000 * 60 * 60);
+      if (hoursWorked > 0) {
+        shiftHours += hoursWorked;
+        console.warn(`[Payroll Export] Orphaned IN resolved using shift plannedEnd - Driver: ${driverName}, Shift: ${shiftId}, Hours: ${hoursWorked.toFixed(2)}`);
+      }
+    } else {
+      console.warn(`[Payroll Export] Orphaned IN ignored (no shift plannedEnd) - Driver: ${driverName}, Shift: ${shiftId}, Event: ${currentInEvent.id}`);
+    }
+  }
+
+  // Handle unpaired BREAK_START
+  if (breakStack.length > 0) {
+    console.warn(`[Payroll Export] ${breakStack.length} unpaired BREAK_START events ignored - Driver: ${driverName}, Shift: ${shiftId}`);
+  }
+
+  // Calculate net hours (worked hours minus break time)
+  const breakHours = shiftBreakMinutes / 60;
+  let netHours = shiftHours - breakHours;
+
+  // Cap break deduction to prevent negative hours
+  if (netHours < 0) {
+    console.warn(`[Payroll Export] Break deduction capped to prevent negative hours - Driver: ${driverName}, Shift: ${shiftId}, Worked: ${shiftHours.toFixed(2)}h, Break: ${breakHours.toFixed(2)}h`);
+    netHours = 0;
+  }
+
+  return { netHours, breakMinutes: shiftBreakMinutes };
+}
+
 export async function registerRoutes(app: Express): Promise<RoutesBootstrapResult> {
   // Auth middleware
   await setupAuth(app);
@@ -900,6 +1001,314 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       } catch (error) {
         console.error("Error setting admin setting:", error);
         res.status(500).json({ message: "Failed to set admin setting" });
+      }
+    }
+  );
+
+  // ============ Admin Payroll Export Routes (BambooHR Integration) ============
+
+  // Get drivers with BambooHR employee mapping
+  app.get(
+    "/api/admin/payroll/drivers",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const drivers = await storage.getDriversForPayroll();
+        res.json(drivers);
+      } catch (error) {
+        console.error("Error fetching drivers for payroll:", error);
+        res.status(500).json({ message: "Failed to fetch drivers" });
+      }
+    }
+  );
+
+  // Update driver's BambooHR employee ID
+  app.put(
+    "/api/admin/payroll/drivers/:driverId/bamboo-id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { driverId } = req.params;
+        const { bambooEmployeeId } = req.body;
+
+        if (!bambooEmployeeId) {
+          return res.status(400).json({ message: "bambooEmployeeId is required" });
+        }
+
+        const driver = await storage.updateDriverBambooId(driverId, bambooEmployeeId);
+        res.json(driver);
+      } catch (error) {
+        console.error("Error updating driver BambooHR ID:", error);
+        res.status(500).json({ message: "Failed to update BambooHR employee ID" });
+      }
+    }
+  );
+
+  // Calculate payroll for a pay period (preview before export)
+  app.post(
+    "/api/admin/payroll/calculate",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { startDate, endDate, includeOvertime } = req.body;
+
+        if (!startDate || !endDate) {
+          return res.status(400).json({ message: "startDate and endDate are required" });
+        }
+
+        const payrollData = await storage.calculatePayrollData(
+          startDate,
+          endDate,
+          { includeOvertime: includeOvertime !== false }
+        );
+        res.json(payrollData);
+      } catch (error) {
+        console.error("Error calculating payroll:", error);
+        res.status(500).json({ message: "Failed to calculate payroll data" });
+      }
+    }
+  );
+
+  // Create and execute payroll export to BambooHR
+  app.post(
+    "/api/admin/payroll/exports",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { startDate, endDate, includeOvertime } = req.body;
+        const userId = req.user.claims.sub;
+
+        if (!startDate || !endDate) {
+          return res.status(400).json({ message: "startDate and endDate are required" });
+        }
+
+        // Create BambooHR service
+        const { createBambooHRService } = await import("./bamboohr-service");
+        const bambooHRService = createBambooHRService();
+
+        if (!bambooHRService) {
+          return res.status(400).json({ 
+            message: "BambooHR integration not configured. Please set BAMBOOHR_API_KEY and BAMBOOHR_SUBDOMAIN environment variables." 
+          });
+        }
+
+        // Test connection first
+        const connectionTest = await bambooHRService.testConnection();
+        if (!connectionTest.success) {
+          return res.status(400).json({ 
+            message: `BambooHR connection failed: ${connectionTest.error}` 
+          });
+        }
+
+        // Calculate payroll data
+        const payrollData = await storage.calculatePayrollData(
+          startDate,
+          endDate,
+          { includeOvertime: includeOvertime !== false }
+        );
+
+        // Filter out drivers without BambooHR employee ID
+        const driversWithoutMapping = payrollData.filter(d => !d.bambooEmployeeId);
+        if (driversWithoutMapping.length > 0) {
+          return res.status(400).json({ 
+            message: `${driversWithoutMapping.length} driver(s) missing BambooHR employee ID mapping. Please map all drivers before exporting.`,
+            unmappedDrivers: driversWithoutMapping.map(d => ({ id: d.driverId, name: d.driverName }))
+          });
+        }
+
+        // Create export record
+        const exportRecord = await storage.createPayrollExport({
+          exportedBy: userId,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          status: "processing",
+          totalDrivers: payrollData.length,
+          totalHours: payrollData.reduce((sum, d) => sum + d.totalHours, 0).toFixed(2),
+        }, []);
+
+        // Export each driver's data to BambooHR
+        const exportResults = [];
+        for (const driver of payrollData) {
+          try {
+            // Step 1: Calculate hours for each shift using actual clock events
+            const shiftHoursMap = new Map<string, { netHours: number; breakMinutes: number }>();
+            for (const shiftId of driver.shiftIds) {
+              const shiftCalc = await calculateShiftHours(shiftId, driver.driverName);
+              shiftHoursMap.set(shiftId, shiftCalc);
+            }
+
+            // Step 2: Group shifts by date and accumulate total hours per day
+            const dailyHoursMap = new Map<string, number>();
+            const shiftsByDate = new Map<string, string[]>();
+
+            for (const shiftId of driver.shiftIds) {
+              const shift = await storage.getShift(shiftId);
+              if (!shift || !shift.date) continue;
+
+              const shiftDate = shift.date;
+              const shiftCalc = shiftHoursMap.get(shiftId);
+              if (!shiftCalc) continue;
+
+              // Accumulate daily hours
+              const currentDayHours = dailyHoursMap.get(shiftDate) || 0;
+              dailyHoursMap.set(shiftDate, currentDayHours + shiftCalc.netHours);
+
+              // Track shift IDs by date
+              if (!shiftsByDate.has(shiftDate)) {
+                shiftsByDate.set(shiftDate, []);
+              }
+              shiftsByDate.get(shiftDate)!.push(shiftId);
+            }
+
+            // Step 3: Apply California overtime rules at daily level
+            const dateBreakdown = new Map<string, {
+              regularHours: number;
+              overtimeHours: number;
+              doubleTimeHours: number;
+              shiftIds: string[];
+            }>();
+
+            for (const [date, totalDayHours] of Array.from(dailyHoursMap.entries())) {
+              let regularHours = 0;
+              let overtimeHours = 0;
+              let doubleTimeHours = 0;
+
+              if (includeOvertime !== false) {
+                // California daily overtime: 0-8 regular, 8-12 overtime, >12 double-time
+                if (totalDayHours <= 8) {
+                  regularHours = totalDayHours;
+                } else if (totalDayHours <= 12) {
+                  regularHours = 8;
+                  overtimeHours = totalDayHours - 8;
+                } else {
+                  regularHours = 8;
+                  overtimeHours = 4; // Hours 8-12
+                  doubleTimeHours = totalDayHours - 12;
+                }
+              } else {
+                // No overtime calculation - all hours are regular
+                regularHours = totalDayHours;
+              }
+
+              dateBreakdown.set(date, {
+                regularHours,
+                overtimeHours,
+                doubleTimeHours,
+                shiftIds: shiftsByDate.get(date) || [],
+              });
+            }
+
+            // Step 4: Create entry records and submit to BambooHR
+            for (const [date, dayData] of Array.from(dateBreakdown.entries())) {
+              const entryRecord = await storage.createPayrollExportEntry({
+                exportId: exportRecord.id,
+                driverId: driver.driverId,
+                bambooEmployeeId: driver.bambooEmployeeId!,
+                date: new Date(date),
+                regularHours: dayData.regularHours.toFixed(2),
+                overtimeHours: dayData.overtimeHours.toFixed(2),
+                doubleTimeHours: dayData.doubleTimeHours.toFixed(2),
+                totalHours: (dayData.regularHours + dayData.overtimeHours + dayData.doubleTimeHours).toFixed(2),
+                shiftIds: dayData.shiftIds,
+                status: "pending",
+              });
+
+              // Submit to BambooHR
+              const bambooEntry = bambooHRService.convertPayrollEntryToBambooHR(entryRecord);
+              const result = await bambooHRService.submitTimeEntry(bambooEntry);
+
+              // Update entry status
+              await storage.updatePayrollExportEntryStatus(
+                entryRecord.id,
+                result.success ? "completed" : "failed",
+                result.success ? result.entryId : undefined,
+                result.success ? undefined : result.error
+              );
+
+              exportResults.push({
+                driverName: driver.driverName,
+                date,
+                success: result.success,
+                error: result.error,
+              });
+            }
+          } catch (error) {
+            console.error(`Error exporting payroll for driver ${driver.driverName}:`, error);
+            exportResults.push({
+              driverName: driver.driverName,
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          }
+        }
+
+        // Update export record status
+        const allSuccessful = exportResults.every(r => r.success);
+        await storage.updatePayrollExportStatus(
+          exportRecord.id,
+          allSuccessful ? "completed" : "failed",
+          allSuccessful ? undefined : "Some entries failed to export",
+          { results: exportResults }
+        );
+
+        res.json({
+          exportId: exportRecord.id,
+          status: allSuccessful ? "completed" : "failed",
+          totalEntries: exportResults.length,
+          successfulEntries: exportResults.filter(r => r.success).length,
+          failedEntries: exportResults.filter(r => !r.success).length,
+          results: exportResults,
+        });
+      } catch (error) {
+        console.error("Error creating payroll export:", error);
+        res.status(500).json({ message: "Failed to create payroll export" });
+      }
+    }
+  );
+
+  // Get list of payroll exports
+  app.get(
+    "/api/admin/payroll/exports",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const exports = await storage.getPayrollExports();
+        res.json(exports);
+      } catch (error) {
+        console.error("Error fetching payroll exports:", error);
+        res.status(500).json({ message: "Failed to fetch payroll exports" });
+      }
+    }
+  );
+
+  // Get details of a specific payroll export
+  app.get(
+    "/api/admin/payroll/exports/:exportId",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { exportId } = req.params;
+        const exportRecord = await storage.getPayrollExport(exportId);
+        
+        if (!exportRecord) {
+          return res.status(404).json({ message: "Payroll export not found" });
+        }
+
+        const entries = await storage.getPayrollExportEntries(exportId);
+        
+        res.json({
+          ...exportRecord,
+          entries,
+        });
+      } catch (error) {
+        console.error("Error fetching payroll export details:", error);
+        res.status(500).json({ message: "Failed to fetch payroll export details" });
       }
     }
   );

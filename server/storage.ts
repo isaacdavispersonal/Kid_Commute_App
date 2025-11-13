@@ -335,9 +335,13 @@ export interface IStorage {
   updateUserBambooEmployeeId(userId: string, bambooEmployeeId: string | null): Promise<User>;
   getDriversWithBambooMapping(): Promise<User[]>;
   getDriversWithoutBambooMapping(): Promise<User[]>;
+  getDriversForPayroll(): Promise<Array<{ id: string; firstName: string; lastName: string; bambooEmployeeId: string | null }>>;
+  updateDriverBambooId(driverId: string, bambooEmployeeId: string): Promise<User>;
   calculatePayrollData(startDate: string, endDate: string, options?: { includeOvertime?: boolean }): Promise<PayrollCalculationResult[]>;
   createPayrollExport(exportData: InsertPayrollExport, entries: InsertPayrollExportEntry[]): Promise<PayrollExport>;
+  createPayrollExportEntry(entry: InsertPayrollExportEntry): Promise<PayrollExportEntry>;
   updatePayrollExportStatus(exportId: string, status: "pending" | "processing" | "completed" | "failed", errorMessage?: string, bambooResponse?: any): Promise<PayrollExport>;
+  updatePayrollExportEntryStatus(entryId: string, status: "pending" | "processing" | "completed" | "failed", bambooEntryId?: string, errorMessage?: string): Promise<PayrollExportEntry>;
   getPayrollExports(limit?: number): Promise<PayrollExport[]>;
   getPayrollExport(id: string): Promise<PayrollExport | undefined>;
   getPayrollExportEntries(exportId: string): Promise<PayrollExportEntry[]>;
@@ -3651,6 +3655,35 @@ export class DatabaseStorage implements IStorage {
       .orderBy(users.firstName, users.lastName);
   }
 
+  async getDriversForPayroll(): Promise<Array<{ id: string; firstName: string; lastName: string; bambooEmployeeId: string | null }>> {
+    const drivers = await db
+      .select({
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        bambooEmployeeId: users.bambooEmployeeId,
+      })
+      .from(users)
+      .where(eq(users.role, "driver"))
+      .orderBy(users.firstName, users.lastName);
+    
+    return drivers;
+  }
+
+  async updateDriverBambooId(driverId: string, bambooEmployeeId: string): Promise<User> {
+    const [updatedDriver] = await db
+      .update(users)
+      .set({ bambooEmployeeId, updatedAt: new Date() })
+      .where(eq(users.id, driverId))
+      .returning();
+    
+    if (!updatedDriver) {
+      throw new NotFoundError("Driver not found");
+    }
+    
+    return updatedDriver;
+  }
+
   async calculatePayrollData(
     startDate: string,
     endDate: string,
@@ -3977,6 +4010,46 @@ export class DatabaseStorage implements IStorage {
       .where(eq(payrollExports.id, id));
 
     return payrollExport;
+  }
+
+  async createPayrollExportEntry(entry: InsertPayrollExportEntry): Promise<PayrollExportEntry> {
+    const [newEntry] = await db
+      .insert(payrollExportEntries)
+      .values(entry)
+      .returning();
+    
+    return newEntry;
+  }
+
+  async updatePayrollExportEntryStatus(
+    entryId: string,
+    status: "pending" | "processing" | "completed" | "failed",
+    bambooEntryId?: string,
+    errorMessage?: string
+  ): Promise<PayrollExportEntry> {
+    const updateData: any = {
+      status,
+    };
+
+    if (bambooEntryId !== undefined) {
+      updateData.bambooEntryId = bambooEntryId;
+    }
+
+    if (errorMessage !== undefined) {
+      updateData.errorMessage = errorMessage;
+    }
+
+    const [updatedEntry] = await db
+      .update(payrollExportEntries)
+      .set(updateData)
+      .where(eq(payrollExportEntries.id, entryId))
+      .returning();
+
+    if (!updatedEntry) {
+      throw new NotFoundError("Payroll export entry not found");
+    }
+
+    return updatedEntry;
   }
 
   async getPayrollExportEntries(exportId: string): Promise<PayrollExportEntry[]> {
