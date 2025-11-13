@@ -1320,6 +1320,7 @@ export interface PayrollCalculationResult {
   bambooEmployeeId: string | null;
   regularHours: number;
   overtimeHours: number;
+  doubleTimeHours: number;
   totalHours: number;
   breakMinutes: number;
   shiftIds: string[];

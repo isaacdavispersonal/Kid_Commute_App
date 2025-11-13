@@ -3698,16 +3698,16 @@ export class DatabaseStorage implements IStorage {
       eventsByShift.get(event.shiftId)!.push(event);
     }
 
+    // Track daily hours for overtime calculation
+    const dailyHoursMap = new Map<string, Map<string, number>>(); // driverId -> date -> hours
     const payrollMap = new Map<string, {
       driver: User;
-      regularHours: number;
-      overtimeHours: number;
       totalHours: number;
       breakMinutes: number;
       shiftIds: string[];
     }>();
 
-    // 4. Process in-memory (no more queries)
+    // 4. Process each shift with production-ready state machine
     for (const shift of validShifts) {
       const driver = driverMap.get(shift.driverId!);
       if (!driver) continue;
@@ -3715,40 +3715,107 @@ export class DatabaseStorage implements IStorage {
       const events = eventsByShift.get(shift.id) || [];
       if (events.length === 0) continue;
 
-      // CRITICAL: Sort events by timestamp to ensure correct IN/OUT and BREAK_START/BREAK_END pairing
+      // Sort events by timestamp
       events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
+      // State machine for clock events
+      type ClockState = "CLOCKED_OUT" | "CLOCKED_IN";
+      let clockState: ClockState = "CLOCKED_OUT";
+      let currentInEvent: ClockEvent | null = null;
       let shiftHours = 0;
-      let shiftBreakMinutes = 0;
-      let lastInEvent: ClockEvent | null = null;
-      let lastBreakStartEvent: ClockEvent | null = null;
 
+      // Break tracking with stack
+      const breakStack: ClockEvent[] = [];
+      let shiftBreakMinutes = 0;
+
+      // Process clock events
       for (const event of events) {
         if (event.type === "IN") {
-          lastInEvent = event;
-        } else if (event.type === "OUT" && lastInEvent) {
-          const inTime = new Date(lastInEvent.timestamp);
+          if (clockState === "CLOCKED_IN") {
+            console.warn(`[Payroll] Duplicate IN event ignored - Driver: ${driver.firstName} ${driver.lastName}, Shift: ${shift.id}, Event: ${event.id}`);
+            continue;
+          }
+          // Valid state transition: CLOCKED_OUT -> CLOCKED_IN
+          clockState = "CLOCKED_IN";
+          currentInEvent = event;
+        } 
+        else if (event.type === "OUT") {
+          if (clockState === "CLOCKED_OUT") {
+            console.warn(`[Payroll] OUT without IN ignored - Driver: ${driver.firstName} ${driver.lastName}, Shift: ${shift.id}, Event: ${event.id}`);
+            continue;
+          }
+          if (!currentInEvent) {
+            console.warn(`[Payroll] OUT event without matching IN - Driver: ${driver.firstName} ${driver.lastName}, Shift: ${shift.id}, Event: ${event.id}`);
+            continue;
+          }
+          // Valid state transition: CLOCKED_IN -> CLOCKED_OUT
+          const inTime = new Date(currentInEvent.timestamp);
           const outTime = new Date(event.timestamp);
           const hoursWorked = (outTime.getTime() - inTime.getTime()) / (1000 * 60 * 60);
           shiftHours += hoursWorked;
-          lastInEvent = null;
-        } else if (event.type === "BREAK_START") {
-          lastBreakStartEvent = event;
-        } else if (event.type === "BREAK_END" && lastBreakStartEvent) {
-          const breakStart = new Date(lastBreakStartEvent.timestamp);
-          const breakEnd = new Date(event.timestamp);
-          const breakMinutes = (breakEnd.getTime() - breakStart.getTime()) / (1000 * 60);
+          clockState = "CLOCKED_OUT";
+          currentInEvent = null;
+        }
+        else if (event.type === "BREAK_START") {
+          breakStack.push(event);
+        }
+        else if (event.type === "BREAK_END") {
+          if (breakStack.length === 0) {
+            console.warn(`[Payroll] Unpaired BREAK_END ignored - Driver: ${driver.firstName} ${driver.lastName}, Shift: ${shift.id}, Event: ${event.id}`);
+            continue;
+          }
+          const breakStart = breakStack.pop()!;
+          const breakStartTime = new Date(breakStart.timestamp);
+          const breakEndTime = new Date(event.timestamp);
+          const breakMinutes = (breakEndTime.getTime() - breakStartTime.getTime()) / (1000 * 60);
           shiftBreakMinutes += breakMinutes;
-          lastBreakStartEvent = null;
         }
       }
 
+      // Handle orphaned IN (still clocked in at end of shift)
+      if (clockState === "CLOCKED_IN" && currentInEvent) {
+        if (shift.plannedEnd) {
+          // Use shift plannedEnd as the OUT timestamp
+          const inTime = new Date(currentInEvent.timestamp);
+          const shiftEndDateTime = new Date(`${shift.date}T${shift.plannedEnd}`);
+          const hoursWorked = (shiftEndDateTime.getTime() - inTime.getTime()) / (1000 * 60 * 60);
+          if (hoursWorked > 0) {
+            shiftHours += hoursWorked;
+            console.warn(`[Payroll] Orphaned IN resolved using shift plannedEnd - Driver: ${driver.firstName} ${driver.lastName}, Shift: ${shift.id}, Hours: ${hoursWorked.toFixed(2)}`);
+          }
+        } else {
+          console.warn(`[Payroll] Orphaned IN ignored (no shift plannedEnd) - Driver: ${driver.firstName} ${driver.lastName}, Shift: ${shift.id}, Event: ${currentInEvent.id}`);
+        }
+      }
+
+      // Handle unpaired BREAK_START
+      if (breakStack.length > 0) {
+        console.warn(`[Payroll] ${breakStack.length} unpaired BREAK_START events ignored - Driver: ${driver.firstName} ${driver.lastName}, Shift: ${shift.id}`);
+      }
+
+      // Calculate net hours (worked hours minus break time)
+      const breakHours = shiftBreakMinutes / 60;
+      let netHours = shiftHours - breakHours;
+
+      // Cap break deduction to prevent negative hours
+      if (netHours < 0) {
+        console.warn(`[Payroll] Break deduction capped to prevent negative hours - Driver: ${driver.firstName} ${driver.lastName}, Shift: ${shift.id}, Worked: ${shiftHours.toFixed(2)}h, Break: ${breakHours.toFixed(2)}h`);
+        netHours = 0;
+      }
+
+      // Track daily hours for overtime calculation
       const driverKey = driver.id;
+      if (!dailyHoursMap.has(driverKey)) {
+        dailyHoursMap.set(driverKey, new Map());
+      }
+      const dailyHours = dailyHoursMap.get(driverKey)!;
+      const currentDayHours = dailyHours.get(shift.date) || 0;
+      dailyHours.set(shift.date, currentDayHours + netHours);
+
+      // Aggregate totals per driver
       if (!payrollMap.has(driverKey)) {
         payrollMap.set(driverKey, {
           driver,
-          regularHours: 0,
-          overtimeHours: 0,
           totalHours: 0,
           breakMinutes: 0,
           shiftIds: [],
@@ -3756,22 +3823,55 @@ export class DatabaseStorage implements IStorage {
       }
 
       const driverData = payrollMap.get(driverKey)!;
-      driverData.regularHours += shiftHours - (shiftBreakMinutes / 60);
-      driverData.totalHours += shiftHours - (shiftBreakMinutes / 60);
+      driverData.totalHours += netHours;
       driverData.breakMinutes += shiftBreakMinutes;
       driverData.shiftIds.push(shift.id);
     }
 
+    // 5. Calculate overtime (California-style with double-time support)
     const results: PayrollCalculationResult[] = [];
     for (const [driverId, data] of Array.from(payrollMap.entries())) {
+      let regularHours = 0;
+      let overtimeHours = 0;
+      let doubleTimeHours = 0;
+
+      if (options?.includeOvertime) {
+        // California-style overtime: Layer daily and weekly overtime
+        // Step 1: Calculate daily breakdowns (0-8 regular, 8-12 overtime, >12 double-time)
+        const dailyHours = dailyHoursMap.get(driverId);
+        if (dailyHours) {
+          for (const [date, hours] of Array.from(dailyHours.entries())) {
+            if (hours <= 8) {
+              regularHours += hours;
+            } else if (hours <= 12) {
+              regularHours += 8;
+              overtimeHours += (hours - 8);
+            } else {
+              regularHours += 8;
+              overtimeHours += 4; // Hours 8-12
+              doubleTimeHours += (hours - 12);
+            }
+          }
+        }
+
+        // Step 2: Apply weekly threshold (if total regular hours > 40, move excess to overtime)
+        if (regularHours > 40) {
+          const weeklyOT = regularHours - 40;
+          overtimeHours += weeklyOT;
+          regularHours = 40;
+        }
+      } else {
+        // No overtime calculation requested - all hours are regular
+        regularHours = data.totalHours;
+      }
+
       results.push({
         driverId,
         driverName: `${data.driver.firstName ?? 'Unknown'} ${data.driver.lastName ?? 'Unknown'}`.trim(),
         bambooEmployeeId: data.driver.bambooEmployeeId,
-        regularHours: Math.round(data.regularHours * 100) / 100,
-        // TODO: Implement overtime calculation based on daily/weekly thresholds
-        // For now, all hours are classified as regular hours
-        overtimeHours: options?.includeOvertime ? 0 : 0,
+        regularHours: Math.round(regularHours * 100) / 100,
+        overtimeHours: Math.round(overtimeHours * 100) / 100,
+        doubleTimeHours: Math.round(doubleTimeHours * 100) / 100,
         totalHours: Math.round(data.totalHours * 100) / 100,
         breakMinutes: Math.round(data.breakMinutes),
         shiftIds: data.shiftIds,
