@@ -73,11 +73,6 @@ const adminMenuSections = [
         icon: RouteIcon,
       },
       {
-        title: "Geofences",
-        url: "/admin/geofences",
-        icon: Shield,
-      },
-      {
         title: "Schedule",
         url: "/admin/schedule",
         icon: Calendar,
