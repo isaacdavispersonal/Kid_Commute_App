@@ -9,6 +9,7 @@ import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
 import { NotFoundError, ValidationError } from "./errors";
 import express from "express";
 import memoizee from "memoizee";
+import { registerAdminImportRoutes } from "./routes/admin-import";
 
 // Webhook authentication middleware
 const verifyWebhookToken = (req: any, res: any, next: any) => {
@@ -1312,6 +1313,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       }
     }
   );
+
+  // ============ Admin Import Routes ============
+  // Register bulk import routes for stops and students
+  registerAdminImportRoutes(app, storage, isAuthenticated, requireRole);
 
   // Get all users
   app.get(

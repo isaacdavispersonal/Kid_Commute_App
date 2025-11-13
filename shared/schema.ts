@@ -469,6 +469,49 @@ export interface BulkImportStudentResult {
   skipped: BulkImportStudentSkipReason[];
 }
 
+// Bulk import API request/response schemas
+export const importPreviewRequestSchema = z.object({
+  text: z.string().min(1, "Import text is required"),
+  region: z.string().optional(), // For stops: "East Valley" or "West Valley"
+});
+
+export const importCommitRequestSchema = importPreviewRequestSchema.extend({
+  source: z.string().optional(), // e.g., "manual:2024-11-13" - auto-generated if omitted
+});
+
+export type ImportPreviewRequest = z.infer<typeof importPreviewRequestSchema>;
+export type ImportCommitRequest = z.infer<typeof importCommitRequestSchema>;
+
+// Preview response types
+export interface ImportStopsPreviewResponse {
+  success: boolean;
+  stops: BulkImportStopInput[];
+  errors: string[];
+}
+
+export interface ImportStudentsPreviewResponse {
+  success: boolean;
+  students: BulkImportStudentInput[];
+  errors: string[];
+}
+
+// Commit response types
+export interface ImportStopsCommitResponse {
+  success: boolean;
+  created: Stop[];
+  skipped: BulkImportStopSkipReason[];
+  warnings: string[];
+  source: string;
+}
+
+export interface ImportStudentsCommitResponse {
+  success: boolean;
+  created: Student[];
+  skipped: BulkImportStudentSkipReason[];
+  warnings: string[];
+  source: string;
+}
+
 // Attendance status enum (for type safety only - stored as varchar in DB)
 export const attendanceStatusEnum = pgEnum("attendance_status", ["PENDING", "riding", "absent"]);
 
