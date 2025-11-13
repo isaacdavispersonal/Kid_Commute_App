@@ -1292,6 +1292,7 @@ export const payrollExportEntries = pgTable("payroll_export_entries", {
   date: timestamp("date").notNull(),
   regularHours: decimal("regular_hours", { precision: 10, scale: 2 }).notNull(),
   overtimeHours: decimal("overtime_hours", { precision: 10, scale: 2 }),
+  doubleTimeHours: decimal("double_time_hours", { precision: 10, scale: 2 }),
   totalHours: decimal("total_hours", { precision: 10, scale: 2 }).notNull(),
   shiftIds: text("shift_ids").array(),
   notes: text("notes"),
