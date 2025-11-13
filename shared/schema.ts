@@ -432,6 +432,43 @@ export type BulkImportStudent = z.infer<typeof bulkImportStudentSchema>;
 export type BulkImportStop = z.infer<typeof bulkImportStopSchema>;
 export type Student = typeof students.$inferSelect;
 
+// Bulk import input types for storage layer
+export interface BulkImportStopInput {
+  name: string;
+  address: string;
+  region?: string;
+}
+
+export interface BulkImportStudentInput {
+  firstName: string;
+  lastName: string;
+  notes?: string;
+}
+
+// Bulk import skip/error reasons
+export type BulkImportStopSkipReason = {
+  input: BulkImportStopInput;
+  reason: "duplicate" | "invalid";
+  message: string;
+};
+
+export type BulkImportStudentSkipReason = {
+  input: BulkImportStudentInput;
+  reason: "duplicate_in_batch" | "invalid";
+  message: string;
+};
+
+// Bulk import results
+export interface BulkImportStopResult {
+  created: Stop[];
+  skipped: BulkImportStopSkipReason[];
+}
+
+export interface BulkImportStudentResult {
+  created: Student[];
+  skipped: BulkImportStudentSkipReason[];
+}
+
 // Attendance status enum (for type safety only - stored as varchar in DB)
 export const attendanceStatusEnum = pgEnum("attendance_status", ["PENDING", "riding", "absent"]);
 
