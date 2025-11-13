@@ -421,7 +421,7 @@ export default function Profile() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />
-            Danger Zone
+            Account Deletion
           </CardTitle>
           <CardDescription>
             Permanent account actions
