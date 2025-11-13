@@ -18,7 +18,8 @@ import {
   Activity,
   Navigation,
   Link2,
-  Map
+  Map,
+  DollarSign
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -90,6 +91,11 @@ const adminMenuSections = [
         title: "Time Management",
         url: "/admin/time-management",
         icon: Clock,
+      },
+      {
+        title: "Payroll Exports",
+        url: "/admin/payroll-exports",
+        icon: DollarSign,
       },
       {
         title: "Incidents",

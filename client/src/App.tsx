@@ -43,6 +43,7 @@ import AdminDriverUtilities from "@/pages/admin/driver-utilities";
 import AdminRouteHealth from "@/pages/admin/route-health";
 import AdminGPSSettings from "@/pages/admin/gps-settings";
 import AdminSamsaraIntegration from "@/pages/admin/samsara-integration";
+import AdminPayrollExports from "@/pages/admin/payroll-exports";
 
 import DriverDashboard from "@/pages/driver/dashboard";
 import DriverRoutes from "@/pages/driver/routes";
@@ -173,6 +174,7 @@ function Router() {
                   <Route path="/admin/route-health" component={AdminRouteHealth} />
                   <Route path="/admin/gps-settings" component={AdminGPSSettings} />
                   <Route path="/admin/samsara-integration" component={AdminSamsaraIntegration} />
+                  <Route path="/admin/payroll-exports" component={AdminPayrollExports} />
                   <Route path="/admin/time-exceptions">
                     {() => {
                       window.location.href = "/admin/time-management";
