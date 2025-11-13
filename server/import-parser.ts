@@ -14,6 +14,8 @@ export interface ParsedStop {
 export interface ParsedStudent {
   firstName: string;
   lastName: string;
+  guardianPhones: string[];
+  guardianNames?: string;
   notes?: string;
 }
 
@@ -87,7 +89,9 @@ export function parseStops(text: string, region?: string): StopParseResult {
 
 /**
  * Parse students from text format
- * Expected format: "FirstName LastName" with optional notes in parentheses
+ * Expected format: "FirstName | LastName | GuardianPhones | GuardianNames"
+ * - GuardianPhones: Semicolon-separated list (e.g., "555-111-2222; 555-333-4444")
+ * - GuardianNames: Semicolon-separated list (e.g., "Mom Name; Dad Name")
  */
 export function parseStudents(text: string): StudentParseResult {
   const errors: string[] = [];
@@ -95,46 +99,53 @@ export function parseStudents(text: string): StudentParseResult {
   
   const lines = text.split('\n')
     .map(line => line.trim())
-    .filter(line => line.length > 0)
-    .filter(line => !line.match(/^[A-Z]–[A-Z]$/)) // Skip section headers like "A–D"
-    .filter(line => !line.toLowerCase().includes('all students'))
-    .filter(line => !line.toLowerCase().includes('alphabetized'));
+    .filter(line => line.length > 0);
   
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineNum = i + 1;
+    
     try {
-      let fullName = line;
-      let notes = '';
+      // Split by pipe character
+      const parts = line.split('|').map(p => p.trim());
       
-      // Extract notes in parentheses
-      const notesMatch = line.match(/\((.*?)\)/);
-      if (notesMatch) {
-        notes = notesMatch[1];
-        fullName = line.replace(/\s*\(.*?\)\s*/g, '').trim();
-      }
-      
-      // Split name into first and last
-      const nameParts = fullName.trim().split(/\s+/);
-      
-      if (nameParts.length < 2) {
-        errors.push(`Invalid name format (need first and last name): ${line}`);
+      if (parts.length < 2) {
+        errors.push(`Line ${lineNum}: Invalid format. Expected: FirstName | LastName | GuardianPhones | GuardianNames`);
         continue;
       }
       
-      // Handle names with middle names or quotes (like "Richie")
-      let firstName = nameParts[0];
-      let lastName = nameParts.slice(1).join(' ');
+      const firstName = parts[0];
+      const lastName = parts[1];
+      const guardianPhonesRaw = parts[2] || '';
+      const guardianNamesRaw = parts[3] || '';
       
-      // Remove quotes from names like Richard "Richie" Davis
-      firstName = firstName.replace(/['"]/g, '');
-      lastName = lastName.replace(/['"]/g, '');
+      // Validate required fields
+      if (!firstName || !lastName) {
+        errors.push(`Line ${lineNum}: First name and last name are required`);
+        continue;
+      }
+      
+      // Parse guardian phones (semicolon-separated)
+      const guardianPhones = guardianPhonesRaw
+        .split(';')
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+      
+      // Parse guardian names (semicolon-separated, for display only)
+      const guardianNames = guardianNamesRaw
+        .split(';')
+        .map(n => n.trim())
+        .filter(n => n.length > 0)
+        .join('; ');
       
       students.push({
         firstName,
         lastName,
-        notes: notes || undefined,
+        guardianPhones,
+        guardianNames: guardianNames || undefined,
       });
     } catch (error) {
-      errors.push(`Error parsing line "${line}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+      errors.push(`Line ${lineNum}: Error parsing "${line}": ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
   
