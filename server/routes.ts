@@ -2215,6 +2215,29 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Delete student
+  app.delete(
+    "/api/admin/students/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const studentId = req.params.id;
+        
+        await storage.deleteStudent(studentId);
+        res.json({ success: true, message: "Student deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting student:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to delete student" });
+      }
+    }
+  );
+
   // ============ Driver Assignment routes (Admin) ============
 
   // Get all driver assignments
