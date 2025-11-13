@@ -404,13 +404,13 @@ export const adminUpdateStudentSchema = createInsertSchema(students).omit({
   guardianPhones: z.array(z.string()).min(1, "At least one guardian phone is required"),
 });
 
-// Bulk import schema for students - allows empty guardian phones for placeholder households
+// Bulk import schema for students - requires at least one guardian phone
 export const bulkImportStudentSchema = createInsertSchema(students).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
-  guardianPhones: z.array(z.string()).default([]), // Allow empty for imports
+  guardianPhones: z.array(z.string()).min(1, "At least one guardian phone is required"),
   householdId: z.string().optional(), // Will be created if not provided
 });
 
@@ -441,6 +441,8 @@ export interface BulkImportStopInput {
 export interface BulkImportStudentInput {
   firstName: string;
   lastName: string;
+  guardianPhones: string[];
+  guardianNames?: string;
   notes?: string;
 }
 

@@ -89,23 +89,23 @@ export default function AdminDataImport() {
       return await apiRequest("POST", "/api/admin/import/stops/preview", { text, region }) as unknown as StopsPreviewResponse;
     },
     onSuccess: (data) => {
-      if (!data.success || data.errors.length > 0) {
-        setStopsErrors(data.errors);
+      if (!data.success || (data.errors && data.errors.length > 0)) {
+        setStopsErrors(data.errors || []);
         setStopsPreview([]);
         toast({
           title: "Parse Errors",
-          description: `Found ${data.errors.length} error(s). Please fix them before importing.`,
+          description: `Found ${data.errors?.length || 0} error(s). Please fix them before importing.`,
           variant: "destructive",
         });
         return;
       }
       
-      setStopsPreview(data.stops);
+      setStopsPreview(data.stops || []);
       setStopsErrors([]);
       
       toast({
         title: "Preview Generated",
-        description: `Found ${data.stops.length} stop(s) to import.`,
+        description: `Found ${data.stops?.length || 0} stop(s) to import.`,
       });
     },
     onError: (error: any) => {
@@ -126,23 +126,23 @@ export default function AdminDataImport() {
       return await apiRequest("POST", "/api/admin/import/students/preview", { text }) as unknown as StudentsPreviewResponse;
     },
     onSuccess: (data) => {
-      if (!data.success || data.errors.length > 0) {
-        setStudentsErrors(data.errors);
+      if (!data.success || (data.errors && data.errors.length > 0)) {
+        setStudentsErrors(data.errors || []);
         setStudentsPreview([]);
         toast({
           title: "Parse Errors",
-          description: `Found ${data.errors.length} error(s). Please fix them before importing.`,
+          description: `Found ${data.errors?.length || 0} error(s). Please fix them before importing.`,
           variant: "destructive",
         });
         return;
       }
       
-      setStudentsPreview(data.students);
+      setStudentsPreview(data.students || []);
       setStudentsErrors([]);
       
       toast({
         title: "Preview Generated",
-        description: `Found ${data.students.length} student(s) to import.`,
+        description: `Found ${data.students?.length || 0} student(s) to import.`,
       });
     },
     onError: (error: any) => {

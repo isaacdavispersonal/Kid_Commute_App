@@ -1163,6 +1163,16 @@ export class DatabaseStorage implements IStorage {
 
       for (const studentInput of studentsInput) {
         try {
+          // Validate guardian phones
+          if (!studentInput.guardianPhones || studentInput.guardianPhones.length === 0) {
+            skipped.push({
+              input: studentInput,
+              reason: "invalid",
+              message: `At least one guardian phone is required for ${studentInput.firstName} ${studentInput.lastName}`,
+            });
+            continue;
+          }
+          
           const nameKey = this.normalizeKey(`${studentInput.firstName} ${studentInput.lastName}`);
           
           if (seenNames.has(nameKey)) {
@@ -1188,7 +1198,7 @@ export class DatabaseStorage implements IStorage {
             firstName: studentInput.firstName,
             lastName: studentInput.lastName,
             householdId: household.id,
-            guardianPhones: [],
+            guardianPhones: studentInput.guardianPhones,
             notes: studentInput.notes,
           }).returning();
 
@@ -3380,16 +3390,19 @@ export class DatabaseStorage implements IStorage {
     // Get student's route for this date
     const student = await db.query.students.findFirst({
       where: eq(students.id, studentId),
+      with: {
+        pickupStop: true,
+      },
     });
 
-    if (!student || !student.routeId) {
+    if (!student || !student.assignedRouteId) {
       return null;
     }
 
     // Find the shift for this route and date
     const shift = await db.query.shifts.findFirst({
       where: and(
-        eq(shifts.routeId, student.routeId),
+        eq(shifts.routeId, student.assignedRouteId),
         eq(shifts.date, date)
       ),
     });
@@ -3404,16 +3417,15 @@ export class DatabaseStorage implements IStorage {
     // Get current stop (first PENDING stop)
     const currentStop = await this.getCurrentStopForShift(shift.id);
     
-    // Find student's pickup stop by matching route stops
+    // Find student's pickup stop by matching pickup stop ID
     const studentPickupStop = allProgress.find((p) => 
-      p.stop?.address && student.pickupAddress && 
-      p.stop.address.toLowerCase().includes(student.pickupAddress.toLowerCase())
+      p.stop?.id === student.pickupStopId
     );
 
     if (!studentPickupStop || !currentStop) {
       return {
         studentId,
-        routeId: student.routeId,
+        routeId: student.assignedRouteId,
         shiftId: shift.id,
         currentStop: null,
         studentStop: null,
@@ -3427,7 +3439,7 @@ export class DatabaseStorage implements IStorage {
 
     return {
       studentId,
-      routeId: student.routeId,
+      routeId: student.assignedRouteId,
       shiftId: shift.id,
       currentStop,
       studentStop: studentPickupStop,
