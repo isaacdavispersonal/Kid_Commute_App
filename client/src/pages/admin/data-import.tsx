@@ -486,7 +486,7 @@ Main Library | 456 Main Ave, Springfield | 42.2345,-71.6789"
             <CardHeader>
               <CardTitle>Import Students</CardTitle>
               <CardDescription>
-                Paste student data with format: FirstName | LastName | Grade | GuardianPhone | GuardianName (one per line)
+                Paste student data with format: FirstName | LastName | GuardianPhone | GuardianName (one per line)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -494,17 +494,17 @@ Main Library | 456 Main Ave, Springfield | 42.2345,-71.6789"
                 <label className="text-sm font-medium">Paste Students Data</label>
                 <Textarea
                   placeholder="Example:
-John | Doe | 5 | 555-123-4567 | Jane Doe
-Emma | Smith | 3 | 555-234-5678 | Robert Smith
-Oliver | Johnson | 4 | | 
-Sophia | Brown | 6 | 555-345-6789 |"
+John | Doe | 555-123-4567 | Jane Doe
+Emma | Smith | 555-234-5678 | Robert Smith
+Oliver | Johnson | 555-111-2222; 555-333-4444 | Mom Name; Dad Name
+Sophia | Brown | | "
                   value={studentsText}
                   onChange={(e) => setStudentsText(e.target.value)}
                   className="min-h-[200px] font-mono text-sm"
                   data-testid="textarea-students-input"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Note: Students without guardian phone numbers will be created with placeholder households
+                  Note: Use semicolons (;) to separate multiple guardian phones or names. Students without guardian phone numbers will be created with placeholder households.
                 </p>
               </div>
 
@@ -573,9 +573,8 @@ Sophia | Brown | 6 | 555-345-6789 |"
                       <TableHeader>
                         <TableRow>
                           <TableHead>Name</TableHead>
-                          <TableHead>Grade</TableHead>
-                          <TableHead>Guardian Phone</TableHead>
-                          <TableHead>Guardian Name</TableHead>
+                          <TableHead>Guardian Phone(s)</TableHead>
+                          <TableHead>Guardian Name(s)</TableHead>
                           <TableHead>Status</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -586,20 +585,21 @@ Sophia | Brown | 6 | 555-345-6789 |"
                               {student.firstName} {student.lastName}
                             </TableCell>
                             <TableCell>
-                              {student.grade ? (
-                                <Badge variant="secondary">Grade {student.grade}</Badge>
+                              {student.guardianPhones && student.guardianPhones.length > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                  {student.guardianPhones.map((phone, pidx) => (
+                                    <Badge key={pidx} variant="secondary">{phone}</Badge>
+                                  ))}
+                                </div>
                               ) : (
-                                <Badge variant="outline">N/A</Badge>
+                                <span className="text-muted-foreground">N/A</span>
                               )}
                             </TableCell>
                             <TableCell>
-                              {student.guardianPhone || <span className="text-muted-foreground">N/A</span>}
+                              {student.guardianNames || <span className="text-muted-foreground">N/A</span>}
                             </TableCell>
                             <TableCell>
-                              {student.guardianName || <span className="text-muted-foreground">N/A</span>}
-                            </TableCell>
-                            <TableCell>
-                              {student.guardianPhone ? (
+                              {student.guardianPhones && student.guardianPhones.length > 0 ? (
                                 <Badge variant="secondary">Regular</Badge>
                               ) : (
                                 <Badge variant="outline">Placeholder</Badge>
@@ -631,7 +631,7 @@ Sophia | Brown | 6 | 555-345-6789 |"
                 <>
                   You are about to import <strong>{studentsPreview?.length || 0} student(s)</strong>.
                   This action will create new records in the database.
-                  {studentsPreview?.some(s => !s.guardianPhone) && (
+                  {studentsPreview?.some(s => !s.guardianPhones || s.guardianPhones.length === 0) && (
                     <div className="mt-2 text-yellow-600 dark:text-yellow-400">
                       Some students will be created with placeholder households (no guardian phone).
                     </div>
