@@ -46,6 +46,7 @@ export const users = pgTable("users", {
   phoneNumber: varchar("phone_number"),
   address: text("address"),
   isLeadDriver: boolean("is_lead_driver").notNull().default(false),
+  bambooEmployeeId: varchar("bamboo_employee_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1241,6 +1242,76 @@ export type InsertVehicleInspection = z.infer<
   typeof insertVehicleInspectionSchema
 >;
 export type VehicleInspection = typeof vehicleInspections.$inferSelect;
+
+// ============ Payroll Export Tables (BambooHR Integration) ============
+
+// Payroll export status enum
+export const payrollExportStatusEnum = pgEnum("payroll_export_status", [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+]);
+
+// Payroll exports table - tracks each export run to BambooHR
+export const payrollExports = pgTable("payroll_exports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  exportedBy: varchar("exported_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  status: payrollExportStatusEnum("status").notNull().default("pending"),
+  totalDrivers: integer("total_drivers").notNull().default(0),
+  totalHours: decimal("total_hours", { precision: 10, scale: 2 }),
+  bambooResponse: jsonb("bamboo_response"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertPayrollExportSchema = createInsertSchema(payrollExports).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
+export type InsertPayrollExport = z.infer<typeof insertPayrollExportSchema>;
+export type PayrollExport = typeof payrollExports.$inferSelect;
+
+// Payroll export entries table - individual time entries per driver
+export const payrollExportEntries = pgTable("payroll_export_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  exportId: varchar("export_id")
+    .notNull()
+    .references(() => payrollExports.id, { onDelete: "cascade" }),
+  driverId: varchar("driver_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  bambooEmployeeId: varchar("bamboo_employee_id").notNull(),
+  date: timestamp("date").notNull(),
+  regularHours: decimal("regular_hours", { precision: 10, scale: 2 }).notNull(),
+  overtimeHours: decimal("overtime_hours", { precision: 10, scale: 2 }),
+  totalHours: decimal("total_hours", { precision: 10, scale: 2 }).notNull(),
+  shiftIds: text("shift_ids").array(),
+  notes: text("notes"),
+  bambooEntryId: varchar("bamboo_entry_id"),
+  status: payrollExportStatusEnum("status").notNull().default("pending"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPayrollExportEntrySchema = createInsertSchema(
+  payrollExportEntries
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPayrollExportEntry = z.infer<
+  typeof insertPayrollExportEntrySchema
+>;
+export type PayrollExportEntry = typeof payrollExportEntries.$inferSelect;
 
 // ============ Relations ============
 
