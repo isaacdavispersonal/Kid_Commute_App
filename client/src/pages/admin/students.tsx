@@ -48,6 +48,7 @@ import {
   X,
   Edit,
   Calendar,
+  Search,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -57,6 +58,7 @@ interface EnrichedStudent {
   lastName: string;
   parentName: string;
   parentEmail: string | null;
+  guardianPhones: string[];
   assignedRouteId: string | null;
   routeName: string | null;
   pickupStopId: string | null;
@@ -274,6 +276,7 @@ export default function AdminStudentsPage() {
   const [selectedPickupStop, setSelectedPickupStop] = useState<string>("");
   const [selectedDropoffStop, setSelectedDropoffStop] = useState<string>("");
   const [filter, setFilter] = useState<"all" | "assigned" | "unassigned">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any | null>(null);
@@ -518,8 +521,26 @@ export default function AdminStudentsPage() {
   };
 
   const filteredStudents = students?.filter((student) => {
-    if (filter === "assigned") return !!student.assignedRouteId;
-    if (filter === "unassigned") return !student.assignedRouteId;
+    // Apply assignment filter
+    if (filter === "assigned" && !student.assignedRouteId) return false;
+    if (filter === "unassigned" && student.assignedRouteId) return false;
+    
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const firstNameMatch = student.firstName.toLowerCase().includes(query);
+      const lastNameMatch = student.lastName.toLowerCase().includes(query);
+      const fullNameMatch = `${student.firstName} ${student.lastName}`.toLowerCase().includes(query);
+      
+      // Check if any guardian phone contains the search query (removing non-digits for phone search)
+      const phoneQuery = query.replace(/\D/g, '');
+      const phoneMatch = student.guardianPhones?.some((phone: string) => 
+        phone.replace(/\D/g, '').includes(phoneQuery)
+      );
+      
+      return firstNameMatch || lastNameMatch || fullNameMatch || phoneMatch;
+    }
+    
     return true;
   });
 
@@ -552,6 +573,17 @@ export default function AdminStudentsPage() {
           </AlertDescription>
         </Alert>
       )}
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by name or phone number..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+          data-testid="input-search-students"
+        />
+      </div>
 
       <div className="flex gap-2">
         <Button
