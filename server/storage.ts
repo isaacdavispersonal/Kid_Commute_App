@@ -1132,8 +1132,8 @@ export class DatabaseStorage implements IStorage {
           const [newStop] = await tx.insert(stops).values({
             name: stopInput.name,
             address: stopInput.address,
-            latitude: null,
-            longitude: null,
+            latitude: stopInput.latitude ?? null,
+            longitude: stopInput.longitude ?? null,
           }).returning();
 
           created.push(newStop);

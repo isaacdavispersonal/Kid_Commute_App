@@ -9,6 +9,8 @@ export interface ParsedStop {
   name: string;
   address: string;
   region?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface ParsedStudent {
@@ -33,7 +35,10 @@ export interface StudentParseResult {
 
 /**
  * Parse stops from text format
- * Expected format: "Name @ Address" or "Name — Location"
+ * Supports multiple formats:
+ * - "Name | Address | Latitude,Longitude"
+ * - "Name @ Address"
+ * - "Name — Location"
  */
 export function parseStops(text: string, region?: string): StopParseResult {
   const errors: string[] = [];
@@ -46,24 +51,50 @@ export function parseStops(text: string, region?: string): StopParseResult {
   
   for (const line of lines) {
     try {
-      // Try to match patterns like "Name @ Address" or "Name — Location"
       let name = '';
       let address = '';
+      let latitude: number | undefined;
+      let longitude: number | undefined;
       
-      if (line.includes(' @ ')) {
+      // Try pipe-delimited format with coordinates first: "Name | Address | Lat,Lng"
+      if (line.includes('|')) {
+        const parts = line.split('|').map(p => p.trim());
+        
+        if (parts.length >= 2) {
+          name = parts[0];
+          address = parts[1];
+          
+          // Try to parse coordinates if present
+          if (parts.length >= 3 && parts[2].includes(',')) {
+            const coords = parts[2].split(',').map(c => c.trim());
+            if (coords.length === 2) {
+              const lat = parseFloat(coords[0]);
+              const lng = parseFloat(coords[1]);
+              
+              if (!isNaN(lat) && !isNaN(lng)) {
+                latitude = lat;
+                longitude = lng;
+              }
+            }
+          }
+        }
+      }
+      // Try @ delimiter
+      else if (line.includes(' @ ')) {
         const parts = line.split(' @ ');
         name = parts[0].trim();
         address = parts.slice(1).join(' @ ').trim();
-      } else if (line.includes(' — ')) {
-        // Handle cases like "Walgreens (MomDoc) — Maricopa"
+      }
+      // Try — delimiter
+      else if (line.includes(' — ')) {
         const parts = line.split(' — ');
         name = parts[0].trim();
-        // For location-only entries, we'll create a simple address
         address = parts.slice(1).join(' — ').trim();
-      } else {
-        // Single line without delimiter - might be a location name
+      }
+      // Single line without delimiter
+      else {
         name = line;
-        address = line; // Use the same value
+        address = line;
       }
       
       if (name && address) {
@@ -71,6 +102,8 @@ export function parseStops(text: string, region?: string): StopParseResult {
           name,
           address,
           region,
+          latitude,
+          longitude,
         });
       } else {
         errors.push(`Could not parse stop: ${line}`);

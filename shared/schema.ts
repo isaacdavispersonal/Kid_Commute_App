@@ -436,6 +436,8 @@ export interface BulkImportStopInput {
   name: string;
   address: string;
   region?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface BulkImportStudentInput {
