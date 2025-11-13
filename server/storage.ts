@@ -344,6 +344,7 @@ export interface IStorage {
   updatePayrollExportEntryStatus(entryId: string, status: "pending" | "processing" | "completed" | "failed", bambooEntryId?: string, errorMessage?: string): Promise<PayrollExportEntry>;
   getPayrollExports(limit?: number): Promise<PayrollExport[]>;
   getPayrollExport(id: string): Promise<PayrollExport | undefined>;
+  getPayrollExportWithEntries(id: string): Promise<{export: PayrollExport, entries: PayrollExportEntry[]} | undefined>;
   getPayrollExportEntries(exportId: string): Promise<PayrollExportEntry[]>;
 }
 
@@ -4012,6 +4013,14 @@ export class DatabaseStorage implements IStorage {
     return payrollExport;
   }
 
+  async getPayrollExportWithEntries(id: string): Promise<{export: PayrollExport, entries: any[]} | undefined> {
+    const exportRecord = await this.getPayrollExport(id);
+    if (!exportRecord) return undefined;
+    
+    const entries = await this.getPayrollExportEntries(id);
+    return { export: exportRecord, entries };
+  }
+
   async createPayrollExportEntry(entry: InsertPayrollExportEntry): Promise<PayrollExportEntry> {
     const [newEntry] = await db
       .insert(payrollExportEntries)
@@ -4062,6 +4071,7 @@ export class DatabaseStorage implements IStorage {
         date: payrollExportEntries.date,
         regularHours: payrollExportEntries.regularHours,
         overtimeHours: payrollExportEntries.overtimeHours,
+        doubleTimeHours: payrollExportEntries.doubleTimeHours,
         totalHours: payrollExportEntries.totalHours,
         shiftIds: payrollExportEntries.shiftIds,
         notes: payrollExportEntries.notes,

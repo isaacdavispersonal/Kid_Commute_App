@@ -57,8 +57,8 @@ export class BambooHRService {
       const payload = {
         date: entry.date,
         hours: entry.hours,
-        ...(entry.overtimeHours && { overtimeHours: entry.overtimeHours }),
-        ...(entry.doubleTimeHours && { doubleTimeHours: entry.doubleTimeHours }),
+        ...(entry.overtimeHours != null && { overtimeHours: entry.overtimeHours }),
+        ...(entry.doubleTimeHours != null && { doubleTimeHours: entry.doubleTimeHours }),
         ...(entry.note && { note: entry.note }),
       };
 
@@ -139,20 +139,25 @@ export class BambooHRService {
       : payrollEntry.regularHours;
     const overtimeHours = typeof payrollEntry.overtimeHours === 'string'
       ? parseFloat(payrollEntry.overtimeHours)
-      : (payrollEntry.overtimeHours || 0);
+      : (payrollEntry.overtimeHours === undefined || payrollEntry.overtimeHours === null) ? 0 : payrollEntry.overtimeHours;
     const doubleTimeHours = typeof payrollEntry.doubleTimeHours === 'string'
       ? parseFloat(payrollEntry.doubleTimeHours)
-      : (payrollEntry.doubleTimeHours || 0);
+      : (payrollEntry.doubleTimeHours === undefined || payrollEntry.doubleTimeHours === null) ? 0 : payrollEntry.doubleTimeHours;
     const totalHours = typeof payrollEntry.totalHours === 'string'
       ? parseFloat(payrollEntry.totalHours)
       : payrollEntry.totalHours;
+
+    if (isNaN(totalHours) || isNaN(regularHours) || 
+        isNaN(overtimeHours || 0) || isNaN(doubleTimeHours || 0)) {
+      throw new Error(`Invalid numeric values in payroll entry for date ${payrollEntry.date}`);
+    }
 
     return {
       employeeId: payrollEntry.bambooEmployeeId,
       date: new Date(payrollEntry.date).toISOString().split('T')[0],
       hours: regularHours,
-      overtimeHours: overtimeHours > 0 ? overtimeHours : undefined,
-      doubleTimeHours: doubleTimeHours > 0 ? doubleTimeHours : undefined,
+      overtimeHours,
+      doubleTimeHours,
       note: `Auto-exported from Kid Commute - ${totalHours.toFixed(2)} total hours`,
     };
   }

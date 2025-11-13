@@ -24,6 +24,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Download, CheckCircle, XCircle, Users, AlertTriangle, Calendar, Clock } from "lucide-react";
 import { format } from "date-fns";
 
+const formatDate = (dateString: string | undefined | null, formatStr: string): string => {
+  if (!dateString) return "N/A";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "Invalid date";
+    return format(date, formatStr);
+  } catch {
+    return "Invalid date";
+  }
+};
+
 interface Driver {
   id: string;
   name: string;
@@ -582,10 +593,10 @@ export default function AdminPayrollExports() {
                     {exportHistory.map((exp) => (
                       <TableRow key={exp.id} data-testid={`row-export-${exp.id}`}>
                         <TableCell>
-                          {format(new Date(exp.exportDate), "MMM dd, yyyy HH:mm")}
+                          {formatDate(exp.exportDate, "MMM dd, yyyy HH:mm")}
                         </TableCell>
                         <TableCell>
-                          {format(new Date(exp.startDate), "MMM dd")} - {format(new Date(exp.endDate), "MMM dd, yyyy")}
+                          {formatDate(exp.startDate, "MMM dd")} - {formatDate(exp.endDate, "MMM dd, yyyy")}
                         </TableCell>
                         <TableCell className="text-right">{exp.driverCount}</TableCell>
                         <TableCell className="text-right">{exp.totalHours.toFixed(2)}</TableCell>
@@ -641,7 +652,7 @@ export default function AdminPayrollExports() {
                 <div className="space-y-2 rounded-md bg-muted p-4 text-sm">
                   <div className="flex justify-between">
                     <span className="font-medium" data-testid="text-pay-period-label">Pay Period:</span>
-                    <span data-testid="text-pay-period-value">{format(new Date(startDate), "MMM dd, yyyy")} to {format(new Date(endDate), "MMM dd, yyyy")}</span>
+                    <span data-testid="text-pay-period-value">{formatDate(startDate, "MMM dd, yyyy")} to {formatDate(endDate, "MMM dd, yyyy")}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium" data-testid="text-overtime-label">Overtime Included:</span>
@@ -668,7 +679,7 @@ export default function AdminPayrollExports() {
                           Warning: This pay period was already exported
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Previous export on {format(new Date(duplicateExport.exportDate), "MMM dd, yyyy HH:mm")}
+                          Previous export on {formatDate(duplicateExport.exportDate, "MMM dd, yyyy HH:mm")}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Status: <Badge variant="default" className="ml-1">
@@ -704,7 +715,7 @@ export default function AdminPayrollExports() {
                           Retrying previous failed export
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Previous export on {format(new Date(duplicateExport.exportDate), "MMM dd, yyyy HH:mm")} failed
+                          Previous export on {formatDate(duplicateExport.exportDate, "MMM dd, yyyy HH:mm")} failed
                         </p>
                       </div>
                     </div>
@@ -774,7 +785,7 @@ export default function AdminPayrollExports() {
             <DialogTitle>Export Details</DialogTitle>
             {exportDetails && (
               <DialogDescription>
-                Exported on {format(new Date(exportDetails.exportDate), "MMM dd, yyyy HH:mm")} for period {format(new Date(exportDetails.startDate), "MMM dd")} - {format(new Date(exportDetails.endDate), "MMM dd, yyyy")}
+                Exported on {formatDate(exportDetails.exportDate, "MMM dd, yyyy HH:mm")} for period {formatDate(exportDetails.startDate, "MMM dd")} - {formatDate(exportDetails.endDate, "MMM dd, yyyy")}
               </DialogDescription>
             )}
           </DialogHeader>
