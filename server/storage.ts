@@ -32,6 +32,8 @@ import {
   geofences,
   geofenceEvents,
   deviceTokens,
+  payrollExports,
+  payrollExportEntries,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -95,9 +97,14 @@ import {
   type InsertDriverFeedback,
   type DeviceToken,
   type InsertDeviceToken,
+  type PayrollExport,
+  type InsertPayrollExport,
+  type PayrollExportEntry,
+  type InsertPayrollExportEntry,
+  type PayrollCalculationResult,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, or, sql, gte, lte, ne, lt } from "drizzle-orm";
+import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "./errors";
 
 export interface IStorage {
@@ -323,6 +330,17 @@ export interface IStorage {
   cleanupOldAuditLogs(retentionDays: number): Promise<number>;
   cleanupOldDismissedAnnouncements(retentionDays: number): Promise<number>;
   cleanupInactiveDeviceTokens(retentionDays: number): Promise<number>;
+
+  // Payroll export operations (BambooHR integration)
+  updateUserBambooEmployeeId(userId: string, bambooEmployeeId: string | null): Promise<User>;
+  getDriversWithBambooMapping(): Promise<User[]>;
+  getDriversWithoutBambooMapping(): Promise<User[]>;
+  calculatePayrollData(startDate: string, endDate: string, options?: { includeOvertime?: boolean }): Promise<PayrollCalculationResult[]>;
+  createPayrollExport(exportData: InsertPayrollExport, entries: InsertPayrollExportEntry[]): Promise<PayrollExport>;
+  updatePayrollExportStatus(exportId: string, status: "pending" | "processing" | "completed" | "failed", errorMessage?: string, bambooResponse?: any): Promise<PayrollExport>;
+  getPayrollExports(limit?: number): Promise<PayrollExport[]>;
+  getPayrollExport(id: string): Promise<PayrollExport | undefined>;
+  getPayrollExportEntries(exportId: string): Promise<PayrollExportEntry[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3589,6 +3607,302 @@ export class DatabaseStorage implements IStorage {
       .returning({ id: deviceTokens.id });
 
     return deleted.length;
+  }
+
+  // ============ Payroll Export Operations ============
+
+  async updateUserBambooEmployeeId(userId: string, bambooEmployeeId: string | null): Promise<User> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ bambooEmployeeId, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updatedUser) {
+      throw new NotFoundError("User not found");
+    }
+
+    return updatedUser;
+  }
+
+  async getDriversWithBambooMapping(): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.role, "driver"),
+          sql`${users.bambooEmployeeId} IS NOT NULL`
+        )
+      )
+      .orderBy(users.firstName, users.lastName);
+  }
+
+  async getDriversWithoutBambooMapping(): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.role, "driver"),
+          sql`${users.bambooEmployeeId} IS NULL`
+        )
+      )
+      .orderBy(users.firstName, users.lastName);
+  }
+
+  async calculatePayrollData(
+    startDate: string,
+    endDate: string,
+    options?: { includeOvertime?: boolean }
+  ): Promise<PayrollCalculationResult[]> {
+    const shiftsInRange = await db
+      .select()
+      .from(shifts)
+      .where(
+        and(
+          gte(shifts.date, startDate),
+          lte(shifts.date, endDate)
+        )
+      )
+      .orderBy(shifts.driverId, shifts.date);
+
+    // 1. Filter out shifts without drivers
+    const validShifts = shiftsInRange.filter(s => s.driverId !== null);
+
+    if (validShifts.length === 0) {
+      return [];
+    }
+
+    // 2. Batch-load all drivers at once
+    const driverIds = Array.from(new Set(validShifts.map(s => s.driverId!)));
+    const drivers = await db
+      .select()
+      .from(users)
+      .where(inArray(users.id, driverIds));
+    const driverMap = new Map(drivers.map(d => [d.id, d]));
+
+    // 3. Batch-load all clock events at once
+    const shiftIds = validShifts.map(s => s.id);
+    const allEvents = await db
+      .select()
+      .from(clockEvents)
+      .where(inArray(clockEvents.shiftId, shiftIds));
+
+    // Group clock events by shift ID
+    const eventsByShift = new Map<string, ClockEvent[]>();
+    for (const event of allEvents) {
+      if (!eventsByShift.has(event.shiftId)) {
+        eventsByShift.set(event.shiftId, []);
+      }
+      eventsByShift.get(event.shiftId)!.push(event);
+    }
+
+    const payrollMap = new Map<string, {
+      driver: User;
+      regularHours: number;
+      overtimeHours: number;
+      totalHours: number;
+      breakMinutes: number;
+      shiftIds: string[];
+    }>();
+
+    // 4. Process in-memory (no more queries)
+    for (const shift of validShifts) {
+      const driver = driverMap.get(shift.driverId!);
+      if (!driver) continue;
+
+      const events = eventsByShift.get(shift.id) || [];
+      if (events.length === 0) continue;
+
+      // CRITICAL: Sort events by timestamp to ensure correct IN/OUT and BREAK_START/BREAK_END pairing
+      events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+      let shiftHours = 0;
+      let shiftBreakMinutes = 0;
+      let lastInEvent: ClockEvent | null = null;
+      let lastBreakStartEvent: ClockEvent | null = null;
+
+      for (const event of events) {
+        if (event.type === "IN") {
+          lastInEvent = event;
+        } else if (event.type === "OUT" && lastInEvent) {
+          const inTime = new Date(lastInEvent.timestamp);
+          const outTime = new Date(event.timestamp);
+          const hoursWorked = (outTime.getTime() - inTime.getTime()) / (1000 * 60 * 60);
+          shiftHours += hoursWorked;
+          lastInEvent = null;
+        } else if (event.type === "BREAK_START") {
+          lastBreakStartEvent = event;
+        } else if (event.type === "BREAK_END" && lastBreakStartEvent) {
+          const breakStart = new Date(lastBreakStartEvent.timestamp);
+          const breakEnd = new Date(event.timestamp);
+          const breakMinutes = (breakEnd.getTime() - breakStart.getTime()) / (1000 * 60);
+          shiftBreakMinutes += breakMinutes;
+          lastBreakStartEvent = null;
+        }
+      }
+
+      const driverKey = driver.id;
+      if (!payrollMap.has(driverKey)) {
+        payrollMap.set(driverKey, {
+          driver,
+          regularHours: 0,
+          overtimeHours: 0,
+          totalHours: 0,
+          breakMinutes: 0,
+          shiftIds: [],
+        });
+      }
+
+      const driverData = payrollMap.get(driverKey)!;
+      driverData.regularHours += shiftHours - (shiftBreakMinutes / 60);
+      driverData.totalHours += shiftHours - (shiftBreakMinutes / 60);
+      driverData.breakMinutes += shiftBreakMinutes;
+      driverData.shiftIds.push(shift.id);
+    }
+
+    const results: PayrollCalculationResult[] = [];
+    for (const [driverId, data] of Array.from(payrollMap.entries())) {
+      results.push({
+        driverId,
+        driverName: `${data.driver.firstName ?? 'Unknown'} ${data.driver.lastName ?? 'Unknown'}`.trim(),
+        bambooEmployeeId: data.driver.bambooEmployeeId,
+        regularHours: Math.round(data.regularHours * 100) / 100,
+        // TODO: Implement overtime calculation based on daily/weekly thresholds
+        // For now, all hours are classified as regular hours
+        overtimeHours: options?.includeOvertime ? 0 : 0,
+        totalHours: Math.round(data.totalHours * 100) / 100,
+        breakMinutes: Math.round(data.breakMinutes),
+        shiftIds: data.shiftIds,
+        shiftsCount: data.shiftIds.length,
+        dateRange: {
+          start: startDate,
+          end: endDate,
+        },
+      });
+    }
+
+    return results;
+  }
+
+  async createPayrollExport(
+    exportData: InsertPayrollExport,
+    entries: InsertPayrollExportEntry[]
+  ): Promise<PayrollExport> {
+    const existingExport = await db
+      .select()
+      .from(payrollExports)
+      .where(
+        and(
+          eq(payrollExports.startDate, exportData.startDate),
+          eq(payrollExports.endDate, exportData.endDate)
+        )
+      )
+      .limit(1);
+
+    if (existingExport.length > 0) {
+      throw new ValidationError(
+        `Payroll export already exists for date range ${exportData.startDate} to ${exportData.endDate}`
+      );
+    }
+
+    return await db.transaction(async (tx) => {
+      const [createdExport] = await tx
+        .insert(payrollExports)
+        .values(exportData)
+        .returning();
+
+      if (entries.length > 0) {
+        const entriesWithExportId = entries.map(entry => ({
+          ...entry,
+          exportId: createdExport.id,
+        }));
+
+        await tx.insert(payrollExportEntries).values(entriesWithExportId);
+      }
+
+      return createdExport;
+    });
+  }
+
+  async updatePayrollExportStatus(
+    exportId: string,
+    status: "pending" | "processing" | "completed" | "failed",
+    errorMessage?: string,
+    bambooResponse?: any
+  ): Promise<PayrollExport> {
+    const updateData: any = {
+      status,
+      updatedAt: new Date(),
+    };
+
+    if (errorMessage !== undefined) {
+      updateData.errorMessage = errorMessage;
+    }
+
+    if (bambooResponse !== undefined) {
+      updateData.bambooResponse = bambooResponse;
+    }
+
+    if (status === "completed") {
+      updateData.completedAt = new Date();
+    }
+
+    const [updatedExport] = await db
+      .update(payrollExports)
+      .set(updateData)
+      .where(eq(payrollExports.id, exportId))
+      .returning();
+
+    if (!updatedExport) {
+      throw new NotFoundError("Payroll export not found");
+    }
+
+    return updatedExport;
+  }
+
+  async getPayrollExports(limit: number = 50): Promise<PayrollExport[]> {
+    return await db
+      .select()
+      .from(payrollExports)
+      .orderBy(desc(payrollExports.createdAt))
+      .limit(limit);
+  }
+
+  async getPayrollExport(id: string): Promise<PayrollExport | undefined> {
+    const [payrollExport] = await db
+      .select()
+      .from(payrollExports)
+      .where(eq(payrollExports.id, id));
+
+    return payrollExport;
+  }
+
+  async getPayrollExportEntries(exportId: string): Promise<PayrollExportEntry[]> {
+    return await db
+      .select({
+        id: payrollExportEntries.id,
+        exportId: payrollExportEntries.exportId,
+        driverId: payrollExportEntries.driverId,
+        bambooEmployeeId: payrollExportEntries.bambooEmployeeId,
+        date: payrollExportEntries.date,
+        regularHours: payrollExportEntries.regularHours,
+        overtimeHours: payrollExportEntries.overtimeHours,
+        totalHours: payrollExportEntries.totalHours,
+        shiftIds: payrollExportEntries.shiftIds,
+        notes: payrollExportEntries.notes,
+        bambooEntryId: payrollExportEntries.bambooEntryId,
+        status: payrollExportEntries.status,
+        errorMessage: payrollExportEntries.errorMessage,
+        createdAt: payrollExportEntries.createdAt,
+        driverFirstName: users.firstName,
+        driverLastName: users.lastName,
+      })
+      .from(payrollExportEntries)
+      .leftJoin(users, eq(payrollExportEntries.driverId, users.id))
+      .where(eq(payrollExportEntries.exportId, exportId))
+      .orderBy(users.firstName, users.lastName);
   }
 }
 

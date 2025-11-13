@@ -1313,6 +1313,23 @@ export type InsertPayrollExportEntry = z.infer<
 >;
 export type PayrollExportEntry = typeof payrollExportEntries.$inferSelect;
 
+// Payroll calculation result type
+export interface PayrollCalculationResult {
+  driverId: string;
+  driverName: string;
+  bambooEmployeeId: string | null;
+  regularHours: number;
+  overtimeHours: number;
+  totalHours: number;
+  breakMinutes: number;
+  shiftIds: string[];
+  shiftsCount: number;
+  dateRange: {
+    start: string;
+    end: string;
+  };
+}
+
 // ============ Relations ============
 
 export const usersRelations = relations(users, ({ many }) => ({
