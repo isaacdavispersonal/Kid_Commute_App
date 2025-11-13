@@ -55,7 +55,6 @@ interface EnrichedStudent {
   id: string;
   firstName: string;
   lastName: string;
-  grade: string | null;
   parentName: string;
   parentEmail: string | null;
   assignedRouteId: string | null;
@@ -287,7 +286,6 @@ export default function AdminStudentsPage() {
       firstName: "",
       lastName: "",
       guardianPhones: [""],
-      grade: "",
       notes: "",
     },
   });
@@ -298,7 +296,6 @@ export default function AdminStudentsPage() {
       firstName: "",
       lastName: "",
       guardianPhones: [""],
-      grade: "",
       notes: "",
     },
   });
@@ -443,7 +440,6 @@ export default function AdminStudentsPage() {
       firstName: student.firstName || "",
       lastName: student.lastName || "",
       guardianPhones: student.guardianPhones || [""],
-      grade: student.grade || "",
       notes: student.notes || "",
       dateOfBirth: student.dateOfBirth || "",
       heightInches: student.heightInches || undefined,
@@ -599,7 +595,6 @@ export default function AdminStudentsPage() {
                     </CardTitle>
                     <p className="text-sm text-muted-foreground truncate">
                       {student.parentName}
-                      {student.grade && ` • Grade ${student.grade}`}
                     </p>
                   </div>
                 </div>
@@ -750,20 +745,6 @@ export default function AdminStudentsPage() {
                 )}
               />
 
-              <FormField
-                control={createForm.control}
-                name="grade"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Grade</FormLabel>
-                    <FormControl>
-                      <Input {...field} value={field.value || ""} data-testid="input-grade" placeholder="e.g., K, 1, 2, 3..." />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <div className="space-y-2">
                 <FormLabel>Guardian Phone Numbers *</FormLabel>
                 <FormDescription>
@@ -894,20 +875,6 @@ export default function AdminStudentsPage() {
                     <FormLabel>Last Name *</FormLabel>
                     <FormControl>
                       <Input {...field} data-testid="input-edit-last-name" placeholder="Enter last name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={editForm.control}
-                name="grade"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Grade</FormLabel>
-                    <FormControl>
-                      <Input {...field} value={field.value || ""} data-testid="input-edit-grade" placeholder="e.g., K, 1, 2, 3..." />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

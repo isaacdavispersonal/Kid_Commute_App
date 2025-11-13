@@ -153,11 +153,6 @@ export default function ParentDashboard() {
                     <CardTitle className="text-lg">
                       {student.firstName} {student.lastName}
                     </CardTitle>
-                    {student.grade && (
-                      <p className="text-sm text-muted-foreground">
-                        Grade {student.grade}
-                      </p>
-                    )}
                   </div>
                 </div>
               </CardHeader>

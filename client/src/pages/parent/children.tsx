@@ -26,7 +26,6 @@ interface EnrichedStudent {
   id: string;
   firstName: string;
   lastName: string;
-  grade: string | null;
   dateOfBirth?: string | null;
   gender?: string | null;
   guardianPhones: string[];
@@ -69,7 +68,6 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
       lastName: student.lastName || "",
       guardianPhones: student.guardianPhones && student.guardianPhones.length > 0 ? student.guardianPhones : [""],
       dateOfBirth: student.dateOfBirth || "",
-      grade: student.grade || "",
       gender: student.gender || "",
       heightInches: student.heightInches || undefined,
       race: student.race || "",
@@ -218,20 +216,6 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
                     <FormLabel>Date of Birth</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} value={field.value || ""} data-testid="input-date-of-birth" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="grade"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Grade</FormLabel>
-                    <FormControl>
-                      <Input {...field} value={field.value || ""} placeholder="e.g., 5" data-testid="input-grade" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -952,11 +936,6 @@ export default function ConnectChildrenPage() {
                       <CardTitle className="text-lg">
                         {student.firstName} {student.lastName}
                       </CardTitle>
-                      {student.grade && (
-                        <p className="text-sm text-muted-foreground">
-                          Grade {student.grade}
-                        </p>
-                      )}
                     </div>
                     {student.assignedRouteId && (
                       <Badge className="bg-success/10 text-success border-success/20">

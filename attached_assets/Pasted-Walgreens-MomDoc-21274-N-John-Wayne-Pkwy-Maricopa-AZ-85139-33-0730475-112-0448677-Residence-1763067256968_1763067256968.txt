@@ -1,0 +1,30 @@
+Walgreens (MomDoc) | 21274 N John Wayne Pkwy, Maricopa, AZ 85139 | 33.0730475,-112.0448677
+Residence – Mondragone Ln | 37129 W Mondragone Ln, Maricopa, AZ 85138 | 33.037484,-111.966535
+Tempe Campus | 7541 S Willow Dr, Tempe, AZ 85283 | 33.350714,-111.9144266
+QC Library | 21802 S Ellsworth Rd, Queen Creek, AZ 85142 | 33.2502613,-111.6354793
+Walmart (Power Rd) | 5290 S Power Rd, Gilbert, AZ 85295 | 33.3190147,-111.6895787
+Bahama Bucks | 1959 S Signal Butte Rd, Mesa, AZ 85209 | 33.3793433,-111.6002714
+Planet Fitness (Greenfield Rd) | 888 S Greenfield Rd, Gilbert, AZ 85296 | 33.3343344,-111.7395632
+Papago Park National Guard Base | 5636 E McDowell Rd, Phoenix, AZ 85008 | 33.4668648,-111.969481
+Dollar Tree | 1737 E Broadway Rd, Tempe, AZ 85282 | 33.406546,-111.9106779
+Floor & Decor | 7500 S Priest Dr, Tempe, AZ 85283 | 33.3507937,-111.9630703
+Residence – Grove Pkwy | 900 W Grove Pkwy #1030, Tempe, AZ 85283 | 33.3548335,-111.9462814
+QuikTrip | 175 N McQueen Rd, Chandler, AZ 85225 | 33.3053231,-111.8233841
+SE Valley Gastroenterology | 875 S Dobson Rd, Chandler, AZ 85224 | 33.2928195,-111.8746296
+IHOP | 5020 E Ray Rd, Phoenix, AZ 85044 | 33.3204837,-111.9753104
+Walgreens (Baseline Rd) | 2345 E Baseline Rd, Gilbert, AZ 85234 | 33.3785253,-111.7832112
+LDS Church | 1451 W Guadalupe Rd, Gilbert, AZ 85233 | 33.364327,-111.82112
+Circle K | 2990 N Arizona Ave, Chandler, AZ 85225 | 33.3489971,-111.8423787
+Sprouts | 1933 E Brown Rd #1, Mesa, AZ 85203 | 33.437103,-111.789844
+Walgreens (Brown Rd) | 4420 E Brown Rd, Mesa, AZ 85205 | 33.4379078,-111.7356502
+Serena Shores Apartments | 4101 E Baseline Rd, Gilbert, AZ 85234 | 33.379107,-111.74594
+Chase Bank (Happy Valley Rd) | 2430 W Happy Valley Rd, Phoenix, AZ 85085 | 33.71296,-112.111669
+Chase Bank (Lake Pleasant Pkwy) | 8280 W Lake Pleasant Pkwy, Peoria, AZ 85382 | 33.667142,-112.237792
+AAED Glendale Campus | 6910 W Bell Rd, Glendale, AZ 85308 | 33.53865,-112.18599
+Northwest Regional Library | 16089 N Bullard Ave, Surprise, AZ 85374 | 33.634094,-112.376927
+Walmart (Thunderbird Rd, El Mirage) | 12900 W Thunderbird Rd, El Mirage, AZ 85335 | 33.6104083,-112.3363485
+Big Lots | 2330 W Bethany Home Rd, Phoenix, AZ 85015 | 33.524156,-112.108856
+Dunkin’ | 18631 N 19th Ave, Phoenix, AZ 85027 | 33.6558889,-112.098256
+Walmart (Rancho Santa Fe Blvd) | 13055 W Rancho Santa Fe Blvd, Avondale, AZ 85323 | 33.4591309,-112.3380283
+Burlington | 10060 W McDowell Rd, Avondale, AZ 85323 | 33.4673554,-112.276772
+Fry’s | 9043 W Olive Ave, Peoria, AZ 85345 | 33.5645575,-112.2536989

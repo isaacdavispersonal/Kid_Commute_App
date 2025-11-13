@@ -194,9 +194,6 @@ export default function DriverAttendance() {
                     <p className="font-medium" data-testid={`text-student-name-${student.id}`}>
                       {student.firstName} {student.lastName}
                     </p>
-                    {student.grade && (
-                      <p className="text-sm text-muted-foreground">Grade: {student.grade}</p>
-                    )}
                   </div>
 
                   <div className="flex items-center gap-2">

@@ -32,9 +32,8 @@ interface Stop {
 interface Student {
   firstName: string;
   lastName: string;
-  grade?: number;
-  guardianPhone?: string;
-  guardianName?: string;
+  guardianPhones: string[];
+  guardianNames?: string;
 }
 
 interface StopsPreviewResponse {
