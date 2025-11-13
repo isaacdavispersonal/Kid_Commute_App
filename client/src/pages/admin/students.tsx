@@ -532,13 +532,7 @@ export default function AdminStudentsPage() {
       const lastNameMatch = student.lastName.toLowerCase().includes(query);
       const fullNameMatch = `${student.firstName} ${student.lastName}`.toLowerCase().includes(query);
       
-      // Check if any guardian phone contains the search query (removing non-digits for phone search)
-      const phoneQuery = query.replace(/\D/g, '');
-      const phoneMatch = student.guardianPhones?.some((phone: string) => 
-        phone.replace(/\D/g, '').includes(phoneQuery)
-      );
-      
-      return firstNameMatch || lastNameMatch || fullNameMatch || phoneMatch;
+      return firstNameMatch || lastNameMatch || fullNameMatch;
     }
     
     return true;
@@ -577,7 +571,7 @@ export default function AdminStudentsPage() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by name or phone number..."
+          placeholder="Search by first or last name..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-9"
