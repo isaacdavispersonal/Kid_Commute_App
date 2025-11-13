@@ -19,7 +19,8 @@ import {
   Navigation,
   Link2,
   Map,
-  DollarSign
+  DollarSign,
+  Upload
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -58,6 +59,11 @@ const adminMenuSections = [
         title: "Vehicles",
         url: "/admin/vehicles",
         icon: Car,
+      },
+      {
+        title: "Data Import",
+        url: "/admin/data-import",
+        icon: Upload,
       },
     ],
   },
