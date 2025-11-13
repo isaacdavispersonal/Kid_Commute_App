@@ -300,7 +300,9 @@ export type RouteStop = typeof routeStops.$inferSelect;
 // Household table - Groups families by phone number
 export const households = pgTable("households", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  primaryPhone: varchar("primary_phone").notNull().unique(),
+  primaryPhone: varchar("primary_phone").unique(),
+  isPlaceholder: boolean("is_placeholder").notNull().default(false),
+  placeholderSource: text("placeholder_source"), // e.g., "bulk_import_2024-11-13"
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -403,9 +405,31 @@ export const adminUpdateStudentSchema = createInsertSchema(students).omit({
   guardianPhones: z.array(z.string()).min(1, "At least one guardian phone is required"),
 });
 
+// Bulk import schema for students - allows empty guardian phones for placeholder households
+export const bulkImportStudentSchema = createInsertSchema(students).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  guardianPhones: z.array(z.string()).default([]), // Allow empty for imports
+  householdId: z.string().optional(), // Will be created if not provided
+});
+
+// Bulk import schema for stops - minimal fields required
+export const bulkImportStopSchema = createInsertSchema(stops).omit({
+  id: true,
+  geofenceId: true,
+  createdAt: true,
+}).extend({
+  latitude: z.string().nullable().optional(),
+  longitude: z.string().nullable().optional(),
+});
+
 export type InsertStudent = z.infer<typeof insertStudentSchema>;
 export type UpdateStudent = z.infer<typeof updateStudentSchema>;
 export type AdminUpdateStudent = z.infer<typeof adminUpdateStudentSchema>;
+export type BulkImportStudent = z.infer<typeof bulkImportStudentSchema>;
+export type BulkImportStop = z.infer<typeof bulkImportStopSchema>;
 export type Student = typeof students.$inferSelect;
 
 // Attendance status enum (for type safety only - stored as varchar in DB)
