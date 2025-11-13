@@ -163,6 +163,11 @@ export interface IStorage {
   updateStudent(id: string, updates: Partial<InsertStudent>): Promise<Student>;
   deleteStudent(id: string): Promise<void>;
 
+  // Bulk import operations
+  bulkUpsertStops(stops: import("@shared/schema").BulkImportStopInput[], source: string): Promise<import("@shared/schema").BulkImportStopResult>;
+  bulkCreateStudents(students: import("@shared/schema").BulkImportStudentInput[], source: string): Promise<import("@shared/schema").BulkImportStudentResult>;
+  findStopByNormalizedKey(name: string, address: string): Promise<Stop | undefined>;
+
   // Driver assignment operations
   getAllDriverAssignments(): Promise<DriverAssignment[]>;
   getDriverAssignment(id: string): Promise<DriverAssignment | undefined>;
@@ -1078,6 +1083,127 @@ export class DatabaseStorage implements IStorage {
 
   async deleteStudent(id: string): Promise<void> {
     await db.delete(students).where(eq(students.id, id));
+  }
+
+  // ============ Bulk import operations ============
+
+  /**
+   * Normalize a string for deduplication: lowercase, trim, remove extra whitespace
+   */
+  private normalizeKey(str: string): string {
+    return str.toLowerCase().trim().replace(/\s+/g, ' ');
+  }
+
+  async findStopByNormalizedKey(name: string, address: string): Promise<Stop | undefined> {
+    const normalizedName = this.normalizeKey(name);
+    const normalizedAddress = this.normalizeKey(address);
+    
+    const allStops = await db.select().from(stops);
+    
+    return allStops.find(stop => 
+      this.normalizeKey(stop.name) === normalizedName &&
+      this.normalizeKey(stop.address) === normalizedAddress
+    );
+  }
+
+  async bulkUpsertStops(
+    stopsInput: import("@shared/schema").BulkImportStopInput[],
+    source: string
+  ): Promise<import("@shared/schema").BulkImportStopResult> {
+    const created: Stop[] = [];
+    const skipped: import("@shared/schema").BulkImportStopSkipReason[] = [];
+
+    return await db.transaction(async (tx) => {
+      for (const stopInput of stopsInput) {
+        try {
+          // Check for duplicates
+          const existing = await this.findStopByNormalizedKey(stopInput.name, stopInput.address);
+          
+          if (existing) {
+            skipped.push({
+              input: stopInput,
+              reason: "duplicate",
+              message: `Stop "${stopInput.name}" already exists`,
+            });
+            continue;
+          }
+
+          // Create the stop
+          const [newStop] = await tx.insert(stops).values({
+            name: stopInput.name,
+            address: stopInput.address,
+            latitude: null,
+            longitude: null,
+          }).returning();
+
+          created.push(newStop);
+        } catch (error) {
+          skipped.push({
+            input: stopInput,
+            reason: "invalid",
+            message: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
+      }
+
+      return { created, skipped };
+    });
+  }
+
+  async bulkCreateStudents(
+    studentsInput: import("@shared/schema").BulkImportStudentInput[],
+    source: string
+  ): Promise<import("@shared/schema").BulkImportStudentResult> {
+    const created: Student[] = [];
+    const skipped: import("@shared/schema").BulkImportStudentSkipReason[] = [];
+
+    return await db.transaction(async (tx) => {
+      // Deduplicate within the batch
+      const seenNames = new Set<string>();
+
+      for (const studentInput of studentsInput) {
+        try {
+          const nameKey = this.normalizeKey(`${studentInput.firstName} ${studentInput.lastName}`);
+          
+          if (seenNames.has(nameKey)) {
+            skipped.push({
+              input: studentInput,
+              reason: "duplicate_in_batch",
+              message: `Duplicate name in batch: ${studentInput.firstName} ${studentInput.lastName}`,
+            });
+            continue;
+          }
+          seenNames.add(nameKey);
+
+          // Create a placeholder household for this student
+          const [household] = await tx.insert(households).values({
+            primaryPhone: null,
+            isPlaceholder: true,
+            placeholderSource: source,
+            notes: studentInput.notes ? `Imported: ${studentInput.notes}` : `Imported from ${source}`,
+          }).returning();
+
+          // Create the student linked to the placeholder household
+          const [newStudent] = await tx.insert(students).values({
+            firstName: studentInput.firstName,
+            lastName: studentInput.lastName,
+            householdId: household.id,
+            guardianPhones: [],
+            notes: studentInput.notes,
+          }).returning();
+
+          created.push(newStudent);
+        } catch (error) {
+          skipped.push({
+            input: studentInput,
+            reason: "invalid",
+            message: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
+      }
+
+      return { created, skipped };
+    });
   }
 
   // ============ Driver assignment operations ============
