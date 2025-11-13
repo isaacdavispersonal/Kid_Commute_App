@@ -49,6 +49,7 @@ import {
   Edit,
   Calendar,
   Search,
+  Trash2,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -380,6 +381,26 @@ export default function AdminStudentsPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (studentId: string) => {
+      return await apiRequest("DELETE", `/api/admin/students/${studentId}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/students"] });
+      toast({
+        title: "Success",
+        description: "Student deleted successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete student",
+        variant: "destructive",
+      });
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: async (data: CreateStudentFormValues) => {
       return await apiRequest("POST", "/api/admin/students", data);
@@ -518,6 +539,12 @@ export default function AdminStudentsPage() {
 
   const handleUnassign = (studentId: string) => {
     unassignMutation.mutate(studentId);
+  };
+
+  const handleDelete = (studentId: string, studentName: string) => {
+    if (confirm(`Are you sure you want to delete ${studentName}? This action cannot be undone.`)) {
+      deleteMutation.mutate(studentId);
+    }
   };
 
   const filteredStudents = students?.filter((student) => {
@@ -680,6 +707,15 @@ export default function AdminStudentsPage() {
                     >
                       <XCircle className="h-4 w-4" />
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => handleDelete(student.id, `${student.firstName} ${student.lastName}`)}
+                      disabled={deleteMutation.isPending}
+                      data-testid={`button-delete-${student.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </>
               ) : (
@@ -705,6 +741,16 @@ export default function AdminStudentsPage() {
                       >
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Info
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(student.id, `${student.firstName} ${student.lastName}`)}
+                        disabled={deleteMutation.isPending}
+                        data-testid={`button-delete-${student.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
                       </Button>
                     </div>
                   </div>
