@@ -3870,9 +3870,18 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const route = await storage.getRoute(assignment.routeId);
         const stops = route ? await storage.getRouteStops(route.id) : [];
 
+        // Fetch group color if route has a groupId
+        let groupColor = null;
+        if (route?.groupId) {
+          const group = await storage.getRouteGroup(route.groupId);
+          groupColor = group?.color || null;
+        }
+
         res.json({
           ...assignment,
           routeName: route?.name || "Unknown",
+          routeColor: route?.color || null,
+          groupColor,
           stops,
         });
       } catch (error) {
