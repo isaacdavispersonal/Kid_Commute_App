@@ -34,6 +34,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 
@@ -264,6 +265,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
   const [location] = useLocation();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   // Fetch unread counts
   const { data: unreadCounts } = useQuery<{
@@ -277,6 +279,13 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
 
   const totalUnread = (unreadCounts?.messages || 0) + (unreadCounts?.announcements || 0) + (unreadCounts?.notifications || 0);
 
+  const handleNavigation = () => {
+    // Close sidebar on mobile after navigation
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
   const renderMenuItem = (item: { title: string; url: string; icon: any }) => {
     const isActive = location === item.url;
     const isMessages = item.title === "Messages";
@@ -289,7 +298,7 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
           className={isActive ? "bg-sidebar-accent" : ""}
           data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
         >
-          <Link href={item.url}>
+          <Link href={item.url} onClick={handleNavigation}>
             <item.icon className="h-4 w-4" />
             <span>{item.title}</span>
             {showBadge && (
