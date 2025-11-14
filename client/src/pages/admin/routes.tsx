@@ -817,6 +817,35 @@ export default function AdminRoutes() {
                       )}
                     />
 
+                    <FormField
+                      control={createRouteForm.control}
+                      name="groupId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Route Group (Optional)</FormLabel>
+                          <Select
+                            onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                            value={field.value || "none"}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-route-group">
+                                <SelectValue placeholder="Select group" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">No Group</SelectItem>
+                              {routeGroups?.map((group) => (
+                                <SelectItem key={group.id} value={group.id}>
+                                  {group.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
                     <div className="flex justify-end gap-2 pt-4">
                       <Button
                         type="button"
@@ -1244,6 +1273,35 @@ export default function AdminRoutes() {
                         <SelectItem value="gold">Gold</SelectItem>
                         <SelectItem value="pink">Pink</SelectItem>
                         <SelectItem value="maroon">Maroon</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editRouteForm.control}
+                name="groupId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Route Group (Optional)</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-route-group">
+                          <SelectValue placeholder="Select group" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">No Group</SelectItem>
+                        {routeGroups?.map((group) => (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
