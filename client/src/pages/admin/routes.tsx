@@ -441,11 +441,6 @@ export default function AdminRoutes() {
       accessor: "name",
     },
     {
-      header: "Description",
-      accessor: "description",
-      cell: (value: string) => value || "—",
-    },
-    {
       header: "Route Type",
       accessor: "routeType",
       cell: (value: string | null) => {
