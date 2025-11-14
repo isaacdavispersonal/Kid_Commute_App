@@ -4,7 +4,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertRouteSchema, insertStopSchema, insertRouteStopSchema, type InsertRoute, type InsertStop, type InsertRouteStop, type Stop, type RouteStop, type RouteStopWithMetadata, type RouteColor } from "@shared/schema";
+import { insertRouteSchema, insertStopSchema, insertRouteStopSchema, insertRouteGroupSchema, type InsertRoute, type InsertStop, type InsertRouteStop, type InsertRouteGroup, type Stop, type RouteStop, type RouteStopWithMetadata, type RouteGroup, type RouteColor } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RouteColorBadge } from "@/components/route-color-badge";
@@ -69,8 +69,12 @@ export default function AdminRoutes() {
   const [isEditStopDialogOpen, setIsEditStopDialogOpen] = useState(false);
   const [isDeleteStopDialogOpen, setIsDeleteStopDialogOpen] = useState(false);
   const [isManageStopsDialogOpen, setIsManageStopsDialogOpen] = useState(false);
+  const [isCreateGroupDialogOpen, setIsCreateGroupDialogOpen] = useState(false);
+  const [isEditGroupDialogOpen, setIsEditGroupDialogOpen] = useState(false);
+  const [isDeleteGroupDialogOpen, setIsDeleteGroupDialogOpen] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<RouteWithStopCount | null>(null);
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<RouteGroup | null>(null);
 
   const { data: routes, isLoading: routesLoading } = useQuery<RouteWithStopCount[]>({
     queryKey: ["/api/admin/routes"],
@@ -78,6 +82,10 @@ export default function AdminRoutes() {
 
   const { data: stops, isLoading: stopsLoading } = useQuery<Stop[]>({
     queryKey: ["/api/admin/stops"],
+  });
+
+  const { data: routeGroups, isLoading: routeGroupsLoading } = useQuery<RouteGroup[]>({
+    queryKey: ["/api/admin/route-groups"],
   });
 
   const { data: routeStops, isLoading: routeStopsLoading } = useQuery<RouteStopWithMetadata[]>({
@@ -126,6 +134,24 @@ export default function AdminRoutes() {
       address: "",
       latitude: null,
       longitude: null,
+    },
+  });
+
+  const createGroupForm = useForm<InsertRouteGroup>({
+    resolver: zodResolver(insertRouteGroupSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      color: "gray",
+    },
+  });
+
+  const editGroupForm = useForm<InsertRouteGroup>({
+    resolver: zodResolver(insertRouteGroupSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      color: "gray",
     },
   });
 
@@ -263,6 +289,75 @@ export default function AdminRoutes() {
     },
   });
 
+  // Route Group Mutations
+  const createGroupMutation = useMutation({
+    mutationFn: async (data: InsertRouteGroup) => {
+      return await apiRequest("POST", "/api/admin/route-groups", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/route-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/routes"] });
+      setIsCreateGroupDialogOpen(false);
+      createGroupForm.reset();
+      toast({
+        title: "Success",
+        description: "Route group created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create route group",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateGroupMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: InsertRouteGroup }) => {
+      return await apiRequest("PATCH", `/api/admin/route-groups/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/route-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/routes"] });
+      setIsEditGroupDialogOpen(false);
+      setSelectedGroup(null);
+      toast({
+        title: "Success",
+        description: "Route group updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update route group",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/admin/route-groups/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/route-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/routes"] });
+      setIsDeleteGroupDialogOpen(false);
+      setSelectedGroup(null);
+      toast({
+        title: "Success",
+        description: "Route group deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete route group",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Route Stop Mutations
   const addStopToRouteMutation = useMutation({
@@ -394,6 +489,35 @@ export default function AdminRoutes() {
   const handleDeleteStopConfirm = () => {
     if (!selectedStop) return;
     deleteStopMutation.mutate(selectedStop.id);
+  };
+
+  const handleCreateGroupSubmit = (data: InsertRouteGroup) => {
+    createGroupMutation.mutate(data);
+  };
+
+  const handleEditGroupSubmit = (data: InsertRouteGroup) => {
+    if (!selectedGroup) return;
+    updateGroupMutation.mutate({ id: selectedGroup.id, data });
+  };
+
+  const handleEditGroupClick = (group: RouteGroup) => {
+    setSelectedGroup(group);
+    editGroupForm.reset({
+      name: group.name,
+      description: group.description || "",
+      color: group.color,
+    });
+    setIsEditGroupDialogOpen(true);
+  };
+
+  const handleDeleteGroupClick = (group: RouteGroup) => {
+    setSelectedGroup(group);
+    setIsDeleteGroupDialogOpen(true);
+  };
+
+  const handleDeleteGroupConfirm = () => {
+    if (!selectedGroup) return;
+    deleteGroupMutation.mutate(selectedGroup.id);
   };
 
   const handleManageStopsClick = (route: RouteWithStopCount) => {
@@ -574,6 +698,7 @@ export default function AdminRoutes() {
         <TabsList>
           <TabsTrigger value="routes" data-testid="tab-routes">Routes</TabsTrigger>
           <TabsTrigger value="stops" data-testid="tab-stops">Stops</TabsTrigger>
+          <TabsTrigger value="groups" data-testid="tab-route-groups">Route Groups</TabsTrigger>
         </TabsList>
 
         <TabsContent value="routes" className="space-y-4">
@@ -855,6 +980,164 @@ export default function AdminRoutes() {
             data={stops || []}
             isLoading={stopsLoading}
             emptyMessage="No stops found. Create your first stop to get started."
+          />
+        </TabsContent>
+
+        <TabsContent value="groups" className="space-y-4">
+          <div className="flex justify-end">
+            <Dialog open={isCreateGroupDialogOpen} onOpenChange={setIsCreateGroupDialogOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-group">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Group
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Route Group</DialogTitle>
+                  <DialogDescription>
+                    Create a group to organize related routes with a shared color
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...createGroupForm}>
+                  <form onSubmit={createGroupForm.handleSubmit(handleCreateGroupSubmit)} className="space-y-4">
+                    <FormField
+                      control={createGroupForm.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Group Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="E.g., Morning Routes"
+                              data-testid="input-group-name"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={createGroupForm.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description (Optional)</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Describe this group's purpose"
+                              data-testid="input-group-description"
+                              {...field}
+                              value={field.value || ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={createGroupForm.control}
+                      name="color"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Group Color</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value || undefined}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-group-color">
+                                <SelectValue placeholder="Select color" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="tan">Tan</SelectItem>
+                              <SelectItem value="red">Red</SelectItem>
+                              <SelectItem value="blue">Blue</SelectItem>
+                              <SelectItem value="orange">Orange</SelectItem>
+                              <SelectItem value="yellow">Yellow</SelectItem>
+                              <SelectItem value="purple">Purple</SelectItem>
+                              <SelectItem value="green">Green</SelectItem>
+                              <SelectItem value="gray">Gray</SelectItem>
+                              <SelectItem value="teal">Teal</SelectItem>
+                              <SelectItem value="gold">Gold</SelectItem>
+                              <SelectItem value="pink">Pink</SelectItem>
+                              <SelectItem value="maroon">Maroon</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="flex justify-end gap-2 pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsCreateGroupDialogOpen(false)}
+                        data-testid="button-cancel-group"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={createGroupMutation.isPending}
+                        data-testid="button-create-group"
+                      >
+                        {createGroupMutation.isPending ? "Creating..." : "Create Group"}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <DataTable
+            columns={[
+              {
+                header: "Group Name",
+                accessor: "name",
+                cell: (value: string, row: RouteGroup) => (
+                  <RouteColorBadge routeName={value} color={row.color} />
+                ),
+              },
+              {
+                header: "Description",
+                accessor: "description",
+                cell: (value: string | null) => value || "—",
+              },
+              {
+                header: "Actions",
+                accessor: "id",
+                cell: (_value: string, row: RouteGroup) => (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleEditGroupClick(row)}
+                      data-testid={`button-edit-group-${row.id}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteGroupClick(row)}
+                      data-testid={`button-delete-group-${row.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+            data={routeGroups || []}
+            isLoading={routeGroupsLoading}
+            emptyMessage="No route groups found. Create your first group to organize routes."
           />
         </TabsContent>
       </Tabs>
@@ -1262,6 +1545,134 @@ export default function AdminRoutes() {
               data-testid="button-confirm-delete-stop"
             >
               {deleteStopMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Route Group Dialog */}
+      <Dialog open={isEditGroupDialogOpen} onOpenChange={setIsEditGroupDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Route Group</DialogTitle>
+            <DialogDescription>
+              Update the group information and color
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editGroupForm}>
+            <form onSubmit={editGroupForm.handleSubmit(handleEditGroupSubmit)} className="space-y-4">
+              <FormField
+                control={editGroupForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Group Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="E.g., Morning Routes"
+                        data-testid="input-edit-group-name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editGroupForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Describe this group's purpose"
+                        data-testid="input-edit-group-description"
+                        {...field}
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editGroupForm.control}
+                name="color"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Group Color</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || undefined}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-group-color">
+                          <SelectValue placeholder="Select color" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="tan">Tan</SelectItem>
+                        <SelectItem value="red">Red</SelectItem>
+                        <SelectItem value="blue">Blue</SelectItem>
+                        <SelectItem value="orange">Orange</SelectItem>
+                        <SelectItem value="yellow">Yellow</SelectItem>
+                        <SelectItem value="purple">Purple</SelectItem>
+                        <SelectItem value="green">Green</SelectItem>
+                        <SelectItem value="gray">Gray</SelectItem>
+                        <SelectItem value="teal">Teal</SelectItem>
+                        <SelectItem value="gold">Gold</SelectItem>
+                        <SelectItem value="pink">Pink</SelectItem>
+                        <SelectItem value="maroon">Maroon</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditGroupDialogOpen(false)}
+                  data-testid="button-cancel-edit-group"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={updateGroupMutation.isPending}
+                  data-testid="button-save-group"
+                >
+                  {updateGroupMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Route Group Dialog */}
+      <AlertDialog open={isDeleteGroupDialogOpen} onOpenChange={setIsDeleteGroupDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Route Group</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{selectedGroup?.name}"? Routes in this group will remain but lose their group assignment. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-group">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteGroupConfirm}
+              disabled={deleteGroupMutation.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+              data-testid="button-confirm-delete-group"
+            >
+              {deleteGroupMutation.isPending ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
