@@ -5,6 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import { log } from "./vite";
 import type { GeofenceEvent } from "./geofence-service";
 import type { StopCompletionEvent } from "./dwell-detection-service";
+import type { DataUpdateMessage, DataUpdateResource, DataUpdateAction } from "@shared/notifications";
 
 interface WebSocketNotification {
   type: "notification";
@@ -277,6 +278,67 @@ class NotificationService {
     } catch (error) {
       log(`[notifications] Error handling stop completion: ${error}`, "error");
     }
+  }
+
+  /**
+   * Publish data update notification to authorized clients
+   * Broadcasts when resources are created/updated/deleted so all clients can refresh
+   */
+  publishDataUpdate(params: {
+    resource: DataUpdateResource;
+    action: DataUpdateAction;
+    entityIds?: string[];
+    scope?: { routeId?: string; organizationId?: string };
+    metadata?: Record<string, any>;
+    actorId?: string;
+    targetRoles?: string[];
+  }) {
+    if (!this.wss) {
+      log("[notifications] WebSocket server not initialized", "warn");
+      return;
+    }
+
+    const { resource, action, entityIds, scope, metadata, actorId, targetRoles = ["admin"] } = params;
+
+    const message: DataUpdateMessage = {
+      type: "data_update",
+      version: 1,
+      resource,
+      action,
+      entityIds,
+      scope,
+      metadata,
+      actorId,
+      timestamp: new Date().toISOString(),
+    };
+
+    let broadcastCount = 0;
+    let errorCount = 0;
+
+    this.wss.clients.forEach((client) => {
+      const authClient = client as AuthenticatedWebSocket;
+
+      // Check if client is authenticated and has authorized role
+      if (
+        authClient.userId &&
+        authClient.userRole &&
+        targetRoles.includes(authClient.userRole) &&
+        authClient.readyState === WebSocket.OPEN
+      ) {
+        try {
+          client.send(JSON.stringify(message));
+          broadcastCount++;
+        } catch (error) {
+          errorCount++;
+          log(`[notifications] Error broadcasting data update to user ${authClient.userId}: ${error}`, "error");
+        }
+      }
+    });
+
+    log(
+      `[notifications] Broadcast ${resource}.${action} to ${broadcastCount} ${targetRoles.join("/")} clients (${errorCount} errors)`,
+      "info"
+    );
   }
 
   /**
