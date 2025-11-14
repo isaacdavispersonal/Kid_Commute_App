@@ -1561,6 +1561,119 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // ============ Route Group endpoints ============
+
+  // Get all route groups
+  app.get(
+    "/api/admin/route-groups",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const groups = await storage.getAllRouteGroups();
+        res.json(groups);
+      } catch (error) {
+        console.error("Error fetching route groups:", error);
+        res.status(500).json({ message: "Failed to fetch route groups" });
+      }
+    }
+  );
+
+  // Create a new route group
+  app.post(
+    "/api/admin/route-groups",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { insertRouteGroupSchema } = await import("@shared/schema");
+        
+        const result = insertRouteGroupSchema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid route group data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const newGroup = await storage.createRouteGroup(result.data);
+        res.json(newGroup);
+      } catch (error: any) {
+        console.error("Error creating route group:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to create route group" });
+      }
+    }
+  );
+
+  // Update a route group
+  app.patch(
+    "/api/admin/route-groups/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { insertRouteGroupSchema } = await import("@shared/schema");
+        
+        const result = insertRouteGroupSchema.partial().safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid route group data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const updatedGroup = await storage.updateRouteGroup(id, result.data);
+        res.json(updatedGroup);
+      } catch (error: any) {
+        console.error("Error updating route group:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update route group" });
+      }
+    }
+  );
+
+  // Delete a route group
+  app.delete(
+    "/api/admin/route-groups/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        await storage.deleteRouteGroup(id);
+        res.json({ message: "Route group deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting route group:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to delete route group" });
+      }
+    }
+  );
+
+  // ============ Route endpoints ============
+
   // Get all routes
   app.get(
     "/api/admin/routes",

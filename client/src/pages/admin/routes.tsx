@@ -4,9 +4,10 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertRouteSchema, insertStopSchema, insertRouteStopSchema, type InsertRoute, type InsertStop, type InsertRouteStop, type Stop, type RouteStop, type RouteStopWithMetadata } from "@shared/schema";
+import { insertRouteSchema, insertStopSchema, insertRouteStopSchema, type InsertRoute, type InsertStop, type InsertRouteStop, type Stop, type RouteStop, type RouteStopWithMetadata, type RouteColor } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RouteColorBadge } from "@/components/route-color-badge";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,8 @@ interface RouteWithStopCount {
   name: string;
   description: string | null;
   routeType: "MORNING" | "AFTERNOON" | "EXTRA" | null;
+  color: RouteColor | null;
+  groupId: string | null;
   isActive: boolean;
   stopCount: number;
 }
@@ -88,6 +91,8 @@ export default function AdminRoutes() {
       name: "",
       description: "",
       routeType: null,
+      color: null,
+      groupId: null,
       isActive: true,
     },
   });
@@ -98,6 +103,8 @@ export default function AdminRoutes() {
       name: "",
       description: "",
       routeType: null,
+      color: null,
+      groupId: null,
       isActive: true,
     },
   });
@@ -342,6 +349,8 @@ export default function AdminRoutes() {
       name: route.name,
       description: route.description || "",
       routeType: route.routeType || null,
+      color: route.color || null,
+      groupId: route.groupId || null,
       isActive: route.isActive,
     });
     setIsEditRouteDialogOpen(true);
@@ -439,6 +448,9 @@ export default function AdminRoutes() {
     {
       header: "Route Name",
       accessor: "name",
+      cell: (_value: string, row: RouteWithStopCount) => (
+        <RouteColorBadge routeName={row.name} color={row.color} />
+      ),
     },
     {
       header: "Route Type",
@@ -638,6 +650,41 @@ export default function AdminRoutes() {
                               <SelectItem value="MORNING">Morning Route</SelectItem>
                               <SelectItem value="AFTERNOON">Afternoon Route</SelectItem>
                               <SelectItem value="EXTRA">Extra Route</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={createRouteForm.control}
+                      name="color"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Color Label (Optional)</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value || undefined}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-route-color">
+                                <SelectValue placeholder="Select color" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="tan">Tan</SelectItem>
+                              <SelectItem value="red">Red</SelectItem>
+                              <SelectItem value="blue">Blue</SelectItem>
+                              <SelectItem value="orange">Orange</SelectItem>
+                              <SelectItem value="yellow">Yellow</SelectItem>
+                              <SelectItem value="purple">Purple</SelectItem>
+                              <SelectItem value="green">Green</SelectItem>
+                              <SelectItem value="gray">Gray</SelectItem>
+                              <SelectItem value="teal">Teal</SelectItem>
+                              <SelectItem value="gold">Gold</SelectItem>
+                              <SelectItem value="pink">Pink</SelectItem>
+                              <SelectItem value="maroon">Maroon</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -879,6 +926,41 @@ export default function AdminRoutes() {
                         <SelectItem value="MORNING">Morning Route</SelectItem>
                         <SelectItem value="AFTERNOON">Afternoon Route</SelectItem>
                         <SelectItem value="EXTRA">Extra Route</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editRouteForm.control}
+                name="color"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Color Label (Optional)</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || undefined}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-route-color">
+                          <SelectValue placeholder="Select color" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="tan">Tan</SelectItem>
+                        <SelectItem value="red">Red</SelectItem>
+                        <SelectItem value="blue">Blue</SelectItem>
+                        <SelectItem value="orange">Orange</SelectItem>
+                        <SelectItem value="yellow">Yellow</SelectItem>
+                        <SelectItem value="purple">Purple</SelectItem>
+                        <SelectItem value="green">Green</SelectItem>
+                        <SelectItem value="gray">Gray</SelectItem>
+                        <SelectItem value="teal">Teal</SelectItem>
+                        <SelectItem value="gold">Gold</SelectItem>
+                        <SelectItem value="pink">Pink</SelectItem>
+                        <SelectItem value="maroon">Maroon</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

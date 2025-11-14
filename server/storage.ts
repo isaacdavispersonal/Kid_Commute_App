@@ -3,6 +3,7 @@ import {
   users,
   vehicles,
   routes,
+  routeGroups,
   stops,
   routeStops,
   students,
@@ -41,6 +42,8 @@ import {
   type InsertVehicle,
   type Route,
   type InsertRoute,
+  type RouteGroup,
+  type InsertRouteGroup,
   type Stop,
   type InsertStop,
   type RouteStopWithMetadata,
@@ -143,6 +146,13 @@ export interface IStorage {
   createStop(stop: InsertStop): Promise<Stop>;
   updateStop(id: string, updates: Partial<InsertStop>): Promise<Stop>;
   deleteStop(id: string): Promise<void>;
+
+  // Route group operations
+  getAllRouteGroups(): Promise<import("@shared/schema").RouteGroup[]>;
+  getRouteGroup(id: string): Promise<import("@shared/schema").RouteGroup | undefined>;
+  createRouteGroup(group: import("@shared/schema").InsertRouteGroup): Promise<import("@shared/schema").RouteGroup>;
+  updateRouteGroup(id: string, updates: Partial<import("@shared/schema").InsertRouteGroup>): Promise<import("@shared/schema").RouteGroup>;
+  deleteRouteGroup(id: string): Promise<void>;
 
   // Household operations
   createHousehold(household: InsertHousehold): Promise<Household>;
@@ -877,6 +887,47 @@ export class DatabaseStorage implements IStorage {
       // Delete stop
       await tx.delete(stops).where(eq(stops.id, id));
     });
+  }
+
+  // ============ Route Group operations ============
+
+  async getAllRouteGroups(): Promise<RouteGroup[]> {
+    return await db.select().from(routeGroups).orderBy(desc(routeGroups.createdAt));
+  }
+
+  async getRouteGroup(id: string): Promise<RouteGroup | undefined> {
+    const [group] = await db.select().from(routeGroups).where(eq(routeGroups.id, id));
+    return group;
+  }
+
+  async createRouteGroup(group: InsertRouteGroup): Promise<RouteGroup> {
+    const [newGroup] = await db.insert(routeGroups).values(group).returning();
+    return newGroup;
+  }
+
+  async updateRouteGroup(id: string, updates: Partial<InsertRouteGroup>): Promise<RouteGroup> {
+    const [updatedGroup] = await db
+      .update(routeGroups)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(routeGroups.id, id))
+      .returning();
+    
+    if (!updatedGroup) {
+      throw new NotFoundError("Route group not found");
+    }
+    
+    return updatedGroup;
+  }
+
+  async deleteRouteGroup(id: string): Promise<void> {
+    // Check if group exists
+    const group = await this.getRouteGroup(id);
+    if (!group) {
+      throw new NotFoundError("Route group not found");
+    }
+    
+    // Delete the group (routes.groupId will be set to null due to ON DELETE SET NULL)
+    await db.delete(routeGroups).where(eq(routeGroups.id, id));
   }
 
   // ============ Route Stops (Junction) operations ============
