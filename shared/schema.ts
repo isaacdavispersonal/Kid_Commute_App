@@ -172,16 +172,55 @@ export type GpsUpdate = z.infer<typeof gpsUpdateSchema>;
 // Route type enum
 export const routeTypeEnum = pgEnum("route_type", ["MORNING", "AFTERNOON", "EXTRA"]);
 
+// Route color enum - for visual organization
+export const routeColorEnum = pgEnum("route_color", [
+  "tan",
+  "red",
+  "blue",
+  "orange",
+  "yellow",
+  "purple",
+  "green",
+  "gray",
+  "teal",
+  "gold",
+  "pink",
+  "maroon",
+]);
+
+// Route groups table - for organizing related routes
+export const routeGroups = pgTable("route_groups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  color: routeColorEnum("color").notNull().default("gray"), // Default color
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertRouteGroupSchema = createInsertSchema(routeGroups).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertRouteGroup = z.infer<typeof insertRouteGroupSchema>;
+export type RouteGroup = typeof routeGroups.$inferSelect;
+
 // Routes table
 export const routes = pgTable("routes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   description: text("description"),
   routeType: routeTypeEnum("route_type"), // Morning, Afternoon, or Extra Route
+  color: routeColorEnum("color"), // Visual color label (route color takes precedence over group color)
+  groupId: varchar("group_id").references(() => routeGroups.id, { onDelete: "set null" }), // Optional group assignment
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_routes_group_id").on(table.groupId), // Index for group-based filtering
+]);
 
 export const insertRouteSchema = createInsertSchema(routes).omit({
   id: true,
@@ -1468,7 +1507,15 @@ export const vehiclesRelations = relations(vehicles, ({ many }) => ({
   inspections: many(vehicleInspections),
 }));
 
-export const routesRelations = relations(routes, ({ many }) => ({
+export const routeGroupsRelations = relations(routeGroups, ({ many }) => ({
+  routes: many(routes),
+}));
+
+export const routesRelations = relations(routes, ({ one, many }) => ({
+  group: one(routeGroups, {
+    fields: [routes.groupId],
+    references: [routeGroups.id],
+  }),
   routeStops: many(routeStops),
   students: many(students),
   driverAssignments: many(driverAssignments),
@@ -1623,3 +1670,84 @@ export const vehicleInspectionsRelations = relations(
     }),
   })
 );
+
+// ============ Color Mapping System ============
+
+// Route color configuration for consistent styling across admin and driver interfaces
+// Color fallback strategy: Route's own color takes precedence; if null, inherit from group color
+export const ROUTE_COLORS = {
+  tan: {
+    bg: "bg-[#D2B48C]/20",
+    text: "text-[#8B7355]",
+    border: "border-[#D2B48C]",
+    hex: "#D2B48C",
+  },
+  red: {
+    bg: "bg-red-100 dark:bg-red-950",
+    text: "text-red-700 dark:text-red-400",
+    border: "border-red-300 dark:border-red-700",
+    hex: "#EF4444",
+  },
+  blue: {
+    bg: "bg-blue-100 dark:bg-blue-950",
+    text: "text-blue-700 dark:text-blue-400",
+    border: "border-blue-300 dark:border-blue-700",
+    hex: "#3B82F6",
+  },
+  orange: {
+    bg: "bg-orange-100 dark:bg-orange-950",
+    text: "text-orange-700 dark:text-orange-400",
+    border: "border-orange-300 dark:border-orange-700",
+    hex: "#F97316",
+  },
+  yellow: {
+    bg: "bg-yellow-100 dark:bg-yellow-950",
+    text: "text-yellow-700 dark:text-yellow-400",
+    border: "border-yellow-300 dark:border-yellow-700",
+    hex: "#EAB308",
+  },
+  purple: {
+    bg: "bg-purple-100 dark:bg-purple-950",
+    text: "text-purple-700 dark:text-purple-400",
+    border: "border-purple-300 dark:border-purple-700",
+    hex: "#A855F7",
+  },
+  green: {
+    bg: "bg-green-100 dark:bg-green-950",
+    text: "text-green-700 dark:text-green-400",
+    border: "border-green-300 dark:border-green-700",
+    hex: "#22C55E",
+  },
+  gray: {
+    bg: "bg-gray-100 dark:bg-gray-800",
+    text: "text-gray-700 dark:text-gray-400",
+    border: "border-gray-300 dark:border-gray-600",
+    hex: "#6B7280",
+  },
+  teal: {
+    bg: "bg-teal-100 dark:bg-teal-950",
+    text: "text-teal-700 dark:text-teal-400",
+    border: "border-teal-300 dark:border-teal-700",
+    hex: "#14B8A6",
+  },
+  gold: {
+    bg: "bg-[#FFD700]/20",
+    text: "text-[#B8860B]",
+    border: "border-[#FFD700]",
+    hex: "#FFD700",
+  },
+  pink: {
+    bg: "bg-pink-100 dark:bg-pink-950",
+    text: "text-pink-700 dark:text-pink-400",
+    border: "border-pink-300 dark:border-pink-700",
+    hex: "#EC4899",
+  },
+  maroon: {
+    bg: "bg-[#800000]/20",
+    text: "text-[#5C0000]",
+    border: "border-[#800000]",
+    hex: "#800000",
+  },
+} as const;
+
+export type RouteColor = keyof typeof ROUTE_COLORS;
