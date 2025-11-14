@@ -4,7 +4,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertRouteSchema, insertStopSchema, insertRouteStopSchema, type InsertRoute, type InsertStop, type InsertRouteStop, type Stop, type RouteStop } from "@shared/schema";
+import { insertRouteSchema, insertStopSchema, insertRouteStopSchema, type InsertRoute, type InsertStop, type InsertRouteStop, type Stop, type RouteStop, type RouteStopWithMetadata } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -56,10 +56,6 @@ interface RouteWithStopCount {
   stopCount: number;
 }
 
-interface RouteStopWithDetails extends RouteStop {
-  stop: Stop;
-}
-
 export default function AdminRoutes() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("routes");
@@ -81,7 +77,7 @@ export default function AdminRoutes() {
     queryKey: ["/api/admin/stops"],
   });
 
-  const { data: routeStops, isLoading: routeStopsLoading } = useQuery<RouteStopWithDetails[]>({
+  const { data: routeStops, isLoading: routeStopsLoading } = useQuery<RouteStopWithMetadata[]>({
     queryKey: ["/api/admin/routes", selectedRoute?.id, "stops"],
     enabled: !!selectedRoute && isManageStopsDialogOpen,
   });
@@ -959,15 +955,15 @@ export default function AdminRoutes() {
               ) : routeStops && routeStops.length > 0 ? (
                 <div className="space-y-2">
                   {routeStops.map((routeStop, index) => (
-                    <Card key={routeStop.id}>
+                    <Card key={routeStop.routeStopId}>
                       <CardContent className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-4">
                           <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-medium">
                             {index + 1}
                           </div>
                           <div>
-                            <p className="font-medium">{routeStop.stop.name}</p>
-                            <p className="text-sm text-muted-foreground">{routeStop.stop.address}</p>
+                            <p className="font-medium">{routeStop.name}</p>
+                            <p className="text-sm text-muted-foreground">{routeStop.address}</p>
                             {routeStop.scheduledTime && (
                               <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                                 <Clock className="h-3 w-3" />
@@ -982,7 +978,7 @@ export default function AdminRoutes() {
                             variant="ghost"
                             onClick={() => handleMoveStopUp(index)}
                             disabled={index === 0}
-                            data-testid={`button-move-up-${routeStop.id}`}
+                            data-testid={`button-move-up-${routeStop.routeStopId}`}
                           >
                             <ArrowUp className="h-4 w-4" />
                           </Button>
@@ -991,15 +987,15 @@ export default function AdminRoutes() {
                             variant="ghost"
                             onClick={() => handleMoveStopDown(index)}
                             disabled={index === routeStops.length - 1}
-                            data-testid={`button-move-down-${routeStop.id}`}
+                            data-testid={`button-move-down-${routeStop.routeStopId}`}
                           >
                             <ArrowDown className="h-4 w-4" />
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleRemoveStopFromRoute(routeStop.id)}
-                            data-testid={`button-remove-stop-${routeStop.id}`}
+                            onClick={() => handleRemoveStopFromRoute(routeStop.routeStopId)}
+                            data-testid={`button-remove-stop-${routeStop.routeStopId}`}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
