@@ -1678,50 +1678,62 @@ export const vehicleInspectionsRelations = relations(
 export const ROUTE_COLORS = {
   tan: {
     borderColor: "border-l-amber-600",
+    bgColor: "bg-amber-600",
     hex: "#D2B48C",
   },
   red: {
     borderColor: "border-l-red-600",
+    bgColor: "bg-red-600",
     hex: "#EF4444",
   },
   blue: {
     borderColor: "border-l-blue-600",
+    bgColor: "bg-blue-600",
     hex: "#3B82F6",
   },
   orange: {
     borderColor: "border-l-orange-600",
+    bgColor: "bg-orange-600",
     hex: "#F97316",
   },
   yellow: {
     borderColor: "border-l-yellow-600",
+    bgColor: "bg-yellow-600",
     hex: "#EAB308",
   },
   purple: {
     borderColor: "border-l-purple-600",
+    bgColor: "bg-purple-600",
     hex: "#A855F7",
   },
   green: {
     borderColor: "border-l-green-600",
+    bgColor: "bg-green-600",
     hex: "#22C55E",
   },
   gray: {
     borderColor: "border-l-gray-400",
+    bgColor: "bg-gray-400",
     hex: "#6B7280",
   },
   teal: {
     borderColor: "border-l-teal-600",
+    bgColor: "bg-teal-600",
     hex: "#14B8A6",
   },
   gold: {
     borderColor: "border-l-yellow-500",
+    bgColor: "bg-yellow-500",
     hex: "#FFD700",
   },
   pink: {
     borderColor: "border-l-pink-600",
+    bgColor: "bg-pink-600",
     hex: "#EC4899",
   },
   maroon: {
     borderColor: "border-l-red-900",
+    bgColor: "bg-red-900",
     hex: "#800000",
   },
 } as const;

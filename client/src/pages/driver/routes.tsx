@@ -170,7 +170,7 @@ export default function DriverRoutes() {
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className="flex items-start justify-between gap-2 flex-wrap mb-1">
                             <div className="flex items-center gap-2">
                               <h5 className="font-semibold text-base">{stop.name}</h5>
                               {status !== "PENDING" && (

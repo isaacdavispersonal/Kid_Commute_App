@@ -14,9 +14,10 @@ export function RouteColorBadge({ routeName, color, groupColor, className = "" }
 
   return (
     <span
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-sm border-l-4 bg-card ${colorConfig.borderColor} ${className}`}
+      className={`inline-flex items-center gap-2 ${className}`}
       data-testid={`route-badge-${routeName.toLowerCase().replace(/\s+/g, "-")}`}
     >
+      <span className={`w-1 h-4 ${colorConfig.bgColor}`} aria-hidden="true" />
       <span className="font-medium">{routeName}</span>
     </span>
   );
