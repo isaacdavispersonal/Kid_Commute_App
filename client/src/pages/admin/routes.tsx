@@ -594,6 +594,16 @@ export default function AdminRoutes() {
       },
     },
     {
+      header: "Group",
+      accessor: "groupId",
+      cell: (value: string | null, row: RouteWithStopCount) => {
+        if (!value) return "—";
+        const group = routeGroups?.find(g => g.id === value);
+        if (!group) return "—";
+        return <RouteColorBadge routeName={group.name} color={group.color} />;
+      },
+    },
+    {
       header: "Stops",
       accessor: "stopCount",
       cell: (value: number) => (
