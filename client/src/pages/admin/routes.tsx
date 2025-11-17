@@ -717,10 +717,8 @@ export default function AdminRoutes() {
     return acc;
   }, {} as Record<string, RouteWithStopCount[]>) || {};
 
-  // Get groups that have routes assigned
-  const groupsWithRoutes = routeGroups?.filter(group => 
-    routes?.some(route => route.groupId === group.id)
-  ) || [];
+  // Show all groups (even those without routes)
+  const groupsWithRoutes = routeGroups || [];
 
   return (
     <div className="space-y-6">
@@ -855,35 +853,6 @@ export default function AdminRoutes() {
                       )}
                     />
 
-                    <FormField
-                      control={createRouteForm.control}
-                      name="groupId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Route Group (Optional)</FormLabel>
-                          <Select
-                            onValueChange={(value) => field.onChange(value === "none" ? null : value)}
-                            value={field.value || "none"}
-                          >
-                            <FormControl>
-                              <SelectTrigger data-testid="select-route-group">
-                                <SelectValue placeholder="Select group" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">No Group</SelectItem>
-                              {routeGroups?.map((group) => (
-                                <SelectItem key={group.id} value={group.id}>
-                                  {group.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
                     <div className="flex justify-end gap-2 pt-4">
                       <Button
                         type="button"
@@ -978,6 +947,27 @@ export default function AdminRoutes() {
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                  <Select
+                                    value={route.groupId || "none"}
+                                    onValueChange={(value) => {
+                                      updateRouteMutation.mutate({
+                                        id: route.id,
+                                        data: { groupId: value === "none" ? null : value } as InsertRoute
+                                      });
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-[140px] h-8" data-testid={`select-route-group-${route.id}`}>
+                                      <SelectValue placeholder="Assign group" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">No Group</SelectItem>
+                                      {routeGroups?.map((group) => (
+                                        <SelectItem key={group.id} value={group.id}>
+                                          {group.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                   <Button
                                     size="sm"
                                     variant="ghost"
@@ -1052,6 +1042,27 @@ export default function AdminRoutes() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
+                                <Select
+                                  value={route.groupId || "none"}
+                                  onValueChange={(value) => {
+                                    updateRouteMutation.mutate({
+                                      id: route.id,
+                                      data: { groupId: value === "none" ? null : value } as InsertRoute
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-[140px] h-8" data-testid={`select-route-group-${route.id}`}>
+                                    <SelectValue placeholder="Assign group" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No Group</SelectItem>
+                                    {routeGroups?.map((group) => (
+                                      <SelectItem key={group.id} value={group.id}>
+                                        {group.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -1446,35 +1457,6 @@ export default function AdminRoutes() {
                         <SelectItem value="gold">Gold</SelectItem>
                         <SelectItem value="pink">Pink</SelectItem>
                         <SelectItem value="maroon">Maroon</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={editRouteForm.control}
-                name="groupId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Route Group (Optional)</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value === "none" ? null : value)}
-                      value={field.value || "none"}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-edit-route-group">
-                          <SelectValue placeholder="Select group" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">No Group</SelectItem>
-                        {routeGroups?.map((group) => (
-                          <SelectItem key={group.id} value={group.id}>
-                            {group.name}
-                          </SelectItem>
-                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
