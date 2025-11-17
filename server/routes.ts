@@ -2441,12 +2441,6 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(404).json({ message: "Route not found" });
         }
 
-        // Validate vehicle exists
-        const vehicle = await storage.getVehicle(validatedData.vehicleId);
-        if (!vehicle) {
-          return res.status(404).json({ message: "Vehicle not found" });
-        }
-
         const assignment = await storage.createDriverAssignment(validatedData);
         res.json(assignment);
       } catch (error: any) {
@@ -2486,13 +2480,6 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           const route = await storage.getRoute(updates.routeId);
           if (!route) {
             return res.status(404).json({ message: "Route not found" });
-          }
-        }
-
-        if (updates.vehicleId) {
-          const vehicle = await storage.getVehicle(updates.vehicleId);
-          if (!vehicle) {
-            return res.status(404).json({ message: "Vehicle not found" });
           }
         }
 
