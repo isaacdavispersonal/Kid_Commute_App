@@ -21,6 +21,7 @@ export default function AdminFleetMap() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
+  const hasInitializedBoundsRef = useRef(false);
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
 
   const { data: vehicles, isLoading } = useQuery<VehicleLocation[]>({
@@ -99,9 +100,11 @@ export default function AdminFleetMap() {
         markersRef.current.set(vehicle.id, marker);
       });
 
-      // Fit map to show all markers
-      if (bounds.length > 0) {
+      // Only fit bounds on initial load, not on subsequent refreshes
+      // This preserves the user's zoom level and pan position
+      if (bounds.length > 0 && !hasInitializedBoundsRef.current) {
         mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
+        hasInitializedBoundsRef.current = true;
       }
     }
 
