@@ -357,11 +357,19 @@ export default function AdminVehicles() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="UNASSIGNED">Unassigned</SelectItem>
-                        {drivers.map((driver) => (
-                          <SelectItem key={driver.id} value={driver.id}>
-                            {driver.firstName} {driver.lastName}
-                          </SelectItem>
-                        ))}
+                        {drivers.map((driver) => {
+                          const firstName = driver.firstName?.trim();
+                          const lastName = driver.lastName?.trim();
+                          const displayName = firstName && lastName 
+                            ? `${firstName} ${lastName}`
+                            : firstName || lastName || driver.email;
+                          
+                          return (
+                            <SelectItem key={driver.id} value={driver.id}>
+                              {displayName}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                     <FormMessage />
