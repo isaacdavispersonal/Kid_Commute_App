@@ -552,7 +552,7 @@ export default function AdminRoutes() {
     const newStops = [...routeStops];
     [newStops[index - 1], newStops[index]] = [newStops[index], newStops[index - 1]];
     const updates = newStops.map((stop, idx) => ({
-      id: stop.id,
+      id: stop.routeStopId,
       stopOrder: idx + 1,
       scheduledTime: stop.scheduledTime,
     }));
@@ -564,7 +564,7 @@ export default function AdminRoutes() {
     const newStops = [...routeStops];
     [newStops[index], newStops[index + 1]] = [newStops[index + 1], newStops[index]];
     const updates = newStops.map((stop, idx) => ({
-      id: stop.id,
+      id: stop.routeStopId,
       stopOrder: idx + 1,
       scheduledTime: stop.scheduledTime,
     }));
