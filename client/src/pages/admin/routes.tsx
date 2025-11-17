@@ -45,8 +45,10 @@ import {
 } from "@/components/ui/select";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
-import { Plus, MapPin, Pencil, Trash2, List, Clock, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, MapPin, Pencil, Trash2, List, Clock, ArrowUp, ArrowDown, ChevronDown, Tag } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
 
 interface RouteWithStopCount {
   id: string;
@@ -75,6 +77,7 @@ export default function AdminRoutes() {
   const [selectedRoute, setSelectedRoute] = useState<RouteWithStopCount | null>(null);
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<RouteGroup | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const { data: routes, isLoading: routesLoading } = useQuery<RouteWithStopCount[]>({
     queryKey: ["/api/admin/routes"],
@@ -690,7 +693,33 @@ export default function AdminRoutes() {
   ];
 
   const availableStops = stops?.filter(
-    stop => !routeStops?.some(rs => rs.stopId === stop.id)
+    stop => !routeStops?.some(rs => rs.id === stop.id)
+  ) || [];
+
+  // Helper function to toggle group expansion
+  const toggleGroupExpansion = (groupId: string) => {
+    const newExpanded = new Set(expandedGroups);
+    if (newExpanded.has(groupId)) {
+      newExpanded.delete(groupId);
+    } else {
+      newExpanded.add(groupId);
+    }
+    setExpandedGroups(newExpanded);
+  };
+
+  // Group routes by their route group
+  const groupedRoutes = routes?.reduce((acc, route) => {
+    const groupKey = route.groupId || "ungrouped";
+    if (!acc[groupKey]) {
+      acc[groupKey] = [];
+    }
+    acc[groupKey].push(route);
+    return acc;
+  }, {} as Record<string, RouteWithStopCount[]>) || {};
+
+  // Get groups that have routes assigned
+  const groupsWithRoutes = routeGroups?.filter(group => 
+    routes?.some(route => route.groupId === group.id)
   ) || [];
 
   return (
@@ -708,7 +737,6 @@ export default function AdminRoutes() {
         <TabsList>
           <TabsTrigger value="routes" data-testid="tab-routes">Routes</TabsTrigger>
           <TabsTrigger value="stops" data-testid="tab-stops">Stops</TabsTrigger>
-          <TabsTrigger value="groups" data-testid="tab-route-groups">Route Groups</TabsTrigger>
         </TabsList>
 
         <TabsContent value="routes" className="space-y-4">
@@ -879,12 +907,200 @@ export default function AdminRoutes() {
             </Dialog>
           </div>
 
-          <DataTable
-            columns={routeColumns}
-            data={routes || []}
-            isLoading={routesLoading}
-            emptyMessage="No routes found. Create your first route to get started."
-          />
+          {routesLoading || routeGroupsLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading routes...</div>
+          ) : !routes || routes.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No routes found. Create your first route to get started.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Grouped Routes */}
+              {groupsWithRoutes.map((group) => {
+                const groupRoutes = groupedRoutes[group.id] || [];
+                const isExpanded = expandedGroups.has(group.id);
+                
+                return (
+                  <Card key={group.id}>
+                    <Collapsible
+                      open={isExpanded}
+                      onOpenChange={() => toggleGroupExpansion(group.id)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <div className="flex items-center justify-between gap-4 p-4 cursor-pointer hover-elevate" data-testid={`group-${group.id}`}>
+                          <div className="flex items-center gap-3">
+                            <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                            <RouteColorBadge routeName={group.name} color={group.color} />
+                            <Badge variant="secondary">{groupRoutes.length} {groupRoutes.length === 1 ? 'route' : 'routes'}</Badge>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedGroup(group);
+                                setIsEditGroupDialogOpen(true);
+                              }}
+                              data-testid={`button-edit-group-${group.id}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedGroup(group);
+                                setIsDeleteGroupDialogOpen(true);
+                              }}
+                              data-testid={`button-delete-group-${group.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="px-4 pb-4 space-y-2">
+                          {groupRoutes.map((route) => (
+                            <Card key={route.id}>
+                              <CardContent className="flex items-center justify-between p-4">
+                                <div>
+                                  <p className="font-medium">{route.name}</p>
+                                  {route.description && (
+                                    <p className="text-sm text-muted-foreground">{route.description}</p>
+                                  )}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {route.routeType && <Badge variant="outline">{route.routeType}</Badge>}
+                                    <span className="text-xs text-muted-foreground">{route.stopCount} stops</span>
+                                    {!route.isActive && <Badge variant="secondary">Inactive</Badge>}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setSelectedRoute(route);
+                                      setIsManageStopsDialogOpen(true);
+                                    }}
+                                    data-testid={`button-manage-stops-${route.id}`}
+                                  >
+                                    <List className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleEditRouteClick(route)}
+                                    data-testid={`button-edit-route-${route.id}`}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleDeleteRouteClick(route)}
+                                    data-testid={`button-delete-route-${route.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </Card>
+                );
+              })}
+
+              {/* Ungrouped Routes */}
+              {groupedRoutes.ungrouped && groupedRoutes.ungrouped.length > 0 && (
+                <Card>
+                  <Collapsible
+                    defaultOpen={true}
+                  >
+                    <CollapsibleTrigger asChild>
+                      <div className="flex items-center justify-between gap-4 p-4 cursor-pointer hover-elevate" data-testid="ungrouped-routes">
+                        <div className="flex items-center gap-3">
+                          <ChevronDown className="h-4 w-4" />
+                          <Tag className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">Ungrouped Routes</span>
+                          <Badge variant="secondary">{groupedRoutes.ungrouped.length} {groupedRoutes.ungrouped.length === 1 ? 'route' : 'routes'}</Badge>
+                        </div>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="px-4 pb-4 space-y-2">
+                        {groupedRoutes.ungrouped.map((route) => (
+                          <Card key={route.id}>
+                            <CardContent className="flex items-center justify-between p-4">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  {route.color && <RouteColorBadge routeName={route.name} color={route.color} />}
+                                  {!route.color && <p className="font-medium">{route.name}</p>}
+                                </div>
+                                {route.description && (
+                                  <p className="text-sm text-muted-foreground">{route.description}</p>
+                                )}
+                                <div className="flex items-center gap-2 mt-1">
+                                  {route.routeType && <Badge variant="outline">{route.routeType}</Badge>}
+                                  <span className="text-xs text-muted-foreground">{route.stopCount} stops</span>
+                                  {!route.isActive && <Badge variant="secondary">Inactive</Badge>}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setSelectedRoute(route);
+                                    setIsManageStopsDialogOpen(true);
+                                  }}
+                                  data-testid={`button-manage-stops-${route.id}`}
+                                >
+                                  <List className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleEditRouteClick(route)}
+                                  data-testid={`button-edit-route-${route.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteRouteClick(route)}
+                                  data-testid={`button-delete-route-${route.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </Card>
+              )}
+
+              {/* Create New Group Button */}
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setIsCreateGroupDialogOpen(true)}
+                data-testid="button-create-group"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create New Group
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="stops" className="space-y-4">
@@ -1021,165 +1237,112 @@ export default function AdminRoutes() {
             emptyMessage="No stops found. Create your first stop to get started."
           />
         </TabsContent>
-
-        <TabsContent value="groups" className="space-y-4">
-          <div className="flex justify-end">
-            <Dialog open={isCreateGroupDialogOpen} onOpenChange={setIsCreateGroupDialogOpen}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-group">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Group
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Route Group</DialogTitle>
-                  <DialogDescription>
-                    Create a group to organize related routes with a shared color
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...createGroupForm}>
-                  <form onSubmit={createGroupForm.handleSubmit(handleCreateGroupSubmit)} className="space-y-4">
-                    <FormField
-                      control={createGroupForm.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Group Name</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="E.g., Morning Routes"
-                              data-testid="input-group-name"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={createGroupForm.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description (Optional)</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Describe this group's purpose"
-                              data-testid="input-group-description"
-                              {...field}
-                              value={field.value || ""}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={createGroupForm.control}
-                      name="color"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Group Color</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value || undefined}
-                          >
-                            <FormControl>
-                              <SelectTrigger data-testid="select-group-color">
-                                <SelectValue placeholder="Select color" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="tan">Tan</SelectItem>
-                              <SelectItem value="red">Red</SelectItem>
-                              <SelectItem value="blue">Blue</SelectItem>
-                              <SelectItem value="orange">Orange</SelectItem>
-                              <SelectItem value="yellow">Yellow</SelectItem>
-                              <SelectItem value="purple">Purple</SelectItem>
-                              <SelectItem value="green">Green</SelectItem>
-                              <SelectItem value="gray">Gray</SelectItem>
-                              <SelectItem value="teal">Teal</SelectItem>
-                              <SelectItem value="gold">Gold</SelectItem>
-                              <SelectItem value="pink">Pink</SelectItem>
-                              <SelectItem value="maroon">Maroon</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="flex justify-end gap-2 pt-4">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setIsCreateGroupDialogOpen(false)}
-                        data-testid="button-cancel-group"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="submit"
-                        disabled={createGroupMutation.isPending}
-                        data-testid="button-create-group"
-                      >
-                        {createGroupMutation.isPending ? "Creating..." : "Create Group"}
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <DataTable
-            columns={[
-              {
-                header: "Group Name",
-                accessor: "name",
-                cell: (value: string, row: RouteGroup) => (
-                  <RouteColorBadge routeName={value} color={row.color} />
-                ),
-              },
-              {
-                header: "Description",
-                accessor: "description",
-                cell: (value: string | null) => value || "—",
-              },
-              {
-                header: "Actions",
-                accessor: "id",
-                cell: (_value: string, row: RouteGroup) => (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleEditGroupClick(row)}
-                      data-testid={`button-edit-group-${row.id}`}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDeleteGroupClick(row)}
-                      data-testid={`button-delete-group-${row.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ),
-              },
-            ]}
-            data={routeGroups || []}
-            isLoading={routeGroupsLoading}
-            emptyMessage="No route groups found. Create your first group to organize routes."
-          />
-        </TabsContent>
       </Tabs>
+
+      {/* Create Group Dialog */}
+      <Dialog open={isCreateGroupDialogOpen} onOpenChange={setIsCreateGroupDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Route Group</DialogTitle>
+            <DialogDescription>
+              Create a group to organize related routes with a shared color
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...createGroupForm}>
+            <form onSubmit={createGroupForm.handleSubmit(handleCreateGroupSubmit)} className="space-y-4">
+              <FormField
+                control={createGroupForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Group Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="E.g., Morning Routes"
+                        data-testid="input-group-name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={createGroupForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Describe this group's purpose"
+                        data-testid="input-group-description"
+                        {...field}
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={createGroupForm.control}
+                name="color"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Group Color</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || undefined}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-group-color">
+                          <SelectValue placeholder="Select color" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="tan">Tan</SelectItem>
+                        <SelectItem value="red">Red</SelectItem>
+                        <SelectItem value="blue">Blue</SelectItem>
+                        <SelectItem value="orange">Orange</SelectItem>
+                        <SelectItem value="yellow">Yellow</SelectItem>
+                        <SelectItem value="purple">Purple</SelectItem>
+                        <SelectItem value="green">Green</SelectItem>
+                        <SelectItem value="gray">Gray</SelectItem>
+                        <SelectItem value="teal">Teal</SelectItem>
+                        <SelectItem value="gold">Gold</SelectItem>
+                        <SelectItem value="pink">Pink</SelectItem>
+                        <SelectItem value="maroon">Maroon</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsCreateGroupDialogOpen(false)}
+                  data-testid="button-cancel-group"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createGroupMutation.isPending}
+                  data-testid="button-submit-group"
+                >
+                  {createGroupMutation.isPending ? "Creating..." : "Create Group"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Route Dialog */}
       <Dialog open={isEditRouteDialogOpen} onOpenChange={setIsEditRouteDialogOpen}>
