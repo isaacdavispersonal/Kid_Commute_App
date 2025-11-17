@@ -7,6 +7,7 @@ import {
   stops,
   routeStops,
   students,
+  studentRoutes,
   driverAssignments,
   shifts,
   clockEvents,
@@ -52,6 +53,8 @@ import {
   type InsertRouteStop,
   type Student,
   type InsertStudent,
+  type StudentRoute,
+  type InsertStudentRoute,
   type DriverAssignment,
   type InsertDriverAssignment,
   type Shift,
@@ -172,6 +175,13 @@ export interface IStorage {
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: string, updates: Partial<InsertStudent>): Promise<Student>;
   deleteStudent(id: string): Promise<void>;
+
+  // Student-Route assignment operations
+  createStudentRouteAssignment(assignment: InsertStudentRoute): Promise<StudentRoute>;
+  deleteStudentRouteAssignment(id: string): Promise<void>;
+  getStudentRouteAssignments(studentId: string): Promise<StudentRoute[]>;
+  updateStudentRouteStops(id: string, pickupStopId: string | null, dropoffStopId: string | null): Promise<StudentRoute>;
+  deleteAllStudentRouteAssignments(studentId: string): Promise<void>;
 
   // Bulk import operations
   bulkUpsertStops(stops: import("@shared/schema").BulkImportStopInput[], source: string): Promise<import("@shared/schema").BulkImportStopResult>;
@@ -319,6 +329,7 @@ export interface IStorage {
   getVehicleChecklistsByVehicle(vehicleId: string): Promise<VehicleChecklist[]>;
   getAllVehicleChecklists(): Promise<VehicleChecklist[]>;
   getTodayVehicleChecklist(driverId: string, vehicleId: string, type: "PRE_TRIP" | "POST_TRIP"): Promise<VehicleChecklist | undefined>;
+  deleteVehicleChecklist(id: string): Promise<void>;
 
   // Driver feedback operations
   createDriverFeedback(feedback: InsertDriverFeedback): Promise<DriverFeedback>;
@@ -1125,6 +1136,88 @@ export class DatabaseStorage implements IStorage {
 
   async deleteStudent(id: string): Promise<void> {
     await db.delete(students).where(eq(students.id, id));
+  }
+
+  // ============ Student-Route assignment operations ============
+
+  async createStudentRouteAssignment(assignment: InsertStudentRoute): Promise<StudentRoute> {
+    // Validate student exists
+    const student = await this.getStudent(assignment.studentId);
+    if (!student) {
+      throw new NotFoundError("Student not found");
+    }
+
+    // Validate route exists
+    const route = await this.getRoute(assignment.routeId);
+    if (!route) {
+      throw new NotFoundError("Route not found");
+    }
+
+    // Check for duplicate assignment
+    const existing = await db
+      .select()
+      .from(studentRoutes)
+      .where(
+        and(
+          eq(studentRoutes.studentId, assignment.studentId),
+          eq(studentRoutes.routeId, assignment.routeId)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      throw new ValidationError("Student is already assigned to this route");
+    }
+
+    const [newAssignment] = await db
+      .insert(studentRoutes)
+      .values(assignment)
+      .returning();
+    return newAssignment;
+  }
+
+  async deleteStudentRouteAssignment(id: string): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(studentRoutes)
+      .where(eq(studentRoutes.id, id))
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError("Student route assignment not found");
+    }
+
+    await db.delete(studentRoutes).where(eq(studentRoutes.id, id));
+  }
+
+  async getStudentRouteAssignments(studentId: string): Promise<StudentRoute[]> {
+    return await db
+      .select()
+      .from(studentRoutes)
+      .where(eq(studentRoutes.studentId, studentId))
+      .orderBy(desc(studentRoutes.createdAt));
+  }
+
+  async updateStudentRouteStops(
+    id: string,
+    pickupStopId: string | null,
+    dropoffStopId: string | null
+  ): Promise<StudentRoute> {
+    const [updated] = await db
+      .update(studentRoutes)
+      .set({ pickupStopId, dropoffStopId })
+      .where(eq(studentRoutes.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new NotFoundError("Student route assignment not found");
+    }
+
+    return updated;
+  }
+
+  async deleteAllStudentRouteAssignments(studentId: string): Promise<void> {
+    await db.delete(studentRoutes).where(eq(studentRoutes.studentId, studentId));
   }
 
   // ============ Bulk import operations ============
@@ -3591,6 +3684,20 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
 
     return checklist;
+  }
+
+  async deleteVehicleChecklist(id: string): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(vehicleChecklists)
+      .where(eq(vehicleChecklists.id, id))
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError("Vehicle checklist not found");
+    }
+
+    await db.delete(vehicleChecklists).where(eq(vehicleChecklists.id, id));
   }
 
   // ============ Driver Feedback operations ============

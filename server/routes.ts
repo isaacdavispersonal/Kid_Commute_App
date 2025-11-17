@@ -872,6 +872,26 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Delete a vehicle checklist (admin)
+  app.delete(
+    "/api/admin/vehicle-checklists/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        await storage.deleteVehicleChecklist(id);
+        res.json({ message: "Checklist deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting vehicle checklist:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to delete vehicle checklist" });
+      }
+    }
+  );
+
   // ============ Audit Log Routes ============
 
   // Get all audit logs
@@ -2380,6 +2400,101 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
         
         res.status(500).json({ message: "Failed to delete student" });
+      }
+    }
+  );
+
+  // ============ Student-Route Assignment Routes ============
+
+  // Get student's route assignments
+  app.get(
+    "/api/admin/students/:id/routes",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const studentId = req.params.id;
+        const assignments = await storage.getStudentRouteAssignments(studentId);
+        res.json(assignments);
+      } catch (error) {
+        console.error("Error fetching student route assignments:", error);
+        res.status(500).json({ message: "Failed to fetch student route assignments" });
+      }
+    }
+  );
+
+  // Create student-route assignment
+  app.post(
+    "/api/admin/students/:id/routes",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const studentId = req.params.id;
+        const { routeId, pickupStopId, dropoffStopId } = req.body;
+
+        if (!routeId) {
+          return res.status(400).json({ message: "Route ID is required" });
+        }
+
+        const assignment = await storage.createStudentRouteAssignment({
+          studentId,
+          routeId,
+          pickupStopId: pickupStopId || null,
+          dropoffStopId: dropoffStopId || null,
+        });
+
+        res.json(assignment);
+      } catch (error) {
+        console.error("Error creating student route assignment:", error);
+        res.status(500).json({ message: "Failed to create student route assignment" });
+      }
+    }
+  );
+
+  // Update student-route assignment stops
+  app.patch(
+    "/api/admin/student-routes/:assignmentId",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { assignmentId } = req.params;
+        const { pickupStopId, dropoffStopId } = req.body;
+
+        const updated = await storage.updateStudentRouteStops(
+          assignmentId,
+          pickupStopId || null,
+          dropoffStopId || null
+        );
+
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error updating student route stops:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to update student route stops" });
+      }
+    }
+  );
+
+  // Delete student-route assignment
+  app.delete(
+    "/api/admin/student-routes/:assignmentId",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { assignmentId } = req.params;
+        await storage.deleteStudentRouteAssignment(assignmentId);
+        res.json({ message: "Assignment deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting student route assignment:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to delete student route assignment" });
       }
     }
   );

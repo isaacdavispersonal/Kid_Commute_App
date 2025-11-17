@@ -415,6 +415,32 @@ export const students = pgTable("students", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Student-Route junction table for many-to-many relationships
+export const studentRoutes = pgTable("student_routes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  studentId: varchar("student_id")
+    .notNull()
+    .references(() => students.id, { onDelete: "cascade" }),
+  routeId: varchar("route_id")
+    .notNull()
+    .references(() => routes.id, { onDelete: "cascade" }),
+  pickupStopId: varchar("pickup_stop_id").references(() => stops.id, {
+    onDelete: "set null",
+  }),
+  dropoffStopId: varchar("dropoff_stop_id").references(() => stops.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertStudentRouteSchema = createInsertSchema(studentRoutes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertStudentRoute = z.infer<typeof insertStudentRouteSchema>;
+export type StudentRoute = typeof studentRoutes.$inferSelect;
+
 export const insertStudentSchema = createInsertSchema(students).omit({
   id: true,
   createdAt: true,

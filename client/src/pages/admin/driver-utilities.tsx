@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Package, FileCheck, MessageSquare, CheckCircle2 } from "lucide-react";
+import { Package, FileCheck, MessageSquare, CheckCircle2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -169,6 +169,70 @@ export default function AdminDriverUtilities() {
     },
   });
 
+  const dismissRequestMutation = useMutation({
+    mutationFn: async (requestId: string) => {
+      return await apiRequest("PATCH", `/api/admin/supplies-requests/${requestId}`, {
+        status: "REJECTED",
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/supplies-requests"] });
+      toast({
+        title: "Dismissed",
+        description: "Supplies request dismissed",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to dismiss request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteChecklistMutation = useMutation({
+    mutationFn: async (checklistId: string) => {
+      return await apiRequest("DELETE", `/api/admin/vehicle-checklists/${checklistId}`);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/vehicle-checklists"] });
+      toast({
+        title: "Deleted",
+        description: "Checklist deleted",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete checklist",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const dismissFeedbackMutation = useMutation({
+    mutationFn: async (feedbackId: string) => {
+      return await apiRequest("PATCH", `/api/admin/feedback/${feedbackId}`, {
+        status: "DISMISSED",
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/feedback"] });
+      toast({
+        title: "Dismissed",
+        description: "Feedback dismissed",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to dismiss feedback",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleManageRequest = (request: SuppliesRequest) => {
     setSelectedRequest(request);
     setRequestStatus(request.status);
@@ -257,14 +321,25 @@ export default function AdminDriverUtilities() {
                     <p className="text-xs text-muted-foreground">
                       {formatDistance(new Date(request.createdAt), new Date(), { addSuffix: true })}
                     </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleManageRequest(request)}
-                      data-testid={`button-manage-${request.id}`}
-                    >
-                      Manage
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => dismissRequestMutation.mutate(request.id)}
+                        disabled={dismissRequestMutation.isPending}
+                        data-testid={`button-dismiss-${request.id}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleManageRequest(request)}
+                        data-testid={`button-manage-${request.id}`}
+                      >
+                        Manage
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -334,6 +409,17 @@ export default function AdminDriverUtilities() {
                       Odometer: {checklist.odometerReading.toLocaleString()} miles
                     </p>
                   )}
+                  <div className="flex justify-end mt-3">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteChecklistMutation.mutate(checklist.id)}
+                      disabled={deleteChecklistMutation.isPending}
+                      data-testid={`button-delete-checklist-${checklist.id}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))
@@ -381,14 +467,25 @@ export default function AdminDriverUtilities() {
                     <p className="text-xs text-muted-foreground">
                       {formatDistance(new Date(fb.createdAt), new Date(), { addSuffix: true })}
                     </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleManageFeedback(fb)}
-                      data-testid={`button-manage-feedback-${fb.id}`}
-                    >
-                      Respond
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => dismissFeedbackMutation.mutate(fb.id)}
+                        disabled={dismissFeedbackMutation.isPending}
+                        data-testid={`button-dismiss-feedback-${fb.id}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleManageFeedback(fb)}
+                        data-testid={`button-manage-feedback-${fb.id}`}
+                      >
+                        Respond
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

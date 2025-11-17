@@ -273,9 +273,7 @@ function AttendanceSection({ student }: { student: EnrichedStudent }) {
 export default function AdminStudentsPage() {
   const { toast } = useToast();
   const [selectedStudent, setSelectedStudent] = useState<EnrichedStudent | null>(null);
-  const [selectedRoute, setSelectedRoute] = useState<string>("");
-  const [selectedPickupStop, setSelectedPickupStop] = useState<string>("");
-  const [selectedDropoffStop, setSelectedDropoffStop] = useState<string>("");
+  const [newRouteId, setNewRouteId] = useState<string>("");
   const [filter, setFilter] = useState<"all" | "assigned" | "unassigned">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -312,70 +310,64 @@ export default function AdminStudentsPage() {
     queryKey: ["/api/admin/routes"],
   });
 
-  const { data: stops } = useQuery<Stop[]>({
-    queryKey: ["/api/admin/stops", selectedRoute],
-    enabled: !!selectedRoute,
+  // Query student route assignments when a student is selected
+  const { data: studentRouteAssignments } = useQuery({
+    queryKey: ["/api/admin/students", selectedStudent?.id, "routes"],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/routes/${selectedRoute}/stops`);
-      if (!response.ok) throw new Error("Failed to fetch stops");
+      if (!selectedStudent?.id) return [];
+      const response = await fetch(`/api/admin/students/${selectedStudent.id}/routes`);
+      if (!response.ok) throw new Error("Failed to fetch student route assignments");
       return response.json();
     },
+    enabled: !!selectedStudent,
   });
 
-  const assignMutation = useMutation({
-    mutationFn: async ({
-      studentId,
-      routeId,
-      pickupStopId,
-      dropoffStopId,
-    }: {
-      studentId: string;
-      routeId: string | null;
-      pickupStopId: string | null;
-      dropoffStopId: string | null;
-    }) => {
-      return await apiRequest(
-        "PATCH",
-        `/api/admin/students/${studentId}/assign-route`,
-        {
-          assignedRouteId: routeId,
-          pickupStopId,
-          dropoffStopId,
-        }
-      );
+  // Add route assignment mutation
+  const addRouteAssignmentMutation = useMutation({
+    mutationFn: async ({ studentId, routeId }: { studentId: string; routeId: string }) => {
+      return await apiRequest("POST", `/api/admin/students/${studentId}/routes`, {
+        routeId,
+        pickupStopId: null,
+        dropoffStopId: null,
+      });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/students"] });
-      handleCloseDialog();
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/students", variables.studentId, "routes"] });
+      setNewRouteId("");
       toast({
         title: "Success",
-        description: "Student route assignment updated",
+        description: "Route assigned to student",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update route assignment",
+        description: error.message || "Failed to assign route",
         variant: "destructive",
       });
     },
   });
 
-  const unassignMutation = useMutation({
-    mutationFn: async (studentId: string) => {
-      return await apiRequest("DELETE", `/api/admin/students/${studentId}/unassign-route`, {});
+  // Remove route assignment mutation
+  const removeRouteAssignmentMutation = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      return await apiRequest("DELETE", `/api/admin/student-routes/${assignmentId}`, {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/students"] });
+      if (selectedStudent) {
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/students", selectedStudent.id, "routes"] });
+      }
       toast({
         title: "Success",
-        description: "Student unassigned from route",
+        description: "Route unassigned from student",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to unassign student",
+        description: "Failed to unassign route",
         variant: "destructive",
       });
     },
@@ -507,38 +499,25 @@ export default function AdminStudentsPage() {
 
   const handleOpenDialog = (student: EnrichedStudent) => {
     setSelectedStudent(student);
-    setSelectedRoute(student.assignedRouteId || "");
-    setSelectedPickupStop(student.pickupStopId || "");
-    setSelectedDropoffStop(student.dropoffStopId || "");
+    setNewRouteId("");
   };
 
   const handleCloseDialog = () => {
     setSelectedStudent(null);
-    setSelectedRoute("");
-    setSelectedPickupStop("");
-    setSelectedDropoffStop("");
+    setNewRouteId("");
   };
 
-  const handleSave = () => {
-    if (!selectedStudent) return;
+  const handleAddRoute = () => {
+    if (!selectedStudent || !newRouteId) return;
 
-    // If route is cleared, use unassign endpoint
-    if (!selectedRoute) {
-      unassignMutation.mutate(selectedStudent.id);
-      handleCloseDialog();
-      return;
-    }
-
-    assignMutation.mutate({
+    addRouteAssignmentMutation.mutate({
       studentId: selectedStudent.id,
-      routeId: selectedRoute,
-      pickupStopId: selectedPickupStop || null,
-      dropoffStopId: selectedDropoffStop || null,
+      routeId: newRouteId,
     });
   };
 
-  const handleUnassign = (studentId: string) => {
-    unassignMutation.mutate(studentId);
+  const handleRemoveRoute = (assignmentId: string) => {
+    removeRouteAssignmentMutation.mutate(assignmentId);
   };
 
   const handleDelete = (studentId: string, studentName: string) => {
@@ -697,15 +676,6 @@ export default function AdminStudentsPage() {
                       data-testid={`button-edit-info-${student.id}`}
                     >
                       <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleUnassign(student.id)}
-                      disabled={unassignMutation.isPending}
-                      data-testid={`button-unassign-${student.id}`}
-                    >
-                      <XCircle className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="outline"
@@ -1055,103 +1025,71 @@ export default function AdminStudentsPage() {
 
       {/* Assignment Dialog */}
       <Dialog open={!!selectedStudent} onOpenChange={handleCloseDialog}>
-        <DialogContent data-testid="dialog-assign-route">
+        <DialogContent data-testid="dialog-assign-route" className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              Assign Route for {selectedStudent?.firstName} {selectedStudent?.lastName}
+              Manage Routes for {selectedStudent?.firstName} {selectedStudent?.lastName}
             </DialogTitle>
             <DialogDescription>
-              Select a route and pickup/dropoff stops
+              Assign students to multiple routes (morning, afternoon, etc.). Pickup and dropoff stops can be configured later if needed.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="route">Route</Label>
-              <Select 
-                value={selectedRoute} 
-                onValueChange={(value) => {
-                  setSelectedRoute(value);
-                  // Clear stop selections when route changes
-                  if (value !== selectedRoute) {
-                    setSelectedPickupStop("");
-                    setSelectedDropoffStop("");
-                  }
-                }}
-              >
-                <SelectTrigger id="route" data-testid="select-route">
-                  <SelectValue placeholder="Select a route" />
-                </SelectTrigger>
-                <SelectContent>
-                  {routes?.map((route) => (
-                    <SelectItem key={route.id} value={route.id}>
-                      {route.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedStudent?.assignedRouteId && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => {
-                    setSelectedRoute("");
-                    setSelectedPickupStop("");
-                    setSelectedDropoffStop("");
-                  }}
-                  data-testid="button-clear-route"
-                >
-                  Clear Route Assignment
-                </Button>
-              )}
-            </div>
-
-            {selectedRoute && (
-              <>
+            {/* Current Assignments */}
+            {studentRouteAssignments && studentRouteAssignments.length > 0 && (
+              <div className="space-y-2">
+                <Label>Current Route Assignments</Label>
                 <div className="space-y-2">
-                  <Label htmlFor="pickup">Pickup Stop</Label>
-                  <Select value={selectedPickupStop} onValueChange={setSelectedPickupStop}>
-                    <SelectTrigger id="pickup" data-testid="select-pickup">
-                      <SelectValue placeholder="Select pickup stop" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {stops?.map((stop) => (
-                        <SelectItem key={stop.id} value={stop.id}>
-                          {stop.name} - {stop.scheduledTime}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {studentRouteAssignments.map((assignment: any) => {
+                    const route = routes?.find(r => r.id === assignment.routeId);
+                    return (
+                      <div key={assignment.id} className="flex items-center justify-between p-2 border rounded-md">
+                        <span>{route?.name || "Unknown Route"}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveRoute(assignment.id)}
+                          disabled={removeRouteAssignmentMutation.isPending}
+                          data-testid={`button-remove-route-${assignment.id}`}
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="dropoff">Dropoff Stop</Label>
-                  <Select value={selectedDropoffStop} onValueChange={setSelectedDropoffStop}>
-                    <SelectTrigger id="dropoff" data-testid="select-dropoff">
-                      <SelectValue placeholder="Select dropoff stop" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {stops?.map((stop) => (
-                        <SelectItem key={stop.id} value={stop.id}>
-                          {stop.name} - {stop.scheduledTime}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+              </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline" onClick={handleCloseDialog} data-testid="button-cancel">
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={assignMutation.isPending || unassignMutation.isPending}
-                data-testid="button-save-assignment"
-              >
-                {selectedRoute ? "Save Assignment" : "Clear Assignment"}
+            {/* Add New Route */}
+            <div className="space-y-2">
+              <Label htmlFor="new-route">Add Route Assignment</Label>
+              <div className="flex gap-2">
+                <Select value={newRouteId} onValueChange={setNewRouteId}>
+                  <SelectTrigger id="new-route" data-testid="select-new-route" className="flex-1">
+                    <SelectValue placeholder="Select a route" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {routes?.map((route) => (
+                      <SelectItem key={route.id} value={route.id}>
+                        {route.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={handleAddRoute}
+                  disabled={!newRouteId || addRouteAssignmentMutation.isPending}
+                  data-testid="button-add-route"
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <Button variant="outline" onClick={handleCloseDialog} data-testid="button-close">
+                Close
               </Button>
             </div>
           </div>
