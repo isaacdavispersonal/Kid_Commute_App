@@ -693,7 +693,7 @@ export default function AdminRoutes() {
   ];
 
   const availableStops = stops?.filter(
-    stop => !routeStops?.some(rs => rs.id === stop.id)
+    stop => !routeStops?.some(rs => rs.stopId === stop.id)
   ) || [];
 
   // Helper function to toggle group expansion

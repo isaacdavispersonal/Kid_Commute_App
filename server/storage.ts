@@ -692,6 +692,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(routeStops.stopOrder);
     
     return result.map(r => ({
+      stopId: r.routeStop.stopId,
       ...r.stop!,
       stopOrder: r.routeStop.stopOrder,
       scheduledTime: r.routeStop.scheduledTime,

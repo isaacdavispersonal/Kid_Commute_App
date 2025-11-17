@@ -260,6 +260,7 @@ export type Stop = typeof stops.$inferSelect;
 
 // Enriched route stop type (Stop + route-stop junction metadata)
 export type RouteStopWithMetadata = Stop & {
+  stopId: string;
   routeStopId: string;
   stopOrder: number;
   scheduledTime: string | null;
