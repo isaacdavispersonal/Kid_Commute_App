@@ -131,6 +131,7 @@ export const vehicles = pgTable("vehicles", {
   plateNumber: varchar("plate_number").notNull().unique(),
   capacity: integer("capacity").notNull(),
   status: vehicleStatusEnum("status").notNull().default("active"),
+  driverId: varchar("driver_id").references(() => users.id, { onDelete: "set null" }), // Optional driver assignment
   currentLat: decimal("current_lat", { precision: 10, scale: 7 }),
   currentLng: decimal("current_lng", { precision: 10, scale: 7 }),
   lastLocationUpdate: timestamp("last_location_update"),
@@ -620,11 +621,6 @@ export const driverAssignments = pgTable("driver_assignments", {
   routeId: varchar("route_id")
     .notNull()
     .references(() => routes.id, { onDelete: "cascade" }),
-  vehicleId: varchar("vehicle_id")
-    .notNull()
-    .references(() => vehicles.id, { onDelete: "cascade" }),
-  startTime: varchar("start_time").notNull(), // When the route starts (e.g., "07:00")
-  endTime: varchar("end_time").notNull(), // When the route ends (e.g., "08:30")
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1501,8 +1497,11 @@ export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
   }),
 }));
 
-export const vehiclesRelations = relations(vehicles, ({ many }) => ({
-  driverAssignments: many(driverAssignments),
+export const vehiclesRelations = relations(vehicles, ({ one, many }) => ({
+  driver: one(users, {
+    fields: [vehicles.driverId],
+    references: [users.id],
+  }),
   shifts: many(shifts),
   incidents: many(incidents),
   inspections: many(vehicleInspections),
@@ -1615,10 +1614,6 @@ export const driverAssignmentsRelations = relations(
     route: one(routes, {
       fields: [driverAssignments.routeId],
       references: [routes.id],
-    }),
-    vehicle: one(vehicles, {
-      fields: [driverAssignments.vehicleId],
-      references: [vehicles.id],
     }),
   })
 );

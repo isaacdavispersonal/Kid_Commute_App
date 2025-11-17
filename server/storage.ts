@@ -608,16 +608,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteVehicle(id: string): Promise<void> {
-    // Check if vehicle is assigned to any active driver assignments
-    const assignments = await db
-      .select()
-      .from(driverAssignments)
-      .where(eq(driverAssignments.vehicleId, id));
-    
-    if (assignments.length > 0) {
-      throw new ValidationError("Cannot delete vehicle that is assigned to drivers. Please remove all driver assignments first.");
-    }
-
     // Check if vehicle is used in any active shifts
     const activeShifts = await db
       .select()
@@ -1338,12 +1328,9 @@ export class DatabaseStorage implements IStorage {
     // Use SQL CURRENT_DATE for timezone-safe comparison
     const shiftUpdates: any = { updatedAt: new Date() };
     
-    // Map assignment updates to shift updates
+    // Map assignment updates to shift updates (only driver and route)
     if (updates.driverId !== undefined) shiftUpdates.driverId = updates.driverId;
     if (updates.routeId !== undefined) shiftUpdates.routeId = updates.routeId;
-    if (updates.vehicleId !== undefined) shiftUpdates.vehicleId = updates.vehicleId;
-    if (updates.startTime !== undefined) shiftUpdates.plannedStart = updates.startTime;
-    if (updates.endTime !== undefined) shiftUpdates.plannedEnd = updates.endTime;
     
     // Only update if there are actual changes to propagate
     if (Object.keys(shiftUpdates).length > 1) {

@@ -40,31 +40,45 @@ import {
 import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertVehicleSchema, type InsertVehicle } from "@shared/schema";
+import { insertVehicleSchema, type InsertVehicle, type User, type Vehicle } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
+
+// Extended schema to handle empty string -> null conversion for driverId
+const vehicleFormSchema = insertVehicleSchema.extend({
+  driverId: z.string().optional().transform(val => val === "" ? null : val || null),
+});
 
 export default function AdminVehicles() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const { data: vehicles, isLoading } = useQuery({
+  const { data: vehicles, isLoading } = useQuery<Vehicle[]>({
     queryKey: ["/api/admin/vehicles"],
   });
 
-  const form = useForm<InsertVehicle>({
-    resolver: zodResolver(insertVehicleSchema),
+  const { data: users } = useQuery<User[]>({
+    queryKey: ["/api/admin/users"],
+  });
+
+  // Filter users to only show drivers
+  const drivers = users?.filter(user => user.role === "driver") || [];
+
+  const form = useForm<z.infer<typeof vehicleFormSchema>>({
+    resolver: zodResolver(vehicleFormSchema),
     defaultValues: {
       name: "",
       plateNumber: "",
       capacity: 0,
       status: "active",
+      driverId: "",
     },
   });
 
   const createVehicleMutation = useMutation({
-    mutationFn: async (data: InsertVehicle) => {
+    mutationFn: async (data: z.infer<typeof vehicleFormSchema>) => {
       return await apiRequest("POST", "/api/admin/vehicles", data);
     },
     onSuccess: () => {
@@ -107,7 +121,7 @@ export default function AdminVehicles() {
     },
   });
 
-  const onSubmit = (data: InsertVehicle) => {
+  const onSubmit = (data: z.infer<typeof vehicleFormSchema>) => {
     createVehicleMutation.mutate(data);
   };
 
@@ -125,6 +139,16 @@ export default function AdminVehicles() {
     {
       header: "Plate Number",
       accessor: "plateNumber",
+    },
+    {
+      header: "Assigned Driver",
+      accessor: "driverId",
+      cell: (value: string | null, row: any) => {
+        if (!value) return <span className="text-muted-foreground">Unassigned</span>;
+        const driver = drivers.find(d => d.id === value);
+        if (!driver) return <span className="text-muted-foreground">Unknown</span>;
+        return <span>{driver.firstName} {driver.lastName}</span>;
+      },
     },
     {
       header: "Capacity",
@@ -248,6 +272,36 @@ export default function AdminVehicles() {
                         data-testid="input-vehicle-capacity"
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="driverId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assigned Driver</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value || ""}
+                      value={field.value || ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-vehicle-driver">
+                          <SelectValue placeholder="Select driver" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">Unassigned</SelectItem>
+                        {drivers.map((driver) => (
+                          <SelectItem key={driver.id} value={driver.id}>
+                            {driver.firstName} {driver.lastName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -2026,12 +2026,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req, res) => {
       try {
         const assignments = await storage.getAllDriverAssignments();
-        // Enrich with driver, route, and vehicle information
+        // Enrich with driver and route information
         const enrichedAssignments = await Promise.all(
           assignments.map(async (assignment) => {
             const driver = await storage.getUser(assignment.driverId);
             const route = await storage.getRoute(assignment.routeId);
-            const vehicle = await storage.getVehicle(assignment.vehicleId);
             
             return {
               ...assignment,
@@ -2040,8 +2039,6 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
                 : "Unknown",
               driverEmail: driver?.email || "",
               routeName: route?.name || "Unknown",
-              vehicleName: vehicle?.name || "Unknown",
-              vehiclePlate: vehicle?.plateNumber || "Unknown",
             };
           })
         );
@@ -2361,18 +2358,16 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req, res) => {
       try {
         const assignments = await storage.getAllDriverAssignments();
-        // Enrich with driver, route, and vehicle information
+        // Enrich with driver and route information
         const enrichedAssignments = await Promise.all(
           assignments.map(async (assignment) => {
             const driver = await storage.getUser(assignment.driverId);
             const route = await storage.getRoute(assignment.routeId);
-            const vehicle = await storage.getVehicle(assignment.vehicleId);
             
             return {
               ...assignment,
               driver: driver || null,
               route: route || null,
-              vehicle: vehicle || null,
             };
           })
         );
@@ -2604,6 +2599,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           daysOfWeek: z.array(z.number().min(0).max(6)).min(1, "At least one day required"),
+          vehicleId: z.string().min(1, "Vehicle ID is required"),
+          plannedStart: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
+          plannedEnd: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
         });
 
         const bulkData = bulkSchema.parse(req.body);
@@ -2661,9 +2659,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
                 date,
                 shiftType,
                 routeId: assignment.routeId,
-                vehicleId: assignment.vehicleId,
-                plannedStart: assignment.startTime,
-                plannedEnd: assignment.endTime,
+                vehicleId: bulkData.vehicleId,
+                plannedStart: bulkData.plannedStart,
+                plannedEnd: bulkData.plannedEnd,
                 status: "SCHEDULED" as const,
                 notes: assignment.notes,
               };
@@ -2703,6 +2701,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const schema = z.object({
           date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
           assignmentIds: z.array(z.string()).min(1, "At least one assignment required"),
+          vehicleId: z.string().min(1, "Vehicle ID is required"),
+          plannedStart: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
+          plannedEnd: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
         });
 
         const data = schema.parse(req.body);
@@ -2729,9 +2730,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             date: data.date,
             shiftType,
             routeId: assignment.routeId,
-            vehicleId: assignment.vehicleId,
-            plannedStart: assignment.startTime,
-            plannedEnd: assignment.endTime,
+            vehicleId: data.vehicleId,
+            plannedStart: data.plannedStart,
+            plannedEnd: data.plannedEnd,
             status: "SCHEDULED" as const,
             notes: assignment.notes,
           };
@@ -2768,6 +2769,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const schema = z.object({
           dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")).min(1),
           driverIds: z.array(z.string()).min(1),
+          vehicleId: z.string().min(1, "Vehicle ID is required"),
+          plannedStart: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
+          plannedEnd: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
         });
 
         const data = schema.parse(req.body);
@@ -2793,9 +2797,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
                 date,
                 shiftType,
                 routeId: assignment.routeId,
-                vehicleId: assignment.vehicleId,
-                plannedStart: assignment.startTime,
-                plannedEnd: assignment.endTime,
+                vehicleId: data.vehicleId,
+                plannedStart: data.plannedStart,
+                plannedEnd: data.plannedEnd,
                 status: "SCHEDULED" as const,
                 notes: assignment.notes,
               };
@@ -3957,18 +3961,15 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           a => a.driverId === driverId && a.isActive
         );
 
-        // Enrich with route and vehicle information
+        // Enrich with route information
         const enrichedAssignments = await Promise.all(
           driverAssignments.map(async (assignment) => {
             const route = await storage.getRoute(assignment.routeId);
-            const vehicle = await storage.getVehicle(assignment.vehicleId);
             const stops = route ? await storage.getRouteStops(route.id) : [];
             
             return {
               ...assignment,
               routeName: route?.name || "Unknown",
-              vehicleName: vehicle?.name || "Unknown",
-              vehiclePlate: vehicle?.plateNumber || "Unknown",
               stops,
             };
           })

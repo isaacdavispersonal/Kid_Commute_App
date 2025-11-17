@@ -59,17 +59,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, CalendarDays, Clock, User, Route, Car, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, User, Route, ChevronRight } from "lucide-react";
 
 interface EnrichedDriverAssignment {
   id: string;
   driverId: string;
   routeId: string;
-  vehicleId: string;
-  startTime: string;
-  endTime: string;
   notes: string | null;
   driver: {
     id: string;
@@ -81,11 +78,6 @@ interface EnrichedDriverAssignment {
     id: string;
     name: string;
     routeType: "MORNING" | "AFTERNOON" | "EXTRA" | null;
-  } | null;
-  vehicle: {
-    id: string;
-    name: string;
-    plateNumber: string;
   } | null;
 }
 
@@ -120,12 +112,6 @@ interface RouteType {
   name: string;
 }
 
-interface Vehicle {
-  id: string;
-  name: string;
-  plateNumber: string;
-}
-
 const formSchema = insertDriverAssignmentSchema;
 
 type FormData = z.infer<typeof formSchema>;
@@ -141,9 +127,6 @@ export default function AdminDriverAssignments() {
     defaultValues: {
       driverId: "",
       routeId: "",
-      vehicleId: "",
-      startTime: "",
-      endTime: "",
       notes: "",
     },
   });
@@ -160,10 +143,6 @@ export default function AdminDriverAssignments() {
 
   const { data: routes } = useQuery<RouteType[]>({
     queryKey: ["/api/admin/routes"],
-  });
-
-  const { data: vehicles } = useQuery<Vehicle[]>({
-    queryKey: ["/api/admin/vehicles"],
   });
 
   const createMutation = useMutation({
@@ -239,9 +218,6 @@ export default function AdminDriverAssignments() {
       form.reset({
         driverId: assignment.driverId,
         routeId: assignment.routeId,
-        vehicleId: assignment.vehicleId,
-        startTime: assignment.startTime,
-        endTime: assignment.endTime,
         notes: assignment.notes || "",
       });
     } else {
@@ -249,9 +225,6 @@ export default function AdminDriverAssignments() {
       form.reset({
         driverId: "",
         routeId: "",
-        vehicleId: "",
-        startTime: "",
-        endTime: "",
         notes: "",
       });
     }
@@ -306,7 +279,7 @@ export default function AdminDriverAssignments() {
         <div>
           <h1 className="text-3xl font-bold">Driver Assignments</h1>
           <p className="text-muted-foreground mt-1">
-            Set up driver assignments to routes and vehicles for scheduling
+            Assign drivers to routes for scheduling
           </p>
         </div>
         <Button onClick={() => handleOpenDialog()} data-testid="button-create-assignment">
@@ -357,8 +330,6 @@ export default function AdminDriverAssignments() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Route</TableHead>
-                              <TableHead>Vehicle</TableHead>
-                              <TableHead>Schedule</TableHead>
                               <TableHead>Notes</TableHead>
                               <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -377,25 +348,6 @@ export default function AdminDriverAssignments() {
                                         {assignment.route.routeType === 'MORNING' ? 'Morning' : assignment.route.routeType === 'AFTERNOON' ? 'Afternoon' : 'Extra'}
                                       </span>
                                     )}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <Car className="h-4 w-4 text-muted-foreground" />
-                                    <div>
-                                      <div>{assignment.vehicle?.name || "Unknown Vehicle"}</div>
-                                      <div className="text-sm text-muted-foreground">
-                                        {assignment.vehicle?.plateNumber || "N/A"}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-sm">
-                                      {assignment.startTime} - {assignment.endTime}
-                                    </span>
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -446,7 +398,7 @@ export default function AdminDriverAssignments() {
             <DialogDescription>
               {editingAssignment
                 ? "Update the driver assignment details"
-                : "Assign a driver to a route with a vehicle and schedule"}
+                : "Assign a driver to a route"}
             </DialogDescription>
           </DialogHeader>
 
@@ -507,75 +459,12 @@ export default function AdminDriverAssignments() {
 
               <FormField
                 control={form.control}
-                name="vehicleId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vehicle</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-vehicle">
-                          <SelectValue placeholder="Select a vehicle" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {vehicles?.map((vehicle) => (
-                          <SelectItem key={vehicle.id} value={vehicle.id}>
-                            {vehicle.name} - {vehicle.plateNumber}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="startTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start Time</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="time"
-                          {...field}
-                          data-testid="input-start-time"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="endTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End Time</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="time"
-                          {...field}
-                          data-testid="input-end-time"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
                 name="notes"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Notes (Optional)</FormLabel>
                     <FormControl>
-                      <Input
+                      <Textarea
                         placeholder="Add any notes about this assignment"
                         {...field}
                         value={field.value || ""}
