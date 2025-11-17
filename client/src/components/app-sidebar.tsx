@@ -61,11 +61,6 @@ const adminMenuSections = [
         url: "/admin/vehicles",
         icon: Car,
       },
-      {
-        title: "Data Import",
-        url: "/admin/data-import",
-        icon: Upload,
-      },
     ],
   },
   {
