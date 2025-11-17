@@ -191,7 +191,14 @@ export default function AdminVehicles() {
         if (!value) return <span className="text-muted-foreground">Unassigned</span>;
         const driver = drivers.find(d => d.id === value);
         if (!driver) return <span className="text-muted-foreground">Unknown</span>;
-        return <span>{driver.firstName} {driver.lastName}</span>;
+        
+        const firstName = driver.firstName?.trim();
+        const lastName = driver.lastName?.trim();
+        const displayName = firstName && lastName 
+          ? `${firstName} ${lastName}`
+          : firstName || lastName || driver.email;
+        
+        return <span>{displayName}</span>;
       },
     },
     {
