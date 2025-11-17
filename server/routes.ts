@@ -1423,6 +1423,42 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Update a vehicle
+  app.put(
+    "/api/admin/vehicles/:id",
+    isAuthenticated,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { insertVehicleSchema } = await import("@shared/schema");
+        
+        // Validate request body
+        const result = insertVehicleSchema.partial().safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid vehicle data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const updatedVehicle = await storage.updateVehicle(req.params.id, result.data);
+        res.json(updatedVehicle);
+      } catch (error: any) {
+        console.error("Error updating vehicle:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        if (error.code === '23505') { // Unique constraint violation
+          return res.status(400).json({ message: "A vehicle with this plate number already exists" });
+        }
+        
+        res.status(500).json({ message: "Failed to update vehicle" });
+      }
+    }
+  );
+
   // Delete a vehicle
   app.delete(
     "/api/admin/vehicles/:id",

@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -45,13 +45,15 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
-// Extended schema to handle empty string -> null conversion for driverId
+// Extended schema to handle empty string -> null conversion for driverId and samsaraVehicleId
 const vehicleFormSchema = insertVehicleSchema.extend({
   driverId: z.string().optional().transform(val => val === "" ? null : val || null),
+  samsaraVehicleId: z.string().optional().transform(val => val === "" ? null : val || null),
 });
 
 export default function AdminVehicles() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -74,6 +76,7 @@ export default function AdminVehicles() {
       capacity: 0,
       status: "active",
       driverId: "",
+      samsaraVehicleId: "",
     },
   });
 
@@ -94,6 +97,30 @@ export default function AdminVehicles() {
       toast({
         title: "Error",
         description: error.message || "Failed to add vehicle",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateVehicleMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof vehicleFormSchema>) => {
+      if (!editingVehicle) throw new Error("No vehicle selected for editing");
+      return await apiRequest("PUT", `/api/admin/vehicles/${editingVehicle.id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/vehicles"] });
+      toast({
+        title: "Success",
+        description: "Vehicle updated successfully",
+      });
+      setIsDialogOpen(false);
+      setEditingVehicle(null);
+      form.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update vehicle",
         variant: "destructive",
       });
     },
@@ -122,7 +149,24 @@ export default function AdminVehicles() {
   });
 
   const onSubmit = (data: z.infer<typeof vehicleFormSchema>) => {
-    createVehicleMutation.mutate(data);
+    if (editingVehicle) {
+      updateVehicleMutation.mutate(data);
+    } else {
+      createVehicleMutation.mutate(data);
+    }
+  };
+
+  const handleEditVehicle = (vehicle: Vehicle) => {
+    setEditingVehicle(vehicle);
+    form.reset({
+      name: vehicle.name,
+      plateNumber: vehicle.plateNumber,
+      capacity: vehicle.capacity,
+      status: vehicle.status,
+      driverId: vehicle.driverId || "",
+      samsaraVehicleId: vehicle.samsaraVehicleId || "",
+    });
+    setIsDialogOpen(true);
   };
 
   const handleDeleteVehicle = () => {
@@ -172,14 +216,24 @@ export default function AdminVehicles() {
       header: "Actions",
       accessor: "id",
       cell: (value: string, row: any) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setVehicleToDelete(value)}
-          data-testid={`button-delete-vehicle-${value}`}
-        >
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleEditVehicle(row)}
+            data-testid={`button-edit-vehicle-${value}`}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setVehicleToDelete(value)}
+            data-testid={`button-delete-vehicle-${value}`}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -209,12 +263,20 @@ export default function AdminVehicles() {
         emptyMessage="No vehicles found. Add your first vehicle to get started."
       />
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) {
+          setEditingVehicle(null);
+          form.reset();
+        }
+      }}>
         <DialogContent data-testid="dialog-add-vehicle">
           <DialogHeader>
-            <DialogTitle>Add New Vehicle</DialogTitle>
+            <DialogTitle>{editingVehicle ? "Edit Vehicle" : "Add New Vehicle"}</DialogTitle>
             <DialogDescription>
-              Enter the details of the new vehicle to add to your fleet.
+              {editingVehicle 
+                ? "Update the vehicle details below." 
+                : "Enter the details of the new vehicle to add to your fleet."}
             </DialogDescription>
           </DialogHeader>
 
@@ -333,12 +395,32 @@ export default function AdminVehicles() {
                 )}
               />
 
+              <FormField
+                control={form.control}
+                name="samsaraVehicleId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Samsara Vehicle ID</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value || ""}
+                        placeholder="Optional - Samsara integration ID"
+                        data-testid="input-samsara-vehicle-id"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <DialogFooter>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {
                     setIsDialogOpen(false);
+                    setEditingVehicle(null);
                     form.reset();
                   }}
                   data-testid="button-cancel-vehicle"
@@ -347,10 +429,12 @@ export default function AdminVehicles() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={createVehicleMutation.isPending}
+                  disabled={createVehicleMutation.isPending || updateVehicleMutation.isPending}
                   data-testid="button-submit-vehicle"
                 >
-                  {createVehicleMutation.isPending ? "Adding..." : "Add Vehicle"}
+                  {editingVehicle 
+                    ? (updateVehicleMutation.isPending ? "Updating..." : "Update Vehicle")
+                    : (createVehicleMutation.isPending ? "Adding..." : "Add Vehicle")}
                 </Button>
               </DialogFooter>
             </form>
