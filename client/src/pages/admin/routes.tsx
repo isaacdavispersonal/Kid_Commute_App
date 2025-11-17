@@ -145,7 +145,6 @@ export default function AdminRoutes() {
     defaultValues: {
       name: "",
       description: "",
-      color: "gray",
     },
   });
 
@@ -154,7 +153,6 @@ export default function AdminRoutes() {
     defaultValues: {
       name: "",
       description: "",
-      color: "gray",
     },
   });
 
@@ -508,7 +506,6 @@ export default function AdminRoutes() {
     editGroupForm.reset({
       name: group.name,
       description: group.description || "",
-      color: group.color,
     });
     setIsEditGroupDialogOpen(true);
   };
@@ -811,41 +808,6 @@ export default function AdminRoutes() {
                               <SelectItem value="MORNING">Morning Route</SelectItem>
                               <SelectItem value="AFTERNOON">Afternoon Route</SelectItem>
                               <SelectItem value="EXTRA">Extra Route</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={createRouteForm.control}
-                      name="color"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Color Label (Optional)</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value || undefined}
-                          >
-                            <FormControl>
-                              <SelectTrigger data-testid="select-route-color">
-                                <SelectValue placeholder="Select color" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="tan">Tan</SelectItem>
-                              <SelectItem value="red">Red</SelectItem>
-                              <SelectItem value="blue">Blue</SelectItem>
-                              <SelectItem value="orange">Orange</SelectItem>
-                              <SelectItem value="yellow">Yellow</SelectItem>
-                              <SelectItem value="purple">Purple</SelectItem>
-                              <SelectItem value="green">Green</SelectItem>
-                              <SelectItem value="gray">Gray</SelectItem>
-                              <SelectItem value="teal">Teal</SelectItem>
-                              <SelectItem value="gold">Gold</SelectItem>
-                              <SelectItem value="pink">Pink</SelectItem>
-                              <SelectItem value="maroon">Maroon</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -1298,41 +1260,6 @@ export default function AdminRoutes() {
                 )}
               />
 
-              <FormField
-                control={createGroupForm.control}
-                name="color"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Group Color</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || undefined}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-group-color">
-                          <SelectValue placeholder="Select color" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="tan">Tan</SelectItem>
-                        <SelectItem value="red">Red</SelectItem>
-                        <SelectItem value="blue">Blue</SelectItem>
-                        <SelectItem value="orange">Orange</SelectItem>
-                        <SelectItem value="yellow">Yellow</SelectItem>
-                        <SelectItem value="purple">Purple</SelectItem>
-                        <SelectItem value="green">Green</SelectItem>
-                        <SelectItem value="gray">Gray</SelectItem>
-                        <SelectItem value="teal">Teal</SelectItem>
-                        <SelectItem value="gold">Gold</SelectItem>
-                        <SelectItem value="pink">Pink</SelectItem>
-                        <SelectItem value="maroon">Maroon</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <div className="flex justify-end gap-2 pt-4">
                 <Button
                   type="button"
@@ -1422,41 +1349,6 @@ export default function AdminRoutes() {
                         <SelectItem value="MORNING">Morning Route</SelectItem>
                         <SelectItem value="AFTERNOON">Afternoon Route</SelectItem>
                         <SelectItem value="EXTRA">Extra Route</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={editRouteForm.control}
-                name="color"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Color Label (Optional)</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || undefined}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-edit-route-color">
-                          <SelectValue placeholder="Select color" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="tan">Tan</SelectItem>
-                        <SelectItem value="red">Red</SelectItem>
-                        <SelectItem value="blue">Blue</SelectItem>
-                        <SelectItem value="orange">Orange</SelectItem>
-                        <SelectItem value="yellow">Yellow</SelectItem>
-                        <SelectItem value="purple">Purple</SelectItem>
-                        <SelectItem value="green">Green</SelectItem>
-                        <SelectItem value="gray">Gray</SelectItem>
-                        <SelectItem value="teal">Teal</SelectItem>
-                        <SelectItem value="gold">Gold</SelectItem>
-                        <SelectItem value="pink">Pink</SelectItem>
-                        <SelectItem value="maroon">Maroon</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -1806,41 +1698,6 @@ export default function AdminRoutes() {
                         value={field.value || ""}
                       />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={editGroupForm.control}
-                name="color"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Group Color</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || undefined}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-edit-group-color">
-                          <SelectValue placeholder="Select color" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="tan">Tan</SelectItem>
-                        <SelectItem value="red">Red</SelectItem>
-                        <SelectItem value="blue">Blue</SelectItem>
-                        <SelectItem value="orange">Orange</SelectItem>
-                        <SelectItem value="yellow">Yellow</SelectItem>
-                        <SelectItem value="purple">Purple</SelectItem>
-                        <SelectItem value="green">Green</SelectItem>
-                        <SelectItem value="gray">Gray</SelectItem>
-                        <SelectItem value="teal">Teal</SelectItem>
-                        <SelectItem value="gold">Gold</SelectItem>
-                        <SelectItem value="pink">Pink</SelectItem>
-                        <SelectItem value="maroon">Maroon</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
