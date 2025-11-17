@@ -50,6 +50,9 @@ import {
   Calendar,
   Search,
   Trash2,
+  Sunrise,
+  Sunset,
+  Clock,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -70,6 +73,7 @@ interface EnrichedStudent {
     assignmentId: string;
     routeId: string;
     routeName: string;
+    routeType: "MORNING" | "AFTERNOON" | "EXTRA" | null;
     pickupStopId: string | null;
     dropoffStopId: string | null;
   }>;
@@ -83,12 +87,45 @@ interface EnrichedStudent {
 interface Route {
   id: string;
   name: string;
+  routeType?: "MORNING" | "AFTERNOON" | "EXTRA" | null;
 }
 
 interface Stop {
   id: string;
   name: string;
   scheduledTime: string;
+}
+
+// Helper function to render route type badge
+function RouteTypeBadge({ routeType }: { routeType: "MORNING" | "AFTERNOON" | "EXTRA" | null }) {
+  if (!routeType) return null;
+  
+  const config = {
+    MORNING: {
+      icon: Sunrise,
+      label: "Morning",
+      className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    },
+    AFTERNOON: {
+      icon: Sunset,
+      label: "Afternoon",
+      className: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+    },
+    EXTRA: {
+      icon: Clock,
+      label: "Extra",
+      className: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+    },
+  };
+  
+  const { icon: Icon, label, className } = config[routeType];
+  
+  return (
+    <Badge variant="outline" className={className} data-testid={`badge-route-type-${routeType.toLowerCase()}`}>
+      <Icon className="h-3 w-3 mr-1" />
+      {label}
+    </Badge>
+  );
 }
 
 // Form schema for create student - uses insertStudentSchema but makes guardianPhones required
@@ -662,11 +699,12 @@ export default function AdminStudentsPage() {
                       {student.assignedRoutes && student.assignedRoutes.length > 0 ? (
                         <>
                           <p className="text-sm font-medium">Assigned Routes ({student.assignedRoutes.length})</p>
-                          <div className="space-y-1 mt-1">
+                          <div className="space-y-2 mt-2">
                             {student.assignedRoutes.map((route) => (
-                              <p key={route.assignmentId} className="text-sm text-muted-foreground truncate">
-                                {route.routeName}
-                              </p>
+                              <div key={route.assignmentId} className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm text-muted-foreground">{route.routeName}</span>
+                                <RouteTypeBadge routeType={route.routeType} />
+                              </div>
                             ))}
                           </div>
                         </>
@@ -1066,14 +1104,18 @@ export default function AdminStudentsPage() {
                   {studentRouteAssignments.map((assignment: any) => {
                     const route = routes?.find(r => r.id === assignment.routeId);
                     return (
-                      <div key={assignment.id} className="flex items-center justify-between p-2 border rounded-md">
-                        <span>{route?.name || "Unknown Route"}</span>
+                      <div key={assignment.id} className="flex items-center justify-between p-2 border rounded-md gap-2">
+                        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                          <span className="truncate">{route?.name || "Unknown Route"}</span>
+                          <RouteTypeBadge routeType={route?.routeType || null} />
+                        </div>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoveRoute(assignment.id)}
                           disabled={removeRouteAssignmentMutation.isPending}
                           data-testid={`button-remove-route-${assignment.id}`}
+                          className="flex-shrink-0"
                         >
                           <XCircle className="h-4 w-4" />
                         </Button>
@@ -1095,7 +1137,16 @@ export default function AdminStudentsPage() {
                   <SelectContent>
                     {routes?.map((route) => (
                       <SelectItem key={route.id} value={route.id}>
-                        {route.name}
+                        <div className="flex items-center gap-2">
+                          <span>{route.name}</span>
+                          {route.routeType && (
+                            <span className="text-xs opacity-70">
+                              {route.routeType === "MORNING" && "☀️ Morning"}
+                              {route.routeType === "AFTERNOON" && "🌅 Afternoon"}
+                              {route.routeType === "EXTRA" && "🕐 Extra"}
+                            </span>
+                          )}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>

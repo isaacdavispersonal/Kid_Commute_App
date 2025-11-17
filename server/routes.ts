@@ -2137,6 +2137,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
                   assignmentId: assignment.id,
                   routeId: assignment.routeId,
                   routeName: route?.name || "Unknown",
+                  routeType: route?.routeType || null,
                   pickupStopId: assignment.pickupStopId,
                   dropoffStopId: assignment.dropoffStopId,
                 };
