@@ -66,6 +66,13 @@ interface EnrichedStudent {
   dropoffStopId: string | null;
   pickupStop: any;
   dropoffStop: any;
+  assignedRoutes?: Array<{
+    assignmentId: string;
+    routeId: string;
+    routeName: string;
+    pickupStopId: string | null;
+    dropoffStopId: string | null;
+  }>;
   attendance?: {
     status: "riding" | "absent";
     markedByUserId: string;
@@ -527,9 +534,10 @@ export default function AdminStudentsPage() {
   };
 
   const filteredStudents = students?.filter((student) => {
-    // Apply assignment filter
-    if (filter === "assigned" && !student.assignedRouteId) return false;
-    if (filter === "unassigned" && student.assignedRouteId) return false;
+    // Apply assignment filter - check both legacy and new multi-route assignments
+    const hasAssignments = student.assignedRouteId || (student.assignedRoutes && student.assignedRoutes.length > 0);
+    if (filter === "assigned" && !hasAssignments) return false;
+    if (filter === "unassigned" && hasAssignments) return false;
     
     // Apply search filter
     if (searchQuery) {
@@ -544,7 +552,7 @@ export default function AdminStudentsPage() {
     return true;
   });
 
-  const unassignedCount = students?.filter((s) => !s.assignedRouteId).length || 0;
+  const unassignedCount = students?.filter((s) => !s.assignedRouteId && (!s.assignedRoutes || s.assignedRoutes.length === 0)).length || 0;
 
   if (studentsLoading) {
     return <AdminStudentsSkeleton />;
@@ -598,7 +606,7 @@ export default function AdminStudentsPage() {
           onClick={() => setFilter("assigned")}
           data-testid="filter-assigned"
         >
-          Assigned ({students?.filter((s) => s.assignedRouteId).length || 0})
+          Assigned ({students?.filter((s) => s.assignedRouteId || (s.assignedRoutes && s.assignedRoutes.length > 0)).length || 0})
         </Button>
         <Button
           variant={filter === "unassigned" ? "default" : "outline"}
@@ -631,7 +639,7 @@ export default function AdminStudentsPage() {
                   </div>
                 </div>
                 <div className="flex-shrink-0">
-                  {student.assignedRouteId ? (
+                  {(student.assignedRouteId || (student.assignedRoutes && student.assignedRoutes.length > 0)) ? (
                     <Badge className="bg-success/10 text-success border-success/20" data-testid={`badge-assigned-${student.id}`}>
                       <CheckCircle className="h-3 w-3 mr-1" />
                       Assigned
@@ -646,15 +654,30 @@ export default function AdminStudentsPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {student.assignedRouteId ? (
+              {((student.assignedRoutes && student.assignedRoutes.length > 0) || student.assignedRouteId) ? (
                 <>
                   <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
                     <RouteIcon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">Route</p>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {student.routeName}
-                      </p>
+                      {student.assignedRoutes && student.assignedRoutes.length > 0 ? (
+                        <>
+                          <p className="text-sm font-medium">Assigned Routes ({student.assignedRoutes.length})</p>
+                          <div className="space-y-1 mt-1">
+                            {student.assignedRoutes.map((route) => (
+                              <p key={route.assignmentId} className="text-sm text-muted-foreground truncate">
+                                {route.routeName}
+                              </p>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium">Route</p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {student.routeName}
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
 

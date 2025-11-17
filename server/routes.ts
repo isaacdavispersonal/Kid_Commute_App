@@ -2128,6 +2128,22 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               }
             }
             
+            // Get all route assignments from junction table
+            const routeAssignments = await storage.getStudentRouteAssignments(student.id);
+            const assignedRoutes = await Promise.all(
+              routeAssignments.map(async (assignment) => {
+                const route = await storage.getRoute(assignment.routeId);
+                return {
+                  assignmentId: assignment.id,
+                  routeId: assignment.routeId,
+                  routeName: route?.name || "Unknown",
+                  pickupStopId: assignment.pickupStopId,
+                  dropoffStopId: assignment.dropoffStopId,
+                };
+              })
+            );
+
+            // Legacy single-route support for backwards compatibility
             let routeName = null;
             let pickupStop = null;
             let dropoffStop = null;
@@ -2155,6 +2171,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               routeName,
               pickupStop,
               dropoffStop,
+              assignedRoutes, // New multi-route assignments
               attendance,
             };
           })
