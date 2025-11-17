@@ -103,12 +103,12 @@ function RouteTypeBadge({ routeType }: { routeType: "MORNING" | "AFTERNOON" | "E
   const config = {
     MORNING: {
       icon: Sunrise,
-      label: "Morning",
+      label: "AM",
       className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
     },
     AFTERNOON: {
       icon: Sunset,
-      label: "Afternoon",
+      label: "PM",
       className: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
     },
     EXTRA: {
@@ -1141,8 +1141,8 @@ export default function AdminStudentsPage() {
                           <span>{route.name}</span>
                           {route.routeType && (
                             <span className="text-xs opacity-70">
-                              {route.routeType === "MORNING" && "☀️ Morning"}
-                              {route.routeType === "AFTERNOON" && "🌅 Afternoon"}
+                              {route.routeType === "MORNING" && "☀️ AM"}
+                              {route.routeType === "AFTERNOON" && "🌅 PM"}
                               {route.routeType === "EXTRA" && "🕐 Extra"}
                             </span>
                           )}
