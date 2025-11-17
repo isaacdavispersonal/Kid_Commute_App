@@ -45,9 +45,9 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
-// Extended schema to handle empty string -> null conversion for driverId and samsaraVehicleId
+// Extended schema to handle "UNASSIGNED" -> null conversion for driverId and samsaraVehicleId
 const vehicleFormSchema = insertVehicleSchema.extend({
-  driverId: z.string().optional().transform(val => val === "" ? null : val || null),
+  driverId: z.string().optional().transform(val => val === "UNASSIGNED" || val === "" ? null : val || null),
   samsaraVehicleId: z.string().optional().transform(val => val === "" ? null : val || null),
 });
 
@@ -75,7 +75,7 @@ export default function AdminVehicles() {
       plateNumber: "",
       capacity: 0,
       status: "active",
-      driverId: "",
+      driverId: "UNASSIGNED",
       samsaraVehicleId: "",
     },
   });
@@ -163,7 +163,7 @@ export default function AdminVehicles() {
       plateNumber: vehicle.plateNumber,
       capacity: vehicle.capacity,
       status: vehicle.status,
-      driverId: vehicle.driverId || "",
+      driverId: vehicle.driverId || "UNASSIGNED",
       samsaraVehicleId: vehicle.samsaraVehicleId || "",
     });
     setIsDialogOpen(true);
@@ -347,8 +347,8 @@ export default function AdminVehicles() {
                     <FormLabel>Assigned Driver</FormLabel>
                     <Select
                       onValueChange={field.onChange}
-                      defaultValue={field.value || ""}
-                      value={field.value || ""}
+                      defaultValue={field.value || "UNASSIGNED"}
+                      value={field.value || "UNASSIGNED"}
                     >
                       <FormControl>
                         <SelectTrigger data-testid="select-vehicle-driver">
@@ -356,7 +356,7 @@ export default function AdminVehicles() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Unassigned</SelectItem>
+                        <SelectItem value="UNASSIGNED">Unassigned</SelectItem>
                         {drivers.map((driver) => (
                           <SelectItem key={driver.id} value={driver.id}>
                             {driver.firstName} {driver.lastName}
