@@ -4052,37 +4052,24 @@ export class DatabaseStorage implements IStorage {
       driverData.shiftIds.push(shift.id);
     }
 
-    // 5. Calculate overtime (California-style with double-time support)
+    // 5. Calculate overtime (Arizona/federal rules: weekly OT only)
     const results: PayrollCalculationResult[] = [];
     for (const [driverId, data] of Array.from(payrollMap.entries())) {
       let regularHours = 0;
       let overtimeHours = 0;
-      let doubleTimeHours = 0;
+      let doubleTimeHours = 0; // Always 0 for federal rules, kept for data structure compatibility
 
       if (options?.includeOvertime) {
-        // California-style overtime: Layer daily and weekly overtime
-        // Step 1: Calculate daily breakdowns (0-8 regular, 8-12 overtime, >12 double-time)
-        const dailyHours = dailyHoursMap.get(driverId);
-        if (dailyHours) {
-          for (const [date, hours] of Array.from(dailyHours.entries())) {
-            if (hours <= 8) {
-              regularHours += hours;
-            } else if (hours <= 12) {
-              regularHours += 8;
-              overtimeHours += (hours - 8);
-            } else {
-              regularHours += 8;
-              overtimeHours += 4; // Hours 8-12
-              doubleTimeHours += (hours - 12);
-            }
-          }
-        }
-
-        // Step 2: Apply weekly threshold (if total regular hours > 40, move excess to overtime)
-        if (regularHours > 40) {
-          const weeklyOT = regularHours - 40;
-          overtimeHours += weeklyOT;
+        // Federal/Arizona overtime: Simple weekly threshold
+        // Hours over 40 per week = overtime at 1.5x
+        const totalHours = data.totalHours;
+        
+        if (totalHours <= 40) {
+          regularHours = totalHours;
+          overtimeHours = 0;
+        } else {
           regularHours = 40;
+          overtimeHours = totalHours - 40;
         }
       } else {
         // No overtime calculation requested - all hours are regular
