@@ -194,7 +194,7 @@ export const routeGroups = pgTable("route_groups", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   description: text("description"),
-  color: routeColorEnum("color").notNull().default("gray"), // Default color
+  color: routeColorEnum("color"), // Optional visual color label
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

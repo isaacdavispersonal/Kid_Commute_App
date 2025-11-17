@@ -4,10 +4,9 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertRouteSchema, insertStopSchema, insertRouteStopSchema, insertRouteGroupSchema, type InsertRoute, type InsertStop, type InsertRouteStop, type InsertRouteGroup, type Stop, type RouteStop, type RouteStopWithMetadata, type RouteGroup, type RouteColor } from "@shared/schema";
+import { insertRouteSchema, insertStopSchema, insertRouteStopSchema, insertRouteGroupSchema, type InsertRoute, type InsertStop, type InsertRouteStop, type InsertRouteGroup, type Stop, type RouteStop, type RouteStopWithMetadata, type RouteGroup } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RouteColorBadge } from "@/components/route-color-badge";
 import {
   Dialog,
   DialogContent,
@@ -55,7 +54,6 @@ interface RouteWithStopCount {
   name: string;
   description: string | null;
   routeType: "MORNING" | "AFTERNOON" | "EXTRA" | null;
-  color: RouteColor | null;
   groupId: string | null;
   isActive: boolean;
   stopCount: number;
@@ -572,8 +570,8 @@ export default function AdminRoutes() {
     {
       header: "Route Name",
       accessor: "name",
-      cell: (_value: string, row: RouteWithStopCount) => (
-        <RouteColorBadge routeName={row.name} color={row.color} />
+      cell: (value: string) => (
+        <span className="font-medium">{value}</span>
       ),
     },
     {
@@ -596,11 +594,11 @@ export default function AdminRoutes() {
     {
       header: "Group",
       accessor: "groupId",
-      cell: (value: string | null, row: RouteWithStopCount) => {
+      cell: (value: string | null) => {
         if (!value) return "—";
         const group = routeGroups?.find(g => g.id === value);
         if (!group) return "—";
-        return <RouteColorBadge routeName={group.name} color={group.color} />;
+        return <span className="font-medium">{group.name}</span>;
       },
     },
     {
@@ -861,7 +859,7 @@ export default function AdminRoutes() {
                         <div className="flex items-center justify-between gap-4 p-4 cursor-pointer hover-elevate" data-testid={`group-${group.id}`}>
                           <div className="flex items-center gap-3">
                             <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-                            <RouteColorBadge routeName={group.name} color={group.color} />
+                            <span className="font-medium">{group.name}</span>
                             <Badge variant="secondary">{groupRoutes.length} {groupRoutes.length === 1 ? 'route' : 'routes'}</Badge>
                           </div>
                           <div className="flex items-center gap-2">
@@ -990,10 +988,7 @@ export default function AdminRoutes() {
                           <Card key={route.id}>
                             <CardContent className="flex items-center justify-between p-4">
                               <div>
-                                <div className="flex items-center gap-2">
-                                  {route.color && <RouteColorBadge routeName={route.name} color={route.color} />}
-                                  {!route.color && <p className="font-medium">{route.name}</p>}
-                                </div>
+                                <p className="font-medium">{route.name}</p>
                                 {route.description && (
                                   <p className="text-sm text-muted-foreground">{route.description}</p>
                                 )}

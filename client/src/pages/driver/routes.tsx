@@ -6,7 +6,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Route as RouteIcon, MapPin, Clock, Users, CheckCircle2, XCircle, Circle } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
-import { RouteColorBadge } from "@/components/route-color-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -109,13 +108,7 @@ export default function DriverRoutes() {
           <CardContent className="space-y-6">
             <div className="flex items-start justify-between gap-2 flex-wrap">
               <div>
-                <div className="mb-1">
-                  <RouteColorBadge 
-                    routeName={todayRoute.routeName} 
-                    color={todayRoute.routeColor}
-                    groupColor={todayRoute.groupColor}
-                  />
-                </div>
+                <h3 className="text-lg font-semibold mb-1">{todayRoute.routeName}</h3>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Clock className="h-4 w-4" />
