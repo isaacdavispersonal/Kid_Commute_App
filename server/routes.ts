@@ -2895,6 +2895,18 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             shiftType = route.routeType as "MORNING" | "AFTERNOON" | "EXTRA";
           }
           
+          // Provide default times based on route type
+          let plannedStart = "07:00";
+          let plannedEnd = "09:00";
+          
+          if (shiftType === "AFTERNOON") {
+            plannedStart = "14:00";
+            plannedEnd = "16:00";
+          } else if (shiftType === "EXTRA") {
+            plannedStart = "10:00";
+            plannedEnd = "12:00";
+          }
+          
           // Use vehicle from the assignment
           const shiftData = {
             driverId: assignment.driverId,
@@ -2903,8 +2915,8 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             shiftType,
             routeId: assignment.routeId,
             vehicleId: assignment.vehicleId,
-            plannedStart: null,
-            plannedEnd: null,
+            plannedStart,
+            plannedEnd,
             status: "SCHEDULED" as const,
             notes: assignment.notes,
           };
