@@ -2878,16 +2878,12 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             continue;
           }
           
-          // Validate required fields - must have vehicle and times
-          if (!assignment.vehicleId || !assignment.startTime || !assignment.endTime) {
-            console.warn(`Assignment ${assignmentId} missing required data:`, {
-              vehicleId: assignment.vehicleId,
-              startTime: assignment.startTime,
-              endTime: assignment.endTime
-            });
+          // Validate required fields - must have vehicle
+          if (!assignment.vehicleId) {
+            console.warn(`Assignment ${assignmentId} missing required vehicle`);
             skipped.push({ 
               assignmentId, 
-              reason: "Missing vehicle or time information" 
+              reason: "Missing vehicle information" 
             });
             continue;
           }
@@ -2899,7 +2895,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             shiftType = route.routeType as "MORNING" | "AFTERNOON" | "EXTRA";
           }
           
-          // Use vehicle and times from the assignment
+          // Use vehicle from the assignment
           const shiftData = {
             driverId: assignment.driverId,
             driverAssignmentId: assignmentId,
@@ -2907,8 +2903,8 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             shiftType,
             routeId: assignment.routeId,
             vehicleId: assignment.vehicleId,
-            plannedStart: assignment.startTime,
-            plannedEnd: assignment.endTime,
+            plannedStart: null,
+            plannedEnd: null,
             status: "SCHEDULED" as const,
             notes: assignment.notes,
           };

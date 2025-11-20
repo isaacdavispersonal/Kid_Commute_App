@@ -357,7 +357,7 @@ export default function AdminDriverAssignments() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Route</TableHead>
-                              <TableHead>Vehicle & Schedule</TableHead>
+                              <TableHead>Vehicle</TableHead>
                               <TableHead>Notes</TableHead>
                               <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -379,21 +379,11 @@ export default function AdminDriverAssignments() {
                                   </div>
                                 </TableCell>
                                 <TableCell>
-                                  <div className="flex flex-col gap-1.5">
-                                    <div className="flex items-center gap-1.5 text-sm">
-                                      <Car className="h-3.5 w-3.5 text-muted-foreground" />
-                                      <span className={assignment.vehicleId ? "text-foreground" : "text-muted-foreground italic"}>
-                                        {assignment.vehicle?.name || "Not set"}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-sm">
-                                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                      <span className={assignment.startTime && assignment.endTime ? "text-foreground" : "text-muted-foreground italic"}>
-                                        {assignment.startTime && assignment.endTime 
-                                          ? `${assignment.startTime} - ${assignment.endTime}`
-                                          : "Not set"}
-                                      </span>
-                                    </div>
+                                  <div className="flex items-center gap-1.5 text-sm">
+                                    <Car className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className={assignment.vehicleId ? "text-foreground" : "text-muted-foreground italic"}>
+                                      {assignment.vehicle?.name || "Not set"}
+                                    </span>
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -528,48 +518,6 @@ export default function AdminDriverAssignments() {
                   </FormItem>
                 )}
               />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="startTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start Time (Optional)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="time"
-                          placeholder="HH:MM"
-                          {...field}
-                          value={field.value || ""}
-                          data-testid="input-start-time"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="endTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End Time (Optional)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="time"
-                          placeholder="HH:MM"
-                          {...field}
-                          value={field.value || ""}
-                          data-testid="input-end-time"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
 
               <FormField
                 control={form.control}
