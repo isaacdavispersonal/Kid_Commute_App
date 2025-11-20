@@ -2853,13 +2853,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       try {
         const { z } = await import("zod");
         
-        // Validate request
+        // Validate request - only need date and assignmentIds
+        // Vehicle/times come from the assignments themselves
         const schema = z.object({
           date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
           assignmentIds: z.array(z.string()).min(1, "At least one assignment required"),
-          vehicleId: z.string().min(1, "Vehicle ID is required"),
-          plannedStart: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
-          plannedEnd: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
         });
 
         const data = schema.parse(req.body);
@@ -2880,15 +2878,16 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             shiftType = route.routeType as "MORNING" | "AFTERNOON" | "EXTRA";
           }
           
+          // Use vehicle and times from the assignment
           const shiftData = {
             driverId: assignment.driverId,
             driverAssignmentId: assignmentId,
             date: data.date,
             shiftType,
             routeId: assignment.routeId,
-            vehicleId: data.vehicleId,
-            plannedStart: data.plannedStart,
-            plannedEnd: data.plannedEnd,
+            vehicleId: assignment.vehicleId,
+            plannedStart: assignment.startTime,
+            plannedEnd: assignment.endTime,
             status: "SCHEDULED" as const,
             notes: assignment.notes,
           };
