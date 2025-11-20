@@ -967,7 +967,7 @@ export default function AdminSchedule() {
                       <CardContent className="space-y-2">
                         {assignments.map((assignment) => {
                           const isSelected = selectedAssignments.includes(assignment.id);
-                          const routeTypeBadge = assignment.route.routeType
+                          const routeTypeBadge = assignment.route?.routeType
                             ? SHIFT_TYPE_LABELS[assignment.route.routeType as "MORNING" | "AFTERNOON" | "EXTRA"]
                             : null;
                           
@@ -987,7 +987,7 @@ export default function AdminSchedule() {
                               />
                               <div className="flex-1 space-y-1.5">
                                 <div className="flex items-center gap-2">
-                                  <span className="font-medium">{assignment.route.name}</span>
+                                  <span className="font-medium">{assignment.route?.name || "Unknown Route"}</span>
                                   {routeTypeBadge && (
                                     <Badge variant="outline" className="text-xs">
                                       <routeTypeBadge.Icon className="h-3 w-3 mr-1" />
@@ -1002,7 +1002,7 @@ export default function AdminSchedule() {
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <Car className="h-3.5 w-3.5" />
-                                    {assignment.vehicle.name}
+                                    {assignment.vehicle?.name || "No Vehicle"}
                                   </div>
                                 </div>
                                 {assignment.notes && (
