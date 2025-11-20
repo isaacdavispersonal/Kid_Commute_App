@@ -69,8 +69,6 @@ interface EnrichedDriverAssignment {
   driverId: string;
   routeId: string;
   vehicleId: string | null;
-  startTime: string | null;
-  endTime: string | null;
   notes: string | null;
   driver: {
     id: string;
@@ -142,8 +140,6 @@ export default function AdminDriverAssignments() {
       driverId: "",
       routeId: "",
       vehicleId: "",
-      startTime: "",
-      endTime: "",
       notes: "",
     },
   });
@@ -240,8 +236,6 @@ export default function AdminDriverAssignments() {
         driverId: assignment.driverId,
         routeId: assignment.routeId,
         vehicleId: assignment.vehicleId || "",
-        startTime: assignment.startTime || "",
-        endTime: assignment.endTime || "",
         notes: assignment.notes || "",
       });
     } else {
@@ -250,8 +244,6 @@ export default function AdminDriverAssignments() {
         driverId: "",
         routeId: "",
         vehicleId: "",
-        startTime: "",
-        endTime: "",
         notes: "",
       });
     }
@@ -499,14 +491,13 @@ export default function AdminDriverAssignments() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Vehicle (Optional)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
                       <FormControl>
                         <SelectTrigger data-testid="select-vehicle">
                           <SelectValue placeholder="Select a vehicle" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
                         {vehicles?.map((vehicle) => (
                           <SelectItem key={vehicle.id} value={vehicle.id}>
                             {vehicle.name} ({vehicle.plateNumber})
