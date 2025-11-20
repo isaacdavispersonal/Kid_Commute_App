@@ -61,12 +61,16 @@ import {
 } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, User, Route, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, User, Route, ChevronRight, Car, Clock } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface EnrichedDriverAssignment {
   id: string;
   driverId: string;
   routeId: string;
+  vehicleId: string | null;
+  startTime: string | null;
+  endTime: string | null;
   notes: string | null;
   driver: {
     id: string;
@@ -79,6 +83,16 @@ interface EnrichedDriverAssignment {
     name: string;
     routeType: "MORNING" | "AFTERNOON" | "EXTRA" | null;
   } | null;
+  vehicle: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+interface Vehicle {
+  id: string;
+  name: string;
+  plateNumber: string;
 }
 
 interface Driver {
@@ -127,6 +141,9 @@ export default function AdminDriverAssignments() {
     defaultValues: {
       driverId: "",
       routeId: "",
+      vehicleId: "",
+      startTime: "",
+      endTime: "",
       notes: "",
     },
   });
@@ -143,6 +160,10 @@ export default function AdminDriverAssignments() {
 
   const { data: routes } = useQuery<RouteType[]>({
     queryKey: ["/api/admin/routes"],
+  });
+
+  const { data: vehicles } = useQuery<Vehicle[]>({
+    queryKey: ["/api/admin/vehicles"],
   });
 
   const createMutation = useMutation({
@@ -218,6 +239,9 @@ export default function AdminDriverAssignments() {
       form.reset({
         driverId: assignment.driverId,
         routeId: assignment.routeId,
+        vehicleId: assignment.vehicleId || "",
+        startTime: assignment.startTime || "",
+        endTime: assignment.endTime || "",
         notes: assignment.notes || "",
       });
     } else {
@@ -225,6 +249,9 @@ export default function AdminDriverAssignments() {
       form.reset({
         driverId: "",
         routeId: "",
+        vehicleId: "",
+        startTime: "",
+        endTime: "",
         notes: "",
       });
     }
@@ -330,6 +357,7 @@ export default function AdminDriverAssignments() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Route</TableHead>
+                              <TableHead>Vehicle & Schedule</TableHead>
                               <TableHead>Notes</TableHead>
                               <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -348,6 +376,24 @@ export default function AdminDriverAssignments() {
                                         {assignment.route.routeType === 'MORNING' ? 'Morning' : assignment.route.routeType === 'AFTERNOON' ? 'Afternoon' : 'Extra'}
                                       </span>
                                     )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-center gap-1.5 text-sm">
+                                      <Car className="h-3.5 w-3.5 text-muted-foreground" />
+                                      <span className={assignment.vehicleId ? "text-foreground" : "text-muted-foreground italic"}>
+                                        {assignment.vehicle?.name || "Not set"}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-sm">
+                                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                      <span className={assignment.startTime && assignment.endTime ? "text-foreground" : "text-muted-foreground italic"}>
+                                        {assignment.startTime && assignment.endTime 
+                                          ? `${assignment.startTime} - ${assignment.endTime}`
+                                          : "Not set"}
+                                      </span>
+                                    </div>
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -456,6 +502,74 @@ export default function AdminDriverAssignments() {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="vehicleId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vehicle (Optional)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-vehicle">
+                          <SelectValue placeholder="Select a vehicle" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {vehicles?.map((vehicle) => (
+                          <SelectItem key={vehicle.id} value={vehicle.id}>
+                            {vehicle.name} ({vehicle.plateNumber})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="startTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Time (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="time"
+                          placeholder="HH:MM"
+                          {...field}
+                          value={field.value || ""}
+                          data-testid="input-start-time"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="endTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Time (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="time"
+                          placeholder="HH:MM"
+                          {...field}
+                          value={field.value || ""}
+                          data-testid="input-end-time"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={form.control}
