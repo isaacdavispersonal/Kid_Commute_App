@@ -2868,10 +2868,27 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         
         // Fetch all assignments and create shifts
         const createdShifts = [];
+        const skipped = [];
+        
         for (const assignmentId of data.assignmentIds) {
           const assignment = await storage.getDriverAssignment(assignmentId);
           if (!assignment) {
             console.warn(`Assignment not found: ${assignmentId}`);
+            skipped.push({ assignmentId, reason: "Assignment not found" });
+            continue;
+          }
+          
+          // Validate required fields - must have vehicle and times
+          if (!assignment.vehicleId || !assignment.startTime || !assignment.endTime) {
+            console.warn(`Assignment ${assignmentId} missing required data:`, {
+              vehicleId: assignment.vehicleId,
+              startTime: assignment.startTime,
+              endTime: assignment.endTime
+            });
+            skipped.push({ 
+              assignmentId, 
+              reason: "Missing vehicle or time information" 
+            });
             continue;
           }
           
@@ -2902,7 +2919,8 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         
         res.json({ 
           count: createdShifts.length,
-          shifts: createdShifts 
+          shifts: createdShifts,
+          skipped: skipped.length > 0 ? skipped : undefined
         });
       } catch (error: any) {
         console.error("Error creating shifts from assignments:", error);
