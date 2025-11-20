@@ -638,7 +638,7 @@ export const schedulePatternEnum = pgEnum("schedule_pattern", [
   "CUSTOM",        // For custom scheduling
 ]);
 
-// Driver assignments table - Simplified to just assign drivers to routes
+// Driver assignments table - Assigns drivers to routes with vehicle and default times
 export const driverAssignments = pgTable("driver_assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   driverId: varchar("driver_id")
@@ -647,6 +647,11 @@ export const driverAssignments = pgTable("driver_assignments", {
   routeId: varchar("route_id")
     .notNull()
     .references(() => routes.id, { onDelete: "cascade" }),
+  vehicleId: varchar("vehicle_id").references(() => vehicles.id, {
+    onDelete: "set null",
+  }), // Optional vehicle assignment for this route
+  startTime: varchar("start_time"), // Default start time (HH:MM format)
+  endTime: varchar("end_time"), // Default end time (HH:MM format)
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

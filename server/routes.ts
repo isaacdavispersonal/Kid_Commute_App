@@ -2527,16 +2527,20 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req, res) => {
       try {
         const assignments = await storage.getAllDriverAssignments();
-        // Enrich with driver and route information
+        // Enrich with driver, route, and vehicle information
         const enrichedAssignments = await Promise.all(
           assignments.map(async (assignment) => {
             const driver = await storage.getUser(assignment.driverId);
             const route = await storage.getRoute(assignment.routeId);
+            const vehicle = assignment.vehicleId 
+              ? await storage.getVehicle(assignment.vehicleId)
+              : null;
             
             return {
               ...assignment,
               driver: driver || null,
               route: route || null,
+              vehicle: vehicle || null,
             };
           })
         );
