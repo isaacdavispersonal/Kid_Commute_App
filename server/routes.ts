@@ -1408,7 +1408,22 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Get all vehicles
+  // Get all vehicles (for any authenticated user - drivers need this for checklists)
+  app.get(
+    "/api/vehicles",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const vehicles = await storage.getAllVehicles();
+        res.json(vehicles);
+      } catch (error) {
+        console.error("Error fetching vehicles:", error);
+        res.status(500).json({ message: "Failed to fetch vehicles" });
+      }
+    }
+  );
+
+  // Get all vehicles (admin-specific route)
   app.get(
     "/api/admin/vehicles",
     isAuthenticated,
