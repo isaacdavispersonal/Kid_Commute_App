@@ -3960,12 +3960,38 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(400).json({ message: "Invalid event type. Must be BOARD or DEBOARD" });
         }
 
+        // Check for duplicate events and enforce mutual exclusivity
+        if (eventType === "BOARD") {
+          const existingBoardEvent = await storage.getStudentBoardEvent(shiftId, studentId);
+          if (existingBoardEvent) {
+            return res.status(400).json({ 
+              message: "Student has already boarded on this route" 
+            });
+          }
+          
+          // Prevent boarding after deboarding
+          const existingDeboardEvent = await storage.getStudentDeboardEvent(shiftId, studentId);
+          if (existingDeboardEvent) {
+            return res.status(400).json({ 
+              message: "Cannot board - student has already deboarded on this route. Complete the route to reset." 
+            });
+          }
+        }
+
         // For DEBOARD events, ensure student has already boarded
         if (eventType === "DEBOARD") {
           const boardEvent = await storage.getStudentBoardEvent(shiftId, studentId);
           if (!boardEvent) {
             return res.status(400).json({ 
-              message: "Student must board before deboarding" 
+              message: "Student must board before deboarding. Use the Board button first." 
+            });
+          }
+          
+          // Check for duplicate deboard
+          const existingDeboardEvent = await storage.getStudentDeboardEvent(shiftId, studentId);
+          if (existingDeboardEvent) {
+            return res.status(400).json({ 
+              message: "Student has already deboarded on this route" 
             });
           }
         }

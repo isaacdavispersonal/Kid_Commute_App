@@ -309,6 +309,7 @@ export type ShiftRouteContext = {
     plannedEnd: string;
     status: string;
     inspectionCompletedAt: Date | null;
+    routeCompletedAt: Date | null;
     inspectionComplete: boolean;
   };
   route: {
@@ -321,6 +322,25 @@ export type ShiftRouteContext = {
     name: string;
     plateNumber: string;
   } | null;
+  students: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    attendance: "riding" | "absent" | null;
+    plannedStopId: string | null;
+    plannedStopName: string | null;
+    plannedStopOrder: number | null;
+    boardEvent: {
+      stopId: string;
+      stopName: string | null;
+      recordedAt: Date;
+    } | null;
+    deboardEvent: {
+      stopId: string;
+      stopName: string | null;
+      recordedAt: Date;
+    } | null;
+  }>;
   stops: Array<RouteStopWithMetadata & {
     students: Array<{
       id: string;
