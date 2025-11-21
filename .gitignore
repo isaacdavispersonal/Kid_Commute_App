@@ -29,9 +29,40 @@ ios/App/fastlane/Preview.html
 ios/App/fastlane/test_output/
 ios/App/fastlane/.env
 
-# Google Services
+# Google Services (Firebase)
 android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
 
 # Environment files with secrets
+.env
 .env.local
 .env.production
+.env.development
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.tmp
+*.temp
