@@ -3931,6 +3931,145 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Record student ride event (board/deboard)
+  app.post(
+    "/api/driver/ride-events",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { shiftId, studentId, actualStopId, eventType, notes } = req.body;
+
+        // Verify shift belongs to this driver and route is started
+        const shift = await storage.getShift(shiftId);
+        if (!shift) {
+          return res.status(404).json({ message: "Shift not found" });
+        }
+        if (shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Not authorized for this shift" });
+        }
+        if (!shift.routeStartedAt) {
+          return res.status(400).json({ 
+            message: "Route must be started before recording ride events" 
+          });
+        }
+
+        // Validate event type
+        if (eventType !== "BOARD" && eventType !== "DEBOARD") {
+          return res.status(400).json({ message: "Invalid event type. Must be BOARD or DEBOARD" });
+        }
+
+        // For DEBOARD events, ensure student has already boarded
+        if (eventType === "DEBOARD") {
+          const boardEvent = await storage.getStudentBoardEvent(shiftId, studentId);
+          if (!boardEvent) {
+            return res.status(400).json({ 
+              message: "Student must board before deboarding" 
+            });
+          }
+        }
+
+        // Get student to find their planned stop
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+
+        // Determine planned stop based on shift type
+        const isPickup = shift.shiftType === "MORNING";
+        const plannedStopId = isPickup ? student.pickupStopId : student.dropoffStopId;
+
+        // Create the ride event
+        const event = await storage.createRideEvent({
+          shiftId,
+          studentId,
+          plannedStopId,
+          actualStopId,
+          eventType,
+          notes,
+        });
+
+        res.json(event);
+      } catch (error) {
+        console.error("Error creating ride event:", error);
+        res.status(500).json({ message: "Failed to record ride event" });
+      }
+    }
+  );
+
+  // Finish route (requires all stops complete and all students processed)
+  app.post(
+    "/api/driver/shift/:shiftId/finish-route",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { shiftId } = req.params;
+
+        // Verify shift belongs to this driver
+        const shift = await storage.getShift(shiftId);
+        if (!shift) {
+          return res.status(404).json({ message: "Shift not found" });
+        }
+        if (shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Not authorized for this shift" });
+        }
+
+        // Check if route has been started
+        if (!shift.routeStartedAt) {
+          return res.status(400).json({ 
+            message: "Route has not been started yet" 
+          });
+        }
+
+        // Check if route is already completed
+        if (shift.routeCompletedAt) {
+          return res.status(400).json({ 
+            message: "Route has already been completed" 
+          });
+        }
+
+        // Verify all stops are completed
+        const routeProgress = await storage.getRouteProgress(shiftId);
+        const allStopsComplete = routeProgress.every(p => p.status === "COMPLETED" || p.status === "SKIPPED");
+        if (!allStopsComplete) {
+          return res.status(400).json({ 
+            message: "All stops must be completed before finishing route" 
+          });
+        }
+
+        // Verify all non-absent students have deboarded
+        if (shift.routeId) {
+          const students = await storage.getStudentsByRouteForDate(shift.routeId, shift.date);
+          const nonAbsentStudents = students.filter(s => s.attendance !== "absent");
+          
+          for (const student of nonAbsentStudents) {
+            const deboardEvent = await storage.getStudentDeboardEvent(shiftId, student.id);
+            if (!deboardEvent) {
+              return res.status(400).json({ 
+                message: `Not all students have deboarded. Missing: ${student.firstName} ${student.lastName}` 
+              });
+            }
+          }
+        }
+
+        // Complete the route
+        await storage.updateShift(shiftId, {
+          routeCompletedAt: new Date(),
+          status: "COMPLETED",
+        });
+
+        const updatedShift = await storage.getShift(shiftId);
+        res.json({ shift: updatedShift });
+      } catch (error) {
+        console.error("Error finishing route:", error);
+        res.status(500).json({ message: "Failed to finish route" });
+      }
+    }
+  );
+
   // ============ Driver Utility Routes ============
 
   // Supplies Requests - Create new request

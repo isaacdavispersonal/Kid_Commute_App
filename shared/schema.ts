@@ -654,6 +654,48 @@ export type InsertStudentAttendance = z.infer<typeof insertStudentAttendanceSche
 export type UpdateStudentAttendance = z.infer<typeof updateStudentAttendanceSchema>;
 export type StudentAttendance = typeof studentAttendance.$inferSelect;
 
+// ============ Student Ride Events Table ============
+
+// Ride event type enum
+export const rideEventTypeEnum = pgEnum("ride_event_type", ["BOARD", "DEBOARD"]);
+
+// Student ride events table - Tracks actual board/deboard events during shifts
+export const studentRideEvents = pgTable("student_ride_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  shiftId: varchar("shift_id")
+    .notNull()
+    .references(() => shifts.id, { onDelete: "cascade" }),
+  studentId: varchar("student_id")
+    .notNull()
+    .references(() => students.id, { onDelete: "cascade" }),
+  plannedStopId: varchar("planned_stop_id").references(() => stops.id, {
+    onDelete: "set null",
+  }), // The stop student was expected at (can be null for ad-hoc students)
+  actualStopId: varchar("actual_stop_id")
+    .notNull()
+    .references(() => stops.id, { onDelete: "cascade" }), // The stop where event actually occurred
+  eventType: rideEventTypeEnum("event_type").notNull(),
+  recordedAt: timestamp("recorded_at").defaultNow(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_ride_events_shift").on(table.shiftId),
+  index("idx_ride_events_student").on(table.studentId),
+]);
+
+export const insertStudentRideEventSchema = createInsertSchema(studentRideEvents).omit({
+  id: true,
+  recordedAt: true, // Server-managed
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  eventType: z.enum(["BOARD", "DEBOARD"]),
+});
+
+export type InsertStudentRideEvent = z.infer<typeof insertStudentRideEventSchema>;
+export type StudentRideEvent = typeof studentRideEvents.$inferSelect;
+
 // ============ Schedule Management Tables ============
 
 // Schedule pattern enum
@@ -738,6 +780,7 @@ export const shifts = pgTable(
     notes: text("notes"),
     inspectionCompletedAt: timestamp("inspection_completed_at"), // Timestamp when vehicle inspection is completed
     routeStartedAt: timestamp("route_started_at"), // Timestamp when route operations were actually started
+    routeCompletedAt: timestamp("route_completed_at"), // Timestamp when driver finished the route
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -750,6 +793,7 @@ export const insertShiftSchema = createInsertSchema(shifts).omit({
   id: true,
   inspectionCompletedAt: true, // Server-managed
   routeStartedAt: true, // Server-managed
+  routeCompletedAt: true, // Server-managed
   createdAt: true,
   updatedAt: true,
 }).extend({

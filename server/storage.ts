@@ -26,6 +26,7 @@ import {
   households,
   householdMembers,
   studentAttendance,
+  studentRideEvents,
   auditLogs,
   routeProgress,
   suppliesRequests,
@@ -91,6 +92,8 @@ import {
   type StudentAttendance,
   type InsertStudentAttendance,
   type UpdateStudentAttendance,
+  type StudentRideEvent,
+  type InsertStudentRideEvent,
   type AuditLog,
   type InsertAuditLog,
   type RouteProgress,
@@ -292,6 +295,13 @@ export interface IStorage {
   getStudentAbsenceReport(studentId: string, startDate: string, endDate: string): Promise<any[]>;
   getAttendanceAnalytics(startDate: string, endDate: string): Promise<any[]>;
   getMonthlyAttendanceStats(year: number, month: number): Promise<any>;
+
+  // Student ride event operations
+  createRideEvent(event: InsertStudentRideEvent): Promise<StudentRideEvent>;
+  getRideEventsByShift(shiftId: string): Promise<StudentRideEvent[]>;
+  getRideEventsByStudent(studentId: string, shiftId?: string): Promise<StudentRideEvent[]>;
+  getStudentBoardEvent(shiftId: string, studentId: string): Promise<StudentRideEvent | undefined>;
+  getStudentDeboardEvent(shiftId: string, studentId: string): Promise<StudentRideEvent | undefined>;
 
   // Statistics
   getStats(): Promise<any>;
@@ -1613,6 +1623,23 @@ export class DatabaseStorage implements IStorage {
     // Get all students for this route
     const allStudents = await this.getStudentsByRouteForDate(route.id, shift.date);
 
+    // Get ride events for this shift
+    const rideEvents = await this.getRideEventsByShift(shiftId);
+    const rideEventsMap = new Map<string, { board?: StudentRideEvent; deboard?: StudentRideEvent }>();
+    
+    // Organize ride events by student
+    rideEvents.forEach(event => {
+      if (!rideEventsMap.has(event.studentId)) {
+        rideEventsMap.set(event.studentId, {});
+      }
+      const studentEvents = rideEventsMap.get(event.studentId)!;
+      if (event.eventType === "BOARD") {
+        studentEvents.board = event;
+      } else {
+        studentEvents.deboard = event;
+      }
+    });
+
     // Get route progress for all stops
     const progressRecords = await db
       .select()
@@ -1621,18 +1648,12 @@ export class DatabaseStorage implements IStorage {
 
     const progressMap = new Map(progressRecords.map(p => [p.routeStopId, p]));
 
-    // Filter students by stop based on route type (morning = pickup, afternoon = dropoff)
+    // Determine which stop field to use based on shift type
     const isPickup = shift.shiftType === "MORNING";
     
-    // Enrich each stop with students and progress
+    // Enrich each stop with progress (no students here anymore)
     const enrichedStops = await Promise.all(
       routeStopsData.map(async (stop, index) => {
-        // Get students for this stop
-        const stopStudents = allStudents.filter(s => {
-          const stopId = isPickup ? s.pickupStopId : s.dropoffStopId;
-          return stopId === stop.id;
-        });
-
         // Get progress for this stop
         const progress = progressMap.get(stop.routeStopId);
         const status = progress?.status || "PENDING";
@@ -1645,12 +1666,6 @@ export class DatabaseStorage implements IStorage {
 
         return {
           ...stop,
-          students: stopStudents.map(s => ({
-            id: s.id,
-            firstName: s.firstName,
-            lastName: s.lastName,
-            attendance: s.attendance,
-          })),
           progress: {
             status,
             completedAt: progress?.completedAt || null,
@@ -1661,6 +1676,33 @@ export class DatabaseStorage implements IStorage {
         };
       })
     );
+
+    // Enrich students with their ride events and planned stop info
+    const enrichedStudents = allStudents.map(student => {
+      const events = rideEventsMap.get(student.id);
+      const plannedStopId = isPickup ? student.pickupStopId : student.dropoffStopId;
+      const plannedStop = routeStopsData.find(s => s.id === plannedStopId);
+      
+      return {
+        id: student.id,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        attendance: student.attendance,
+        plannedStopId,
+        plannedStopName: plannedStop?.name || null,
+        plannedStopOrder: plannedStop?.stopOrder || null,
+        boardEvent: events?.board ? {
+          stopId: events.board.actualStopId,
+          stopName: routeStopsData.find(s => s.id === events.board!.actualStopId)?.name || null,
+          recordedAt: events.board.recordedAt,
+        } : null,
+        deboardEvent: events?.deboard ? {
+          stopId: events.deboard.actualStopId,
+          stopName: routeStopsData.find(s => s.id === events.deboard!.actualStopId)?.name || null,
+          recordedAt: events.deboard.recordedAt,
+        } : null,
+      };
+    });
 
     // Calculate overall progress
     const completedStops = enrichedStops.filter(s => s.progress.status === "COMPLETED").length;
@@ -1679,6 +1721,7 @@ export class DatabaseStorage implements IStorage {
         plannedEnd: shift.plannedEnd,
         status: shift.status,
         inspectionCompletedAt: shift.inspectionCompletedAt,
+        routeCompletedAt: shift.routeCompletedAt,
         inspectionComplete,
       },
       route: {
@@ -1691,6 +1734,7 @@ export class DatabaseStorage implements IStorage {
         name: vehicle.name,
         plateNumber: vehicle.plateNumber,
       } : null,
+      students: enrichedStudents,
       stops: enrichedStops,
       progress: {
         completedStops,
@@ -3325,6 +3369,78 @@ export class DatabaseStorage implements IStorage {
       endDate,
       students: Array.from(studentStats.values()),
     };
+  }
+
+  // ============ Student Ride Event Operations ============
+
+  async createRideEvent(event: InsertStudentRideEvent): Promise<StudentRideEvent> {
+    const [newEvent] = await db
+      .insert(studentRideEvents)
+      .values(event)
+      .returning();
+    return newEvent;
+  }
+
+  async getRideEventsByShift(shiftId: string): Promise<StudentRideEvent[]> {
+    const events = await db
+      .select()
+      .from(studentRideEvents)
+      .where(eq(studentRideEvents.shiftId, shiftId))
+      .orderBy(studentRideEvents.recordedAt);
+    return events;
+  }
+
+  async getRideEventsByStudent(studentId: string, shiftId?: string): Promise<StudentRideEvent[]> {
+    if (shiftId) {
+      const events = await db
+        .select()
+        .from(studentRideEvents)
+        .where(
+          and(
+            eq(studentRideEvents.studentId, studentId),
+            eq(studentRideEvents.shiftId, shiftId)
+          )
+        )
+        .orderBy(studentRideEvents.recordedAt);
+      return events;
+    } else {
+      const events = await db
+        .select()
+        .from(studentRideEvents)
+        .where(eq(studentRideEvents.studentId, studentId))
+        .orderBy(studentRideEvents.recordedAt);
+      return events;
+    }
+  }
+
+  async getStudentBoardEvent(shiftId: string, studentId: string): Promise<StudentRideEvent | undefined> {
+    const [event] = await db
+      .select()
+      .from(studentRideEvents)
+      .where(
+        and(
+          eq(studentRideEvents.shiftId, shiftId),
+          eq(studentRideEvents.studentId, studentId),
+          eq(studentRideEvents.eventType, "BOARD")
+        )
+      )
+      .limit(1);
+    return event;
+  }
+
+  async getStudentDeboardEvent(shiftId: string, studentId: string): Promise<StudentRideEvent | undefined> {
+    const [event] = await db
+      .select()
+      .from(studentRideEvents)
+      .where(
+        and(
+          eq(studentRideEvents.shiftId, shiftId),
+          eq(studentRideEvents.studentId, studentId),
+          eq(studentRideEvents.eventType, "DEBOARD")
+        )
+      )
+      .limit(1);
+    return event;
   }
 
   // ============ Audit Log Operations ============
