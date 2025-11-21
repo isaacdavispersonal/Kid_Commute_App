@@ -16,6 +16,14 @@ import { useState, useEffect } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
+interface PaymentPortal {
+  id: string;
+  provider: "quickbooks" | "classwallet";
+  portalUrl: string;
+  displayName: string;
+  isEnabled: boolean;
+}
+
 interface StudentData {
   id: string;
   firstName: string;
@@ -82,6 +90,12 @@ export default function ParentDashboard() {
     queryKey: ["/api/parent/students"],
     refetchInterval: 120000, // Fallback refetch every 2 minutes (WebSocket is primary)
     refetchIntervalInBackground: true,
+  });
+
+  // Fetch configured payment portals
+  const { data: paymentPortals } = useQuery<PaymentPortal[]>({
+    queryKey: ["/api/billing/portals"],
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
   // Listen for WebSocket route progress updates
@@ -361,49 +375,45 @@ export default function ParentDashboard() {
         </Card>
       )}
       
-      {/* Billing & Payment Portal */}
-      <Card data-testid="card-billing-portal">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-primary" />
-            <CardTitle>Billing & Payment</CardTitle>
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            Pay for transportation services using your preferred payment method
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Available Payment Options:</p>
-            <p className="text-sm text-muted-foreground">
-              Please use one of the payment portals below. You'll need to log in with your account credentials for each service.
+      {/* Billing & Payment Portal - Only show if portals are configured */}
+      {paymentPortals && paymentPortals.length > 0 && (
+        <Card data-testid="card-billing-portal">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-primary" />
+              <CardTitle>Billing & Payment</CardTitle>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Pay for transportation services using your preferred payment method
             </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Button
-              variant="default"
-              className="w-full justify-between"
-              onClick={() => window.open("https://quickbooks.intuit.com/payments/", "_blank")}
-              data-testid="button-quickbooks"
-            >
-              <span>QuickBooks Online</span>
-              <ExternalLink className="h-4 w-4 ml-2" />
-            </Button>
-            <Button
-              variant="default"
-              className="w-full justify-between"
-              onClick={() => window.open("https://www.classwallet.com/", "_blank")}
-              data-testid="button-classwallet"
-            >
-              <span>ClassWallet</span>
-              <ExternalLink className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Note: After clicking, you'll be directed to the payment portal where you'll need to sign in with your account credentials. Contact the administrator if you need help with payment setup.
-          </p>
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Available Payment Options:</p>
+              <p className="text-sm text-muted-foreground">
+                Please use one of the payment portals below. You'll need to log in with your account credentials for each service.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {paymentPortals.map((portal) => (
+                <Button
+                  key={portal.id}
+                  variant="default"
+                  className="w-full justify-between"
+                  onClick={() => window.open(portal.portalUrl, "_blank")}
+                  data-testid={`button-${portal.provider}`}
+                >
+                  <span>{portal.displayName}</span>
+                  <ExternalLink className="h-4 w-4 ml-2" />
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Note: After clicking, you'll be directed to the payment portal where you'll need to sign in with your account credentials. Contact the administrator if you need help with payment setup.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
