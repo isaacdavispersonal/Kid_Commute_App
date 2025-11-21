@@ -3917,6 +3917,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           status: "ACTIVE",
         });
         
+        // Automatically initialize route progress for all stops
+        if (shift.routeId) {
+          await storage.initializeRouteProgress(shiftId);
+        }
+        
         const updatedShift = await storage.getShift(shiftId);
         res.json({ shift: updatedShift });
       } catch (error) {
