@@ -133,6 +133,44 @@ app.use((req, res, next) => {
   setInterval(runAutoClockout, AUTO_CLOCKOUT_INTERVAL);
   log(`Auto-clockout job scheduled to run every ${AUTO_CLOCKOUT_INTERVAL / 1000 / 60} minutes`);
 
+  // Seed payment portals from environment variables on startup
+  async function seedPaymentPortals() {
+    try {
+      const { storage } = await import("./storage");
+      
+      const portalsToSeed = [
+        {
+          provider: "quickbooks" as const,
+          envVar: "QUICKBOOKS_PORTAL_URL",
+          displayName: "QuickBooks Online",
+        },
+        {
+          provider: "classwallet" as const,
+          envVar: "CLASSWALLET_PORTAL_URL",
+          displayName: "ClassWallet",
+        },
+      ];
+
+      for (const { provider, envVar, displayName } of portalsToSeed) {
+        const portalUrl = process.env[envVar];
+        if (portalUrl) {
+          await storage.upsertPaymentPortal({
+            provider,
+            portalUrl,
+            displayName,
+            isEnabled: true,
+          });
+          log(`Payment portal configured: ${displayName} (${provider})`);
+        }
+      }
+    } catch (error) {
+      console.error("Error seeding payment portals:", error);
+    }
+  }
+
+  // Run payment portal seeding on startup
+  await seedPaymentPortals();
+
   // Setup data retention scheduled job
   // Run daily to automatically cleanup old data per privacy policy
   const { initializeDataRetention } = await import("./data-retention-service");
