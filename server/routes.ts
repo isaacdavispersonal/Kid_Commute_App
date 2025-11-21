@@ -255,6 +255,19 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   });
 
+  // ============ Billing Portal Configuration Routes ============
+
+  // Get enabled payment portals for parents
+  app.get("/api/billing/portals", isAuthenticated, async (req: any, res) => {
+    try {
+      const portals = await storage.getEnabledPaymentPortals();
+      res.json(portals);
+    } catch (error: any) {
+      console.error("Error fetching payment portals:", error);
+      res.status(500).json({ message: "Failed to fetch payment portals" });
+    }
+  });
+
   // ============ Push Notification Device Token Routes ============
 
   // Register or update device token for push notifications
