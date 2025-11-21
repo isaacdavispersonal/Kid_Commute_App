@@ -2921,8 +2921,17 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             notes: assignment.notes,
           };
           
-          const shift = await storage.createShift(shiftData);
-          createdShifts.push(shift);
+          try {
+            const shift = await storage.createShift(shiftData);
+            createdShifts.push(shift);
+          } catch (shiftError: any) {
+            // Skip if shift already exists or other error
+            console.warn(`Failed to create shift for assignment ${assignmentId}:`, shiftError.message);
+            skipped.push({ 
+              assignmentId, 
+              reason: shiftError.message || "Failed to create shift" 
+            });
+          }
         }
         
         res.json({ 
