@@ -4477,12 +4477,31 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             let studentPickedUp = false;
             let routeStatus = "inactive";
 
-            if (student.assignedRouteId) {
-              const route = await storage.getRoute(student.assignedRouteId);
+            // First check for route assignments in studentRoutes junction table (multi-route system)
+            let effectiveRouteId = null;
+            let effectivePickupStopId = null;
+            let effectiveDropoffStopId = null;
+
+            const routeAssignments = await storage.getStudentRouteAssignments(student.id);
+            if (routeAssignments && routeAssignments.length > 0) {
+              // Use the first route assignment (could be enhanced to prioritize AM routes or active routes)
+              const assignment = routeAssignments[0];
+              effectiveRouteId = assignment.routeId;
+              effectivePickupStopId = assignment.pickupStopId;
+              effectiveDropoffStopId = assignment.dropoffStopId;
+            } else if (student.assignedRouteId) {
+              // Fall back to legacy single-route fields for backward compatibility
+              effectiveRouteId = student.assignedRouteId;
+              effectivePickupStopId = student.pickupStopId;
+              effectiveDropoffStopId = student.dropoffStopId;
+            }
+
+            if (effectiveRouteId) {
+              const route = await storage.getRoute(effectiveRouteId);
               routeName = route?.name || null;
 
               // Get current driver assignment for this route (assignments are ongoing, not date-specific)
-              const assignments = await storage.getDriverAssignmentsByRoute(student.assignedRouteId);
+              const assignments = await storage.getDriverAssignmentsByRoute(effectiveRouteId);
               const activeAssignment = assignments.find(a => a.isActive !== false);
               if (activeAssignment) {
                 const driver = await storage.getUser(activeAssignment.driverId);
@@ -4494,7 +4513,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
                   // Find active shift for this driver to get route progress
                   const driverShifts = await storage.getShiftsByDriver(driver.id);
                   const activeShift = driverShifts.find(shift => 
-                    shift.routeId === student.assignedRouteId && 
+                    shift.routeId === effectiveRouteId && 
                     shift.status === "ACTIVE"
                   );
 
@@ -4515,9 +4534,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
                       routeProgressPct = Math.round((stopsCompleted / totalStops) * 100);
 
                       // Calculate stops remaining before pickup
-                      if (student.pickupStopId) {
+                      if (effectivePickupStopId) {
                         // Find pickup stop's order
-                        const pickupProgress = routeProgress.find((p: any) => p.routeStop.stopId === student.pickupStopId);
+                        const pickupProgress = routeProgress.find((p: any) => p.routeStop.stopId === effectivePickupStopId);
                         if (pickupProgress) {
                           const pickupOrder = pickupProgress.routeStop.stopOrder;
                           
@@ -4540,18 +4559,18 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               }
             }
 
-            if (student.pickupStopId) {
-              const stops = student.assignedRouteId
-                ? await storage.getRouteStops(student.assignedRouteId)
+            if (effectivePickupStopId) {
+              const stops = effectiveRouteId
+                ? await storage.getRouteStops(effectiveRouteId)
                 : [];
-              pickupStop = stops.find((s) => s.id === student.pickupStopId);
+              pickupStop = stops.find((s) => s.id === effectivePickupStopId);
             }
 
-            if (student.dropoffStopId) {
-              const stops = student.assignedRouteId
-                ? await storage.getRouteStops(student.assignedRouteId)
+            if (effectiveDropoffStopId) {
+              const stops = effectiveRouteId
+                ? await storage.getRouteStops(effectiveRouteId)
                 : [];
-              dropoffStop = stops.find((s) => s.id === student.dropoffStopId);
+              dropoffStop = stops.find((s) => s.id === effectiveDropoffStopId);
             }
 
             // Get today's attendance
@@ -4559,6 +4578,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
 
             return {
               ...student,
+              assignedRoute: effectiveRouteId, // Include effective route ID for frontend
               routeName,
               pickupStop,
               dropoffStop,
@@ -4595,7 +4615,20 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const parentId = req.user.claims.sub;
         const students = await storage.getStudentsByParent(parentId);
 
-        if (students.length === 0 || !students[0].assignedRouteId) {
+        if (students.length === 0) {
+          return res.json(null);
+        }
+
+        // Get effective route ID (check junction table first, fall back to legacy field)
+        let effectiveRouteId = null;
+        const routeAssignments = await storage.getStudentRouteAssignments(students[0].id);
+        if (routeAssignments && routeAssignments.length > 0) {
+          effectiveRouteId = routeAssignments[0].routeId;
+        } else if (students[0].assignedRouteId) {
+          effectiveRouteId = students[0].assignedRouteId;
+        }
+
+        if (!effectiveRouteId) {
           return res.json(null);
         }
 
@@ -4604,7 +4637,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const assignments = await storage.getAllDriverAssignments();
         const todayAssignment = assignments.find(
           (a) =>
-            a.routeId === students[0].assignedRouteId &&
+            a.routeId === effectiveRouteId &&
             a.date === today &&
             a.isActive
         );
@@ -4614,7 +4647,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
 
         const vehicle = await storage.getVehicle(todayAssignment.vehicleId);
-        const route = await storage.getRoute(students[0].assignedRouteId);
+        const route = await storage.getRoute(effectiveRouteId);
 
         res.json({
           vehicleId: vehicle?.id,
