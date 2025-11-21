@@ -647,7 +647,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             }
 
             // Get student count
-            const students = await storage.getStudentsByRoute(route.id);
+            const students = await storage.getStudentsByRouteForDate(route.id, today);
             
             // Get unresolved incidents
             const incidents = await storage.getIncidentsByRoute(route.id);
