@@ -195,3 +195,9 @@
     vehicle inspections also check to see if the driver is using the same vehicle as the one they're assigned, and if they're not then it'll update their current van they're using
 
     admin dashboard for vehicle information
+
+
+    ----
+
+    -Language implmentation
+    
