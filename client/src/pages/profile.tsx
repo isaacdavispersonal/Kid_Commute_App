@@ -370,17 +370,6 @@ export default function Profile() {
                 For account billing, payment history, and invoices, please contact your administrator or visit your organization's billing portal.
               </AlertDescription>
             </Alert>
-            <div className="mt-4">
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => window.open('mailto:billing@kidcommute.com?subject=Billing%20Inquiry', '_blank')}
-                data-testid="button-contact-billing"
-              >
-                <Mail className="h-4 w-4 mr-2" />
-                Contact Billing Support
-              </Button>
-            </div>
           </CardContent>
         </Card>
       )}

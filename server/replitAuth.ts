@@ -89,7 +89,9 @@ async function upsertUser(claims: any) {
   // Auto-link parent to household if their phone number matches any guardian phone
   const user = await storage.getUser(claims["sub"]);
   if (user && user.role === "parent" && user.phoneNumber) {
-    await storage.relinkParentHouseholds(user.id, user.phoneNumber);
+    // Normalize phone number to digits-only for matching with student guardian phones
+    const normalizedPhone = user.phoneNumber.replace(/\D/g, '');
+    await storage.relinkParentHouseholds(user.id, normalizedPhone);
   }
 }
 
