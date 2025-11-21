@@ -420,7 +420,7 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
                 </div>
               )
             ) : isRouteStarted && !isCompleted ? (
-              <Link href="/driver/route" className="flex-1">
+              <Link href={`/driver/route/${shift.id}`} className="flex-1">
                 <Button className="w-full" data-testid={`button-manage-route-${shift.id}`}>
                   <MessageSquare className="h-4 w-4 mr-2" />
                   Manage Route

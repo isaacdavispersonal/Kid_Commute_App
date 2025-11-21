@@ -4346,6 +4346,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(403).json({ message: "Not authorized to view this shift" });
         }
 
+        // Check if route has been started
+        if (!shift.routeStartedAt) {
+          return res.status(400).json({ 
+            message: "Route has not been started. Please start the route from the dashboard first." 
+          });
+        }
+
         // Get comprehensive route context
         const routeContext = await storage.getShiftRouteContext(shiftId);
         res.json(routeContext);
@@ -4515,6 +4522,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(403).json({ message: "Access denied" });
         }
 
+        // Check if route has been started
+        if (!shift.routeStartedAt) {
+          return res.status(400).json({ 
+            message: "Route has not been started. Please start the route from the dashboard first." 
+          });
+        }
+
         const progress = await storage.getRouteProgress(shiftId);
         res.json(progress);
       } catch (error) {
@@ -4542,6 +4556,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const shift = await storage.getShift(shiftId);
         if (!shift || shift.driverId !== driverId) {
           return res.status(403).json({ message: "Access denied" });
+        }
+
+        // Check if route has been started
+        if (!shift.routeStartedAt) {
+          return res.status(400).json({ 
+            message: "Route has not been started. Please start the route from the dashboard first." 
+          });
         }
 
         await storage.initializeRouteProgress(shiftId);
@@ -4572,6 +4593,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const shift = await storage.getShift(shiftId);
         if (!shift || shift.driverId !== driverId) {
           return res.status(403).json({ message: "Access denied" });
+        }
+
+        // Check if route has been started
+        if (!shift.routeStartedAt) {
+          return res.status(400).json({ 
+            message: "Route has not been started. Please start the route from the dashboard first." 
+          });
         }
 
         const updated = await storage.updateStopStatus(shiftId, routeStopId, status, notes);
@@ -5558,8 +5586,19 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const recipient = await storage.getUser(recipientId);
         const isAdmin = recipient?.role === "admin";
         
-        // If not admin, verify driver can message this parent (via routes)
+        // If messaging parent, check if driver has a started route today
         if (!isAdmin) {
+          const today = new Date().toISOString().split('T')[0];
+          const shifts = await storage.getShiftsByDriver(driverId, today, today);
+          const hasStartedRoute = shifts.some(s => s.routeStartedAt);
+          
+          if (!hasStartedRoute) {
+            return res.status(400).json({ 
+              message: "Route has not been started. Please start the route from the dashboard first." 
+            });
+          }
+          
+          // Verify driver can message this parent (via routes)
           const messageableParents = await storage.getMessageableParentsForDriver(driverId);
           const canMessage = messageableParents.some((parent: any) => parent.id === recipientId);
           
@@ -5610,6 +5649,17 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const isAdmin = recipient?.role === "admin";
 
         if (!isAdmin) {
+          // Check if driver has a started route today before messaging parents
+          const today = new Date().toISOString().split('T')[0];
+          const shifts = await storage.getShiftsByDriver(senderId, today, today);
+          const hasStartedRoute = shifts.some(s => s.routeStartedAt);
+          
+          if (!hasStartedRoute) {
+            return res.status(400).json({ 
+              message: "Route has not been started. Please start the route from the dashboard first." 
+            });
+          }
+          
           // Verify driver can message this parent (parent's child is on driver's route)
           const messageableParents = await storage.getMessageableParentsForDriver(senderId);
           const canMessage = messageableParents.some((parent: any) => parent.id === recipientId);
@@ -6290,8 +6340,25 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     requireRole("driver"),
     async (req: any, res) => {
       try {
+        const driverId = req.user.claims.sub;
         const routeId = req.params.routeId;
         const today = new Date().toISOString().split('T')[0];
+        
+        // Find driver's active shift for this route today
+        const shifts = await storage.getShiftsByDriver(driverId, today, today);
+        const activeShift = shifts.find(s => s.routeId === routeId && s.date === today);
+        
+        if (!activeShift) {
+          return res.status(404).json({ message: "No shift found for this route today" });
+        }
+        
+        // Check if route has been started
+        if (!activeShift.routeStartedAt) {
+          return res.status(400).json({ 
+            message: "Route has not been started. Please start the route from the dashboard first." 
+          });
+        }
+        
         const students = await storage.getStudentsByRouteForDate(routeId, today);
         res.json(students);
       } catch (error) {
@@ -6318,6 +6385,44 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const user = await storage.getUser(userId);
         if (!user) {
           return res.status(401).json({ message: "User not found" });
+        }
+
+        // Authorization check for drivers - must have started route
+        if (user.role === "driver") {
+          const student = await storage.getStudent(studentId);
+          if (!student) {
+            return res.status(404).json({ message: "Student not found" });
+          }
+          
+          // Find driver's shift for the student's route on the given date
+          const shifts = await storage.getShiftsByDriver(userId, date, date);
+          
+          // Check if driver has a shift for any of the student's assigned routes
+          let hasActiveStartedShift = false;
+          
+          // Check studentRoutes (multi-route assignments)
+          const studentRoutes = await storage.getStudentRoutes(studentId);
+          for (const sr of studentRoutes) {
+            const shift = shifts.find(s => s.routeId === sr.routeId && s.date === date);
+            if (shift?.routeStartedAt) {
+              hasActiveStartedShift = true;
+              break;
+            }
+          }
+          
+          // Also check legacy assignedRouteId
+          if (!hasActiveStartedShift && student.assignedRouteId) {
+            const shift = shifts.find(s => s.routeId === student.assignedRouteId && s.date === date);
+            if (shift?.routeStartedAt) {
+              hasActiveStartedShift = true;
+            }
+          }
+          
+          if (!hasActiveStartedShift) {
+            return res.status(400).json({ 
+              message: "Route has not been started. Please start the route from the dashboard first." 
+            });
+          }
         }
 
         // Authorization check for parents

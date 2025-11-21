@@ -27,7 +27,7 @@ Preferred communication style: Simple, everyday language.
 - **Key Features**:
     - **Reusable Stops System**: Stops are independently defined and assignable to multiple routes.
     - **Phone-Based Household System**: Links parents to students via phone numbers, supporting multi-guardian scenarios.
-    - **Time Tracking**: Shift-based system with clock in/out, break tracking, and anomaly detection.
+    - **Time Tracking**: Separated clock-in and route workflow system. Drivers clock in/out for general timekeeping (creates clock events with shiftId=null), independent of route operations. Route operations (attendance, messaging, GPS tracking) are only accessible after explicitly starting a route, which requires: (1) active clock-in, (2) completed vehicle inspection, (3) setting routeStartedAt timestamp. Backend API endpoints validate routeStartedAt before allowing route operations. Features break tracking and anomaly detection.
     - **Flexible Shift Scheduling**: Shifts require explicit start/end times and vehicle selection during creation, allowing for dynamic schedule variations (regular days, half-days, etc.) without requiring duplicate driver assignments. Shift times are independent of driver assignments, enabling the same driver-route combination to operate at different times on different days.
     - **Messaging System**: Route-based messaging between drivers and parents, with admin direct messaging and intervention.
     - **Announcement System**: Dismissible announcements for users, route-specific broadcasts for drivers, and enhanced admin broadcasts.
