@@ -4669,7 +4669,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(404).json({ message: "User not found" });
         }
         
-        const oldPhone = parent.phone;
+        const oldPhone = parent.phoneNumber;
         console.log(`[update-phone] Parent ${parentId}: old phone = ${oldPhone}, new phone = ${normalizedPhone}`);
         
         // ALWAYS sync guardian phones when changing phone number
@@ -4707,7 +4707,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         
         // Now update parent's phone number
         console.log(`[update-phone] Updating parent ${parentId} phone to ${normalizedPhone}`);
-        await storage.updateUserProfile(parentId, { phone: normalizedPhone });
+        await storage.updateUserProfile(parentId, { phoneNumber: normalizedPhone });
         console.log(`[update-phone] Parent phone updated successfully`);
         
         // Re-link to households with new phone

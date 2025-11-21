@@ -43,7 +43,7 @@ export default function Profile() {
         firstName: profile.firstName || "",
         lastName: profile.lastName || "",
         email: profile.email || "",
-        phoneNumber: profile.phone ? formatPhoneNumber(profile.phone) : "",
+        phoneNumber: profile.phoneNumber ? formatPhoneNumber(profile.phoneNumber) : "",
         address: profile.address || "",
       });
     }
@@ -154,7 +154,7 @@ export default function Profile() {
         firstName: profile.firstName || "",
         lastName: profile.lastName || "",
         email: profile.email || "",
-        phoneNumber: profile.phone ? formatPhoneNumber(profile.phone) : "",
+        phoneNumber: profile.phoneNumber ? formatPhoneNumber(profile.phoneNumber) : "",
         address: profile.address || "",
       });
     }
@@ -181,7 +181,7 @@ export default function Profile() {
     );
   }
 
-  const isComplete = profile?.firstName && profile?.lastName && profile?.email && profile?.phone && profile?.address;
+  const isComplete = profile?.firstName && profile?.lastName && profile?.email && profile?.phoneNumber && profile?.address;
 
   return (
     <div className="container max-w-3xl mx-auto p-6 space-y-6">
