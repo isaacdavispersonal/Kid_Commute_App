@@ -38,7 +38,7 @@ export const userRoleEnum = pgEnum("user_role", ["admin", "driver", "parent"]);
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email"),
-  phone: varchar("phone").unique(),
+  phone: varchar("phone"), // Legacy column - use phoneNumber instead
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
@@ -114,6 +114,38 @@ export const insertDeviceTokenSchema = createInsertSchema(deviceTokens).omit({
 
 export type InsertDeviceToken = z.infer<typeof insertDeviceTokenSchema>;
 export type DeviceToken = typeof deviceTokens.$inferSelect;
+
+// ============ Billing Portal Configuration ============
+
+// Payment portal provider enum
+export const paymentProviderEnum = pgEnum("payment_provider", [
+  "quickbooks",
+  "classwallet",
+]);
+
+// Payment portals table - stores configured payment provider portals
+export const paymentPortals = pgTable("payment_portals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  provider: paymentProviderEnum("provider").notNull().unique(),
+  portalUrl: text("portal_url").notNull(),
+  displayName: varchar("display_name").notNull(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPaymentPortalSchema = createInsertSchema(paymentPortals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  provider: z.enum(["quickbooks", "classwallet"]),
+  portalUrl: z.string().url("Portal URL must be a valid URL"),
+  displayName: z.string().min(1, "Display name is required"),
+});
+
+export type InsertPaymentPortal = z.infer<typeof insertPaymentPortalSchema>;
+export type PaymentPortal = typeof paymentPortals.$inferSelect;
 
 // ============ Fleet Management Tables ============
 
