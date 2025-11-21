@@ -192,7 +192,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       const user = await storage.getUser(userId);
       if (user?.role === "parent" && result.data.phoneNumber) {
         const normalizedNewPhone = result.data.phoneNumber.replace(/\D/g, '');
-        const currentPhone = user.phone;
+        const currentPhone = user.phoneNumber;
         
         if (normalizedNewPhone !== currentPhone) {
           return res.status(400).json({
@@ -6044,7 +6044,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           
           // Check if parent is authorized (via household or guardian phone)
           const household = await storage.getUserHousehold(userId);
-          const userPhoneNormalized = user.phone?.replace(/\D/g, '') || '';
+          const userPhoneNormalized = user.phoneNumber?.replace(/\D/g, '') || '';
           const isAuthorized = 
             (household && student.householdId === household.id) ||
             student.guardianPhones.some(gp => gp.replace(/\D/g, '') === userPhoneNormalized);

@@ -1,7 +1,7 @@
 // Parent dashboard with student overview
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserCircle, MapPin, Clock, Bus, Phone, MessageSquare, Bell, Navigation } from "lucide-react";
+import { UserCircle, MapPin, Clock, Bus, Phone, MessageSquare, Bell, Navigation, CreditCard, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -360,6 +360,50 @@ export default function ParentDashboard() {
           </CardContent>
         </Card>
       )}
+      
+      {/* Billing & Payment Portal */}
+      <Card data-testid="card-billing-portal">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-primary" />
+            <CardTitle>Billing & Payment</CardTitle>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            Pay for transportation services using your preferred payment method
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Available Payment Options:</p>
+            <p className="text-sm text-muted-foreground">
+              Please use one of the payment portals below. You'll need to log in with your account credentials for each service.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Button
+              variant="default"
+              className="w-full justify-between"
+              onClick={() => window.open("https://quickbooks.intuit.com/payments/", "_blank")}
+              data-testid="button-quickbooks"
+            >
+              <span>QuickBooks Online</span>
+              <ExternalLink className="h-4 w-4 ml-2" />
+            </Button>
+            <Button
+              variant="default"
+              className="w-full justify-between"
+              onClick={() => window.open("https://www.classwallet.com/", "_blank")}
+              data-testid="button-classwallet"
+            >
+              <span>ClassWallet</span>
+              <ExternalLink className="h-4 w-4 ml-2" />
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Note: After clicking, you'll be directed to the payment portal where you'll need to sign in with your account credentials. Contact the administrator if you need help with payment setup.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
