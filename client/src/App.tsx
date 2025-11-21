@@ -36,11 +36,8 @@ import AdminUsers from "@/pages/admin/users";
 import AdminStudents from "@/pages/admin/students";
 import AdminDriverAssignments from "@/pages/admin/driver-assignments";
 import AdminAnnouncements from "@/pages/admin/announcements";
-import AdminTimeManagement from "@/pages/admin/time-management";
+import AdminActivityOperations from "@/pages/admin/activity-operations";
 import AdminIncidents from "@/pages/admin/incidents";
-import AdminAuditLog from "@/pages/admin/audit-log";
-import AdminDriverUtilities from "@/pages/admin/driver-utilities";
-import AdminRouteHealth from "@/pages/admin/route-health";
 import AdminGPSSettings from "@/pages/admin/gps-settings";
 import AdminSamsaraIntegration from "@/pages/admin/samsara-integration";
 import AdminPayrollExports from "@/pages/admin/payroll-exports";
@@ -167,17 +164,39 @@ function Router() {
                   <Route path="/admin/driver-assignments" component={AdminDriverAssignments} />
                   <Route path="/admin/messages" component={AdminMessages} />
                   <Route path="/admin/announcements" component={AdminAnnouncements} />
-                  <Route path="/admin/time-management" component={AdminTimeManagement} />
+                  <Route path="/admin/activity-operations" component={AdminActivityOperations} />
                   <Route path="/admin/incidents" component={AdminIncidents} />
-                  <Route path="/admin/audit-log" component={AdminAuditLog} />
-                  <Route path="/admin/driver-utilities" component={AdminDriverUtilities} />
-                  <Route path="/admin/route-health" component={AdminRouteHealth} />
                   <Route path="/admin/gps-settings" component={AdminGPSSettings} />
                   <Route path="/admin/samsara-integration" component={AdminSamsaraIntegration} />
                   <Route path="/admin/payroll-exports" component={AdminPayrollExports} />
+                  {/* Redirects for old routes */}
                   <Route path="/admin/time-exceptions">
                     {() => {
-                      window.location.href = "/admin/time-management";
+                      window.location.href = "/admin/activity-operations";
+                      return null;
+                    }}
+                  </Route>
+                  <Route path="/admin/time-management">
+                    {() => {
+                      window.location.href = "/admin/activity-operations";
+                      return null;
+                    }}
+                  </Route>
+                  <Route path="/admin/audit-log">
+                    {() => {
+                      window.location.href = "/admin/activity-operations";
+                      return null;
+                    }}
+                  </Route>
+                  <Route path="/admin/driver-utilities">
+                    {() => {
+                      window.location.href = "/admin/activity-operations";
+                      return null;
+                    }}
+                  </Route>
+                  <Route path="/admin/route-health">
+                    {() => {
+                      window.location.href = "/admin/activity-operations";
                       return null;
                     }}
                   </Route>

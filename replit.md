@@ -13,6 +13,7 @@ Preferred communication style: Simple, everyday language.
 - **Role-Based Interfaces**: Desktop-optimized Admin Dashboard (with sidebar navigation, data tables, fleet maps, compact schedule calendar), mobile-first Driver Interface, and a Parent Portal with real-time tracking.
 - **Real-time Features**: WebSockets for messaging, Leaflet.js for map visualization, and polling for statistics.
 - **Navigation**: Profile settings are in a header dropdown to maintain clean sidebar navigation across all roles.
+- **Admin Page Consolidation**: Activity & Operations page combines Route Health, Driver Utilities, Audit Log, and Time Management into a single tabbed interface for streamlined fleet monitoring and operations management.
 
 ### Technical Implementations
 - **Backend**: Express.js on Node.js with TypeScript and ESM.

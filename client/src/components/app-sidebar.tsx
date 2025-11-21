@@ -90,9 +90,9 @@ const adminMenuSections = [
         icon: MessageSquare,
       },
       {
-        title: "Time Management",
-        url: "/admin/time-management",
-        icon: Clock,
+        title: "Activity & Operations",
+        url: "/admin/activity-operations",
+        icon: Activity,
       },
       {
         title: "Payroll Exports",
@@ -103,21 +103,6 @@ const adminMenuSections = [
         title: "Incidents",
         url: "/admin/incidents",
         icon: AlertTriangle,
-      },
-      {
-        title: "Driver Utilities",
-        url: "/admin/driver-utilities",
-        icon: Package,
-      },
-      {
-        title: "Audit Log",
-        url: "/admin/audit-log",
-        icon: FileText,
-      },
-      {
-        title: "Route Health",
-        url: "/admin/route-health",
-        icon: Activity,
       },
     ],
   },
