@@ -34,6 +34,7 @@ import {
   geofences,
   geofenceEvents,
   deviceTokens,
+  paymentPortals,
   payrollExports,
   payrollExportEntries,
   type User,
@@ -103,6 +104,8 @@ import {
   type InsertDriverFeedback,
   type DeviceToken,
   type InsertDeviceToken,
+  type PaymentPortal,
+  type InsertPaymentPortal,
   type PayrollExport,
   type InsertPayrollExport,
   type PayrollExportEntry,
@@ -372,6 +375,14 @@ export interface IStorage {
   getPayrollExport(id: string): Promise<PayrollExport | undefined>;
   getPayrollExportWithEntries(id: string): Promise<{export: PayrollExport, entries: PayrollExportEntry[]} | undefined>;
   getPayrollExportEntries(exportId: string): Promise<PayrollExportEntry[]>;
+
+  // Payment portal operations (billing configuration)
+  getEnabledPaymentPortals(): Promise<PaymentPortal[]>;
+  getAllPaymentPortals(): Promise<PaymentPortal[]>;
+  getPaymentPortal(provider: "quickbooks" | "classwallet"): Promise<PaymentPortal | undefined>;
+  upsertPaymentPortal(portal: InsertPaymentPortal): Promise<PaymentPortal>;
+  updatePaymentPortalEnabled(provider: "quickbooks" | "classwallet", isEnabled: boolean): Promise<PaymentPortal>;
+  deletePaymentPortal(provider: "quickbooks" | "classwallet"): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4357,6 +4368,71 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(users, eq(payrollExportEntries.driverId, users.id))
       .where(eq(payrollExportEntries.exportId, exportId))
       .orderBy(users.firstName, users.lastName);
+  }
+
+  // ============ Payment Portal operations (billing configuration) ============
+
+  async getEnabledPaymentPortals(): Promise<PaymentPortal[]> {
+    return await db
+      .select()
+      .from(paymentPortals)
+      .where(eq(paymentPortals.isEnabled, true))
+      .orderBy(paymentPortals.provider);
+  }
+
+  async getAllPaymentPortals(): Promise<PaymentPortal[]> {
+    return await db
+      .select()
+      .from(paymentPortals)
+      .orderBy(paymentPortals.provider);
+  }
+
+  async getPaymentPortal(provider: "quickbooks" | "classwallet"): Promise<PaymentPortal | undefined> {
+    const [portal] = await db
+      .select()
+      .from(paymentPortals)
+      .where(eq(paymentPortals.provider, provider));
+    return portal;
+  }
+
+  async upsertPaymentPortal(portal: InsertPaymentPortal): Promise<PaymentPortal> {
+    const [result] = await db
+      .insert(paymentPortals)
+      .values({
+        ...portal,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: paymentPortals.provider,
+        set: {
+          portalUrl: portal.portalUrl,
+          displayName: portal.displayName,
+          isEnabled: portal.isEnabled,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async updatePaymentPortalEnabled(provider: "quickbooks" | "classwallet", isEnabled: boolean): Promise<PaymentPortal> {
+    const [result] = await db
+      .update(paymentPortals)
+      .set({ isEnabled, updatedAt: new Date() })
+      .where(eq(paymentPortals.provider, provider))
+      .returning();
+    
+    if (!result) {
+      throw new NotFoundError(`Payment portal for provider ${provider} not found`);
+    }
+    
+    return result;
+  }
+
+  async deletePaymentPortal(provider: "quickbooks" | "classwallet"): Promise<void> {
+    await db
+      .delete(paymentPortals)
+      .where(eq(paymentPortals.provider, provider));
   }
 }
 
