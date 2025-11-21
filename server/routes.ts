@@ -3711,6 +3711,221 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // ============ Simple Clock In/Out System (Not Shift-Based) ============
+
+  // Simple clock-in (general timekeeping, not tied to a specific shift)
+  app.post(
+    "/api/driver/clock-in",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        
+        // Check if already clocked in
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        if (activeClockIn) {
+          return res.status(400).json({ 
+            message: "Already clocked in. Please clock out first." 
+          });
+        }
+        
+        // Create clock IN event (no shift association)
+        const clockEvent = await storage.createClockEvent({
+          driverId,
+          shiftId: null, // Not tied to a specific shift
+          type: "IN",
+          source: "USER",
+          notes: null,
+          isResolved: true,
+        });
+        
+        res.json({ clockEvent });
+      } catch (error) {
+        console.error("Error clocking in:", error);
+        res.status(500).json({ message: "Failed to clock in" });
+      }
+    }
+  );
+
+  // Simple clock-out (general timekeeping)
+  app.post(
+    "/api/driver/clock-out",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { notes } = req.body;
+        
+        // Check if clocked in
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        if (!activeClockIn) {
+          return res.status(400).json({ 
+            message: "Not currently clocked in" 
+          });
+        }
+        
+        // Create clock OUT event
+        const clockEvent = await storage.createClockEvent({
+          driverId,
+          shiftId: null,
+          type: "OUT",
+          source: "USER",
+          notes: notes || null,
+          isResolved: true,
+        });
+        
+        res.json({ clockEvent });
+      } catch (error) {
+        console.error("Error clocking out:", error);
+        res.status(500).json({ message: "Failed to clock out" });
+      }
+    }
+  );
+
+  // Get current clock status
+  app.get(
+    "/api/driver/clock-status",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        const activeBreak = await storage.getActiveBreak(driverId);
+        
+        res.json({ 
+          isClockedIn: !!activeClockIn,
+          clockInTime: activeClockIn?.clockEvent.timestamp || null,
+          isOnBreak: !!activeBreak,
+          breakStartTime: activeBreak?.timestamp || null,
+        });
+      } catch (error) {
+        console.error("Error getting clock status:", error);
+        res.status(500).json({ message: "Failed to get clock status" });
+      }
+    }
+  );
+
+  // Complete vehicle inspection for a shift
+  app.post(
+    "/api/driver/shift/:shiftId/complete-inspection",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { shiftId } = req.params;
+        const { tiresOk, lightsOk, brakesOk, fluidLevelsOk, cleanlinessOk, notes } = req.body;
+        
+        // Verify shift belongs to this driver
+        const shift = await storage.getShift(shiftId);
+        if (!shift) {
+          return res.status(404).json({ message: "Shift not found" });
+        }
+        if (shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Not authorized for this shift" });
+        }
+        
+        // Validate all checks are completed
+        if (!tiresOk || !lightsOk || !brakesOk || !fluidLevelsOk || !cleanlinessOk) {
+          return res.status(400).json({ 
+            message: "All inspection items must be marked OK before completing inspection" 
+          });
+        }
+        
+        // Update shift with inspection completion timestamp
+        await storage.updateShift(shiftId, {
+          inspectionCompletedAt: new Date(),
+        });
+        
+        // Also create a vehicle checklist record if vehicleId exists
+        if (shift.vehicleId) {
+          await storage.createVehicleChecklist({
+            driverId,
+            vehicleId: shift.vehicleId,
+            shiftId,
+            checklistType: "PRE_TRIP",
+            tiresOk,
+            lightsOk,
+            brakesOk,
+            fluidLevelsOk,
+            interiorCleanOk: cleanlinessOk,
+            emergencyEquipmentOk: true,
+            mirrorsOk: true,
+            seatsOk: true,
+            odometerReading: null,
+            fuelLevel: null,
+            issues: notes || null,
+          });
+        }
+        
+        const updatedShift = await storage.getShift(shiftId);
+        res.json({ shift: updatedShift });
+      } catch (error) {
+        console.error("Error completing inspection:", error);
+        res.status(500).json({ message: "Failed to complete inspection" });
+      }
+    }
+  );
+
+  // Start route (requires clock-in and completed inspection)
+  app.post(
+    "/api/driver/shift/:shiftId/start-route",
+    isAuthenticated,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.claims.sub;
+        const { shiftId } = req.params;
+        
+        // Verify shift belongs to this driver
+        const shift = await storage.getShift(shiftId);
+        if (!shift) {
+          return res.status(404).json({ message: "Shift not found" });
+        }
+        if (shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Not authorized for this shift" });
+        }
+        
+        // Check if driver is clocked in
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        if (!activeClockIn) {
+          return res.status(400).json({ 
+            message: "You must clock in before starting a route" 
+          });
+        }
+        
+        // Check if inspection is completed
+        if (!shift.inspectionCompletedAt) {
+          return res.status(400).json({ 
+            message: "Vehicle inspection must be completed before starting route" 
+          });
+        }
+        
+        // Check if route already started
+        if (shift.routeStartedAt) {
+          return res.status(400).json({ 
+            message: "Route has already been started" 
+          });
+        }
+        
+        // Start the route
+        await storage.updateShift(shiftId, {
+          routeStartedAt: new Date(),
+          status: "ACTIVE",
+        });
+        
+        const updatedShift = await storage.getShift(shiftId);
+        res.json({ shift: updatedShift });
+      } catch (error) {
+        console.error("Error starting route:", error);
+        res.status(500).json({ message: "Failed to start route" });
+      }
+    }
+  );
+
   // ============ Driver Utility Routes ============
 
   // Supplies Requests - Create new request
@@ -4064,7 +4279,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Get today's route
+  // Get today's route (based on shifts)
   app.get(
     "/api/driver/today-route",
     isAuthenticated,
@@ -4072,14 +4287,18 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req: any, res) => {
       try {
         const driverId = req.user.claims.sub;
-        const assignment = await storage.getDriverAssignmentForToday(driverId);
+        const today = new Date().toISOString().split("T")[0];
+        const shifts = await storage.getShiftsByDate(today, driverId);
 
-        if (!assignment) {
+        // Get the first shift for today (if any)
+        const shift = shifts[0];
+        if (!shift || !shift.routeId) {
           return res.json(null);
         }
 
-        const route = await storage.getRoute(assignment.routeId);
+        const route = await storage.getRoute(shift.routeId);
         const stops = route ? await storage.getRouteStops(route.id) : [];
+        const vehicle = shift.vehicleId ? await storage.getVehicle(shift.vehicleId) : null;
 
         // Fetch group color if route has a groupId
         let groupColor = null;
@@ -4089,10 +4308,15 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
 
         res.json({
-          ...assignment,
+          id: shift.id,
+          routeId: shift.routeId,
+          vehicleId: shift.vehicleId,
+          date: shift.date,
           routeName: route?.name || "Unknown",
           routeColor: route?.color || null,
           groupColor,
+          vehicleName: vehicle?.name || "Unknown Vehicle",
+          vehiclePlate: vehicle?.plateNumber || "",
           stops,
         });
       } catch (error) {
@@ -4153,7 +4377,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Get driver's weekly schedule
+  // Get driver's weekly schedule (returns shifts for the next 7 days)
   app.get(
     "/api/driver/schedule",
     isAuthenticated,
@@ -4161,28 +4385,43 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req: any, res) => {
       try {
         const driverId = req.user.claims.sub;
-        const allAssignments = await storage.getAllDriverAssignments();
         
-        // Filter assignments for this driver
-        const driverAssignments = allAssignments.filter(
-          a => a.driverId === driverId && a.isActive
-        );
-
-        // Enrich with route information
-        const enrichedAssignments = await Promise.all(
-          driverAssignments.map(async (assignment) => {
-            const route = await storage.getRoute(assignment.routeId);
+        // Get today's date
+        const today = new Date();
+        const startDate = today.toISOString().split("T")[0];
+        
+        // Get date 6 days from now (total 7 days including today)
+        const endDateObj = new Date(today);
+        endDateObj.setDate(endDateObj.getDate() + 6);
+        const endDate = endDateObj.toISOString().split("T")[0];
+        
+        // Get shifts for this driver in the date range
+        const shifts = await storage.getShiftsByDriver(driverId, startDate, endDate);
+        
+        // Enrich with route and vehicle information
+        const enrichedShifts = await Promise.all(
+          shifts.map(async (shift) => {
+            const route = shift.routeId ? await storage.getRoute(shift.routeId) : null;
+            const vehicle = shift.vehicleId ? await storage.getVehicle(shift.vehicleId) : null;
             const stops = route ? await storage.getRouteStops(route.id) : [];
             
             return {
-              ...assignment,
-              routeName: route?.name || "Unknown",
+              id: shift.id,
+              routeId: shift.routeId,
+              vehicleId: shift.vehicleId,
+              date: shift.date,
+              startTime: shift.plannedStart,
+              endTime: shift.plannedEnd,
+              isActive: shift.status !== "MISSED",
+              routeName: route?.name || "Unknown Route",
+              vehicleName: vehicle?.name || "Unknown Vehicle",
+              vehiclePlate: vehicle?.plateNumber || "",
               stops,
             };
           })
         );
 
-        res.json(enrichedAssignments);
+        res.json(enrichedShifts);
       } catch (error) {
         console.error("Error fetching driver schedule:", error);
         res.status(500).json({ message: "Failed to fetch schedule" });

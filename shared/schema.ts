@@ -737,6 +737,7 @@ export const shifts = pgTable(
     status: shiftStatusEnum("status").notNull().default("SCHEDULED"),
     notes: text("notes"),
     inspectionCompletedAt: timestamp("inspection_completed_at"), // Timestamp when vehicle inspection is completed
+    routeStartedAt: timestamp("route_started_at"), // Timestamp when route operations were actually started
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -748,6 +749,7 @@ export const shifts = pgTable(
 export const insertShiftSchema = createInsertSchema(shifts).omit({
   id: true,
   inspectionCompletedAt: true, // Server-managed
+  routeStartedAt: true, // Server-managed
   createdAt: true,
   updatedAt: true,
 }).extend({
@@ -759,6 +761,7 @@ export const insertShiftSchema = createInsertSchema(shifts).omit({
 export const updateShiftSchema = createInsertSchema(shifts).omit({
   id: true,
   inspectionCompletedAt: true, // Server-managed
+  routeStartedAt: true, // Server-managed
   createdAt: true,
   updatedAt: true,
 }).extend({

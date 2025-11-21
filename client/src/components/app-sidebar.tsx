@@ -192,11 +192,6 @@ const driverMenuSections = [
         url: "/driver/supplies",
         icon: Package,
       },
-      {
-        title: "Send Feedback",
-        url: "/driver/feedback",
-        icon: MessageSquare,
-      },
     ],
   },
   {

@@ -53,7 +53,6 @@ import DriverAttendance from "@/pages/driver/attendance";
 import DriverAnnouncements from "@/pages/driver/announcements";
 import DriverSupplies from "@/pages/driver/supplies";
 import DriverChecklist from "@/pages/driver/checklist";
-import DriverFeedback from "@/pages/driver/feedback";
 
 import ParentDashboard from "@/pages/parent/dashboard";
 import ParentTracking from "@/pages/parent/tracking";
@@ -218,7 +217,6 @@ function Router() {
                   <Route path="/driver/announcements" component={DriverAnnouncements} />
                   <Route path="/driver/supplies" component={DriverSupplies} />
                   <Route path="/driver/checklist" component={DriverChecklist} />
-                  <Route path="/driver/feedback" component={DriverFeedback} />
                 </>
               )}
               {userRole === "parent" && (
