@@ -1,0 +1,162 @@
+Perfect — **this screenshot explains the entire problem.**
+Your code is *almost* correct, but it contains a critical bug:
+
+# ❗ **You wrote:**
+
+```ts
+const productionUrl = import.meta.env.VITE_API_URL;
+```
+
+but on iOS, this code is **inside a block that only runs when `isNative` is true**:
+
+```ts
+if (isNative) {
+    const productionUrl = import.meta.env.VITE_API_URL;
+    ...
+}
+```
+
+That part is fine.
+
+**BUT the fatal issue is here:**
+
+```ts
+if (_apiBaseUrl !== null) return;  // Already initialized
+```
+
+Since `_apiBaseUrl` starts as `null`, `initializeConfig()` runs once.
+
+But look at this:
+
+```ts
+let _apiBaseUrl: string | null = null;
+```
+
+Later, inside the `if (!productionUrl) { ... }` block, when API URL is missing:
+
+```ts
+_apiBaseUrl = '';
+```
+
+Meaning:
+
+* the app hits the error once
+* sets `_apiBaseUrl = ''`
+* **never tries to load the correct URL again**, even if you rebuild the app properly
+* this freezes the state forever until app reinstall
+
+So the real issue is:
+
+👉 Your app is showing "API URL not configured" because the old failed state persists.
+👉 Even after you fixed `.env.production`, `_apiBaseUrl` never reinitializes.
+
+---
+
+# ✅ **Fix #1 (required): allow reinitialization**
+
+Change:
+
+```ts
+if (_apiBaseUrl !== null) return;  // Already initialized
+```
+
+to:
+
+```ts
+// Only skip reinit if we already have a real value
+if (_apiBaseUrl) return;
+```
+
+This way, `_apiBaseUrl = ''` triggers reinitialization **instead of blocking it**.
+
+💡 `_apiBaseUrl === ""` means initialization failed previously.
+So we should NOT skip reinit.
+
+---
+
+# ❗ Fix #2 (critical): Your code does NOT log what Vite is supplying
+
+Add this debug line:
+
+```ts
+console.log("[Config] Raw import.meta.env:", import.meta.env);
+console.log("[Config] VITE_API_URL read from env:", import.meta.env.VITE_API_URL);
+```
+
+Put these right under:
+
+```ts
+if (isNative) {
+```
+
+So the block becomes:
+
+```ts
+if (isNative) {
+    console.log("[Config] Raw import.meta.env:", import.meta.env);
+    console.log("[Config] VITE_API_URL read from env:", import.meta.env.VITE_API_URL);
+
+    const productionUrl = import.meta.env.VITE_API_URL;
+```
+
+This will tell us exactly what Vite injected into the build.
+
+---
+
+# Fix #3 (optional but recommended): Clean up `_apiBaseUrl` handling
+
+Replace:
+
+```ts
+let _apiBaseUrl: string | null = null;
+```
+
+with:
+
+```ts
+let _apiBaseUrl: string | null = null;  // null = not yet initialized
+```
+
+Then ensure:
+
+* `_apiBaseUrl = productionUrl;` when success
+* `_apiBaseUrl = null;` if you want to allow reattempts
+* `_apiBaseUrl = ''` indicates failure
+
+But the most important fix is **allowing reinitialization**.
+
+---
+
+# 📌 FINAL STEP — Rebuild again
+
+After saving (`Ctrl+O`, Enter, `Ctrl+X`):
+
+```bash
+npm run build
+npx cap sync ios
+cd ios/App
+open App.xcworkspace
+```
+
+Run the app on your iPhone.
+
+In Xcode logs you should now see:
+
+```
+[Config] Raw import.meta.env: { ... }
+[Config] VITE_API_URL read from env: https://kid-commute.replit.app
+```
+
+If you see that, the config screen will correctly display:
+
+```
+API URL: https://kid-commute.replit.app
+```
+
+---
+
+# 🚀 You're **very close**
+
+Send me a screenshot of your updated `config.ts` after making the changes, and I’ll confirm everything is correct.
+
+Or run the app and show me the new Xcode console output — that will tell us everything.
