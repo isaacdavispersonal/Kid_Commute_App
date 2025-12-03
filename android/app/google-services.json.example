@@ -1,0 +1,32 @@
+{
+  "_comment": "PLACEHOLDER FILE - Replace with your actual google-services.json from Firebase Console",
+  "_instructions": [
+    "1. Go to Firebase Console: https://console.firebase.google.com/",
+    "2. Create or select your project",
+    "3. Add an Android app with package name: com.fleettrack.app",
+    "4. Download google-services.json",
+    "5. Replace this file with the downloaded file (rename to google-services.json)",
+    "6. DO NOT commit the actual google-services.json to version control"
+  ],
+  "project_info": {
+    "project_number": "YOUR_PROJECT_NUMBER",
+    "project_id": "YOUR_PROJECT_ID",
+    "storage_bucket": "YOUR_PROJECT_ID.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:YOUR_PROJECT_NUMBER:android:YOUR_APP_ID",
+        "android_client_info": {
+          "package_name": "com.fleettrack.app"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "YOUR_API_KEY"
+        }
+      ]
+    }
+  ],
+  "configuration_version": "1"
+}

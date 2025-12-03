@@ -18,6 +18,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { isConfigured, getConfigError } from "@/lib/config";
+import { ConfigErrorScreen } from "@/components/config-error-screen";
 
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
@@ -239,6 +241,13 @@ function Router() {
 }
 
 export default function App() {
+  // Check for configuration errors (e.g., missing backend URL in mobile app)
+  const configError = getConfigError();
+  
+  if (!isConfigured()) {
+    return <ConfigErrorScreen errorMessage={configError || "Unknown configuration error"} />;
+  }
+  
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
