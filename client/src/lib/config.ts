@@ -9,6 +9,7 @@ import { Capacitor } from '@capacitor/core';
 export const isNative = Capacitor.isNativePlatform();
 
 // Configuration state - allows checking if the app is properly configured
+// null = not yet initialized, '' = failed/misconfigured, truthy string = configured
 let _configError: string | null = null;
 let _apiBaseUrl: string | null = null;
 
@@ -17,9 +18,16 @@ let _apiBaseUrl: string | null = null;
  * Call this once at app startup
  */
 function initializeConfig(): void {
-  if (_apiBaseUrl !== null) return; // Already initialized
+  // Only skip reinit if we already have a real value (truthy URL)
+  // _apiBaseUrl === '' means initialization failed previously, so allow retry
+  if (_apiBaseUrl) return;
   
   if (isNative) {
+    // Debug logging to verify what Vite injected into the build
+    console.log("[Config] Running on native platform");
+    console.log("[Config] Raw import.meta.env keys:", Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')));
+    console.log("[Config] VITE_API_URL read from env:", import.meta.env.VITE_API_URL);
+    
     const productionUrl = import.meta.env.VITE_API_URL;
     
     if (!productionUrl) {
@@ -28,6 +36,7 @@ function initializeConfig(): void {
       console.error('[Config] VITE_API_URL is not configured! Mobile app cannot connect to backend.');
       console.error('[Config] To fix: Set VITE_API_URL=https://your-backend-url.replit.app in environment, rebuild with "npm run build", then run "npx cap sync"');
     } else {
+      _configError = null; // Clear any previous error
       _apiBaseUrl = productionUrl;
       console.log('[Config] Mobile app configured with backend:', productionUrl);
     }
@@ -35,6 +44,16 @@ function initializeConfig(): void {
     // Web app: use relative URLs
     _apiBaseUrl = '';
   }
+}
+
+/**
+ * Reset configuration state to allow forced reinitialization
+ * Useful for testing or recovery from configuration errors
+ */
+export function resetConfig(): void {
+  _apiBaseUrl = null;
+  _configError = null;
+  console.log('[Config] Configuration reset, will reinitialize on next access');
 }
 
 // Initialize on module load
