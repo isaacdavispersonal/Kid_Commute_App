@@ -153,6 +153,17 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
 
   app.use(express.json());
 
+  // ============ Health Check (Public - for mobile app connectivity testing) ============
+  
+  app.get("/api/health", (req, res) => {
+    res.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      version: "1.0.0",
+      environment: process.env.NODE_ENV || "development"
+    });
+  });
+
   // ============ Auth routes (Required for Replit Auth) ============
 
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
