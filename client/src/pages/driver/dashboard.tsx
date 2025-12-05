@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useAuth } from "@/hooks/useAuth";
+import { getLoginUrl } from "@/lib/config";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
@@ -565,7 +566,7 @@ export default function DriverDashboard() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        window.location.href = getLoginUrl();
       }, 500);
     }
   }, [error, toast]);

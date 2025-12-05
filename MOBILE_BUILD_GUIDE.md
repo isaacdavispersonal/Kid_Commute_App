@@ -34,12 +34,18 @@ echo "VITE_API_URL=https://kid-commute.replit.app" > .env.production
 
 Then build normally - Vite will automatically load this file.
 
-### Option 2: Inline Environment Variable
+### Option 2: Inline Environment Variable (Recommended for Mac)
 
-Set the variable directly when building:
+Set the variable directly when building - this is the most reliable method:
 
 ```bash
+# One command that builds with the correct API URL
 VITE_API_URL=https://kid-commute.replit.app npm run build
+```
+
+**Tip:** Create an alias in your terminal for convenience:
+```bash
+alias build-native="VITE_API_URL=https://kid-commute.replit.app npm run build && npx cap sync"
 ```
 
 ### Verify the URL was embedded

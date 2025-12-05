@@ -115,3 +115,21 @@ export function getApiUrl(path: string): string {
   
   return baseUrl + normalizedPath;
 }
+
+/**
+ * Get the login URL for authentication
+ * On mobile, returns full URL to backend; on web, returns relative path
+ * This is critical because mobile apps run at capacitor://localhost
+ * and need to redirect to the actual backend URL
+ */
+export function getLoginUrl(): string {
+  return getApiUrl('/api/login');
+}
+
+/**
+ * Get the logout URL for authentication
+ * On mobile, returns full URL to backend; on web, returns relative path
+ */
+export function getLogoutUrl(): string {
+  return getApiUrl('/api/logout');
+}

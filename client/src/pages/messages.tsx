@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useEffect } from "react";
+import { getLoginUrl } from "@/lib/config";
 
 interface MessagesPageProps {
   userRole: "driver" | "parent";
@@ -86,7 +87,7 @@ export default function MessagesPage({ userRole }: MessagesPageProps) {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = getLoginUrl();
         }, 500);
         return;
       }

@@ -16,6 +16,7 @@ import { AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { getLoginUrl } from "@/lib/config";
 
 export default function DriverIncident() {
   const { toast } = useToast();
@@ -50,7 +51,7 @@ export default function DriverIncident() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = getLoginUrl();
         }, 500);
         return;
       }

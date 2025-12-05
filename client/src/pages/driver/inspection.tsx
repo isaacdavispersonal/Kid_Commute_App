@@ -9,6 +9,7 @@ import { ClipboardCheck, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { getLoginUrl } from "@/lib/config";
 
 const inspectionItems = [
   { id: "tiresOk", label: "Tires (pressure, tread, damage)" },
@@ -58,7 +59,7 @@ export default function DriverInspection() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = getLoginUrl();
         }, 500);
         return;
       }

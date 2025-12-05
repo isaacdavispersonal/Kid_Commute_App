@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { isConfigured, getConfigError } from "@/lib/config";
+import { isConfigured, getConfigError, getLogoutUrl } from "@/lib/config";
 import { ConfigErrorScreen } from "@/components/config-error-screen";
 
 import Landing from "@/pages/landing";
@@ -132,7 +132,7 @@ function Router() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => (window.location.href = "/api/logout")}
+                  onClick={() => (window.location.href = getLogoutUrl())}
                   className="text-destructive focus:text-destructive"
                   data-testid="button-logout"
                 >

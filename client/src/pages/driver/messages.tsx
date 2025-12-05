@@ -14,6 +14,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { getLoginUrl } from "@/lib/config";
 
 const quickReplies = [
   "Running 5 minutes late",
@@ -169,7 +170,7 @@ export default function DriverMessagesPage() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = getLoginUrl();
         }, 500);
         return;
       }

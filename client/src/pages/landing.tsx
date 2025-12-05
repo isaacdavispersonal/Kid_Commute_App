@@ -2,6 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Car, Users, MapPin, MessageSquare, Shield, Clock, UserPlus, Mail } from "lucide-react";
+import { getLoginUrl } from "@/lib/config";
 
 export default function Landing() {
   return (
@@ -23,7 +24,7 @@ export default function Landing() {
             </p>
             <Button
               size="lg"
-              onClick={() => (window.location.href = "/api/login")}
+              onClick={() => (window.location.href = getLoginUrl())}
               data-testid="button-login"
               className="px-12"
             >
