@@ -38,6 +38,7 @@ import {
   paymentPortals,
   payrollExports,
   payrollExportEntries,
+  authCredentials,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -114,6 +115,8 @@ import {
   type PayrollExportEntry,
   type InsertPayrollExportEntry,
   type PayrollCalculationResult,
+  type AuthCredentials,
+  type InsertAuthCredentials,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray } from "drizzle-orm";
@@ -393,6 +396,15 @@ export interface IStorage {
   upsertPaymentPortal(portal: InsertPaymentPortal): Promise<PaymentPortal>;
   updatePaymentPortalEnabled(provider: "quickbooks" | "classwallet", isEnabled: boolean): Promise<PaymentPortal>;
   deletePaymentPortal(provider: "quickbooks" | "classwallet"): Promise<void>;
+
+  // Mobile auth credentials operations
+  getAuthCredentialsByEmail(email: string): Promise<AuthCredentials | undefined>;
+  getAuthCredentialsByPhone(phone: string): Promise<AuthCredentials | undefined>;
+  getAuthCredentialsByUserId(userId: string): Promise<AuthCredentials | undefined>;
+  createAuthCredentials(credentials: InsertAuthCredentials): Promise<AuthCredentials>;
+  updateAuthCredentialsLastLogin(userId: string): Promise<void>;
+  updateAuthCredentialsPassword(userId: string, passwordHash: string): Promise<void>;
+  getUserByEmailOrPhone(identifier: string): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4549,6 +4561,87 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(paymentPortals)
       .where(eq(paymentPortals.provider, provider));
+  }
+
+  // ============ Mobile Auth Credentials operations ============
+
+  async getAuthCredentialsByEmail(email: string): Promise<AuthCredentials | undefined> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const [credentials] = await db
+      .select()
+      .from(authCredentials)
+      .where(eq(authCredentials.email, normalizedEmail));
+    return credentials;
+  }
+
+  async getAuthCredentialsByPhone(phone: string): Promise<AuthCredentials | undefined> {
+    const normalizedPhone = phone.replace(/\D/g, "");
+    const [credentials] = await db
+      .select()
+      .from(authCredentials)
+      .where(eq(authCredentials.phone, normalizedPhone));
+    return credentials;
+  }
+
+  async getAuthCredentialsByUserId(userId: string): Promise<AuthCredentials | undefined> {
+    const [credentials] = await db
+      .select()
+      .from(authCredentials)
+      .where(eq(authCredentials.userId, userId));
+    return credentials;
+  }
+
+  async createAuthCredentials(credentials: InsertAuthCredentials): Promise<AuthCredentials> {
+    const [result] = await db
+      .insert(authCredentials)
+      .values({
+        ...credentials,
+        email: credentials.email?.toLowerCase().trim(),
+        phone: credentials.phone?.replace(/\D/g, ""),
+      })
+      .returning();
+    return result;
+  }
+
+  async updateAuthCredentialsLastLogin(userId: string): Promise<void> {
+    await db
+      .update(authCredentials)
+      .set({ lastLoginAt: new Date(), updatedAt: new Date() })
+      .where(eq(authCredentials.userId, userId));
+  }
+
+  async updateAuthCredentialsPassword(userId: string, passwordHash: string): Promise<void> {
+    await db
+      .update(authCredentials)
+      .set({ 
+        passwordHash, 
+        passwordUpdatedAt: new Date(), 
+        updatedAt: new Date() 
+      })
+      .where(eq(authCredentials.userId, userId));
+  }
+
+  async getUserByEmailOrPhone(identifier: string): Promise<User | undefined> {
+    const isEmailFormat = identifier.includes("@");
+    
+    if (isEmailFormat) {
+      const normalizedEmail = identifier.toLowerCase().trim();
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, normalizedEmail));
+      return user;
+    } else {
+      const normalizedPhone = identifier.replace(/\D/g, "");
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(or(
+          eq(users.phoneNumber, normalizedPhone),
+          eq(users.phone, normalizedPhone)
+        ));
+      return user;
+    }
   }
 }
 
