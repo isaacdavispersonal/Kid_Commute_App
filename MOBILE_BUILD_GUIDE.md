@@ -19,13 +19,52 @@ Kid Commute is configured for iOS and Android using Capacitor. This guide explai
 
 ---
 
+## ⚠️ CRITICAL: Backend URL Configuration
+
+**The mobile app MUST know the backend URL at build time.** This is the most common issue when the app shows "Backend URL not configured".
+
+### Option 1: Create .env.production file (Recommended)
+
+Create a file called `.env.production` in the project root (same folder as `package.json`):
+
+```bash
+# From your project root:
+echo "VITE_API_URL=https://kid-commute.replit.app" > .env.production
+```
+
+Then build normally - Vite will automatically load this file.
+
+### Option 2: Inline Environment Variable
+
+Set the variable directly when building:
+
+```bash
+VITE_API_URL=https://kid-commute.replit.app npm run build
+```
+
+### Verify the URL was embedded
+
+After building, check that the URL is in the compiled JavaScript:
+
+```bash
+grep -r "kid-commute" dist/
+```
+
+You should see the URL appear in the output. If not, the environment variable wasn't set correctly.
+
+---
+
 ## 🚀 Building Your Apps
 
 ### Step 1: Build the Web App
-First, build your web application:
+First, ensure VITE_API_URL is set (see above), then build:
 
 ```bash
+# Option A: Use .env.production file (create it first)
 npm run build
+
+# Option B: Set inline
+VITE_API_URL=https://kid-commute.replit.app npm run build
 ```
 
 This creates the production web bundle in `dist/public/`.

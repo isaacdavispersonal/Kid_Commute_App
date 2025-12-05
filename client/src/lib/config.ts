@@ -5,46 +5,40 @@ import { Capacitor } from '@capacitor/core';
  * Handles both web and mobile (Capacitor) environments
  */
 
-// Check if running in a Capacitor native app
+// Detect native environment
 export const isNative = Capacitor.isNativePlatform();
 
-// Configuration state - allows checking if the app is properly configured
-// null = not yet initialized, '' = failed/misconfigured, truthy string = configured
-let _configError: string | null = null;
 let _apiBaseUrl: string | null = null;
+let _configError: string | null = null;
 
-/**
- * Initialize configuration and detect any issues
- * Call this once at app startup
- */
-function initializeConfig(): void {
-  // Only skip reinit if we already have a real value (truthy URL)
-  // _apiBaseUrl === '' means initialization failed previously, so allow retry
-  if (_apiBaseUrl) return;
-  
+export function initializeConfig(): void {
+  // Allow reinitialization if previous attempt failed
+  if (_apiBaseUrl) return; // Only skip if we already have a REAL working value
+
   if (isNative) {
-    // Debug logging to verify what Vite injected into the build
-    console.log("[Config] Running on native platform");
-    console.log("[Config] Raw import.meta.env keys:", Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')));
+    console.log("[Config] Raw import.meta.env:", import.meta.env);
     console.log("[Config] VITE_API_URL read from env:", import.meta.env.VITE_API_URL);
-    
-    const productionUrl = import.meta.env.VITE_API_URL;
-    
+
+    const productionUrl = import.meta.env.VITE_API_URL as string | undefined;
+
     if (!productionUrl) {
-      _configError = 'Backend URL not configured. The mobile app needs VITE_API_URL to be set during the build process.';
-      _apiBaseUrl = '';
-      console.error('[Config] VITE_API_URL is not configured! Mobile app cannot connect to backend.');
-      console.error('[Config] To fix: Set VITE_API_URL=https://your-backend-url.replit.app in environment, rebuild with "npm run build", then run "npx cap sync"');
-    } else {
-      _configError = null; // Clear any previous error
-      _apiBaseUrl = productionUrl;
-      console.log('[Config] Mobile app configured with backend:', productionUrl);
+      _configError = "Backend URL not configured. The mobile app needs VITE_API_URL set during the build process.";
+      _apiBaseUrl = "";  // FAILED STATE, allows retry after rebuild
+      console.error("[Config] VITE_API_URL is not configured! Mobile app cannot connect to backend.");
+      return;
     }
+
+    // Normalize trailing slash
+    _apiBaseUrl = productionUrl.replace(/\/$/, "");
+    _configError = null; // Clear any previous error
+    console.log("[Config] Mobile app configured with backend:", _apiBaseUrl);
   } else {
-    // Web app: use relative URLs
-    _apiBaseUrl = '';
+    // Web version uses relative URLs
+    _apiBaseUrl = "";
   }
 }
+
+initializeConfig();
 
 /**
  * Reset configuration state to allow forced reinitialization
@@ -55,9 +49,6 @@ export function resetConfig(): void {
   _configError = null;
   console.log('[Config] Configuration reset, will reinitialize on next access');
 }
-
-// Initialize on module load
-initializeConfig();
 
 /**
  * Check if the app has a configuration error
