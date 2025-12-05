@@ -10,6 +10,8 @@ import { NotFoundError, ValidationError } from "./errors";
 import express from "express";
 import memoizee from "memoizee";
 import { registerAdminImportRoutes } from "./routes/admin-import";
+import mobileAuthRouter from "./routes/mobile-auth";
+import { verifyToken } from "./utils/jwt-auth";
 
 // Webhook authentication middleware
 const verifyWebhookToken = (req: any, res: any, next: any) => {
@@ -1361,6 +1363,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // ============ Admin Import Routes ============
   // Register bulk import routes for stops and students
   registerAdminImportRoutes(app, storage, isAuthenticated, requireRole);
+
+  // ============ Mobile Auth Routes ============
+  // JWT-based authentication for Capacitor mobile apps
+  app.use("/api/mobile/auth", mobileAuthRouter);
 
   // Get all users
   app.get(

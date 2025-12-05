@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { useMobileAuth } from "@/hooks/useMobileAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, UserCog } from "lucide-react";
 import {
@@ -18,8 +19,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { isConfigured, getConfigError, getLogoutUrl } from "@/lib/config";
+import { isConfigured, getConfigError, getLogoutUrl, isNative } from "@/lib/config";
 import { ConfigErrorScreen } from "@/components/config-error-screen";
+import MobileLogin from "@/pages/mobile-login";
 
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
@@ -65,7 +67,13 @@ import DriverMessages from "@/pages/driver/messages";
 import AdminMessages from "@/pages/admin/messages";
 
 function Router() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  // Use different auth systems based on platform
+  const webAuth = useAuth();
+  const mobileAuth = useMobileAuth();
+  
+  // On native, use mobile JWT auth; on web, use Replit OIDC
+  const auth = isNative ? mobileAuth : webAuth;
+  const { user, isAuthenticated, isLoading } = auth;
 
   if (isLoading) {
     return (
@@ -76,6 +84,18 @@ function Router() {
   }
 
   if (!isAuthenticated || !user) {
+    // On mobile, show the mobile login screen
+    if (isNative) {
+      return (
+        <MobileLogin 
+          onLoginSuccess={async (token, userData) => {
+            await mobileAuth.login(token, userData);
+          }} 
+        />
+      );
+    }
+    
+    // On web, show landing page with Replit Auth login
     return (
       <Switch>
         <Route path="/" component={Landing} />
@@ -87,6 +107,11 @@ function Router() {
   }
 
   const userRole = user.role || "parent";
+  
+  // For mobile auth, create a logout handler
+  const handleLogout = isNative 
+    ? async () => { await mobileAuth.logout(); }
+    : () => { window.location.href = getLogoutUrl(); };
 
   const sidebarStyle = {
     "--sidebar-width": "16rem",
@@ -132,7 +157,7 @@ function Router() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => (window.location.href = getLogoutUrl())}
+                  onClick={handleLogout}
                   className="text-destructive focus:text-destructive"
                   data-testid="button-logout"
                 >

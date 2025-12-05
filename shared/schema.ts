@@ -115,6 +115,62 @@ export const insertDeviceTokenSchema = createInsertSchema(deviceTokens).omit({
 export type InsertDeviceToken = z.infer<typeof insertDeviceTokenSchema>;
 export type DeviceToken = typeof deviceTokens.$inferSelect;
 
+// ============ Mobile Auth Credentials ============
+
+// Auth credentials table for mobile app login (separate from Replit OIDC)
+export const authCredentials = pgTable("auth_credentials", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  email: varchar("email").unique(), // Can login with email
+  phone: varchar("phone").unique(), // Can login with phone (normalized, digits only)
+  passwordHash: text("password_hash").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  lastLoginAt: timestamp("last_login_at"),
+  passwordUpdatedAt: timestamp("password_updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_auth_credentials_email").on(table.email),
+  index("idx_auth_credentials_phone").on(table.phone),
+]);
+
+export const insertAuthCredentialsSchema = createInsertSchema(authCredentials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastLoginAt: true,
+  passwordUpdatedAt: true,
+}).extend({
+  email: z.string().email("Invalid email format").optional(),
+  phone: z.string().regex(/^\d{10}$/, "Phone must be 10 digits").optional(),
+  passwordHash: z.string().min(1),
+});
+
+export type InsertAuthCredentials = z.infer<typeof insertAuthCredentialsSchema>;
+export type AuthCredentials = typeof authCredentials.$inferSelect;
+
+// Mobile login request schema
+export const mobileLoginSchema = z.object({
+  identifier: z.string().min(1, "Email or phone is required"), // email or phone
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export type MobileLoginRequest = z.infer<typeof mobileLoginSchema>;
+
+// Mobile registration request schema
+export const mobileRegisterSchema = z.object({
+  email: z.string().email("Invalid email").optional(),
+  phone: z.string().optional(),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+}).refine(
+  (data) => data.email || data.phone,
+  { message: "Either email or phone is required", path: ["identifier"] }
+);
+
+export type MobileRegisterRequest = z.infer<typeof mobileRegisterSchema>;
+
 // ============ Billing Portal Configuration ============
 
 // Payment portal provider enum
