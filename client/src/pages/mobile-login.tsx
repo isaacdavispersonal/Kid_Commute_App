@@ -70,8 +70,11 @@ export default function MobileLogin({ onLoginSuccess }: MobileLoginProps) {
     e.preventDefault();
     setIsLoading(true);
 
+    const apiUrl = getApiUrl("/api/mobile/auth/register");
+    console.log("[MobileLogin] Registering to:", apiUrl);
+
     try {
-      const response = await fetch(getApiUrl("/api/mobile/auth/register"), {
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -83,7 +86,13 @@ export default function MobileLogin({ onLoginSuccess }: MobileLoginProps) {
         }),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error("[MobileLogin] Failed to parse response:", parseError);
+        throw new Error("Server returned invalid response. Check network connection.");
+      }
 
       if (!response.ok) {
         throw new Error(data.message || "Registration failed");
@@ -96,9 +105,17 @@ export default function MobileLogin({ onLoginSuccess }: MobileLoginProps) {
 
       onLoginSuccess(data.token, data.user);
     } catch (error: any) {
+      console.error("[MobileLogin] Registration error:", error);
+      let errorMessage = error.message || "Please try again";
+      
+      // Provide more helpful error messages
+      if (error.message?.includes("fetch") || error.message?.includes("network")) {
+        errorMessage = "Unable to connect to server. Please check your internet connection.";
+      }
+      
       toast({
         title: "Registration Failed",
-        description: error.message || "Please try again",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
