@@ -16,21 +16,23 @@ export function initializeConfig(): void {
   if (_apiBaseUrl) return; // Only skip if we already have a REAL working value
 
   if (isNative) {
+    const FALLBACK_API_URL = "https://kid-commute.replit.app";
+
     console.log("[Config] Raw import.meta.env:", import.meta.env);
     console.log("[Config] VITE_API_URL read from env:", import.meta.env.VITE_API_URL);
 
-    const productionUrl = import.meta.env.VITE_API_URL as string | undefined;
+    let productionUrl = import.meta.env.VITE_API_URL as string | undefined;
 
     if (!productionUrl) {
-      _configError = "Backend URL not configured. The mobile app needs VITE_API_URL set during the build process.";
-      _apiBaseUrl = "";  // FAILED STATE, allows retry after rebuild
-      console.error("[Config] VITE_API_URL is not configured! Mobile app cannot connect to backend.");
-      return;
+      console.warn(
+        "[Config] VITE_API_URL is missing at build time. Falling back to hardcoded native URL:",
+        FALLBACK_API_URL,
+      );
+      productionUrl = FALLBACK_API_URL;
     }
 
-    // Normalize trailing slash
     _apiBaseUrl = productionUrl.replace(/\/$/, "");
-    _configError = null; // Clear any previous error
+    _configError = null;
     console.log("[Config] Mobile app configured with backend:", _apiBaseUrl);
   } else {
     // Web version uses relative URLs
