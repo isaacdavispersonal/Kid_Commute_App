@@ -1,16 +1,16 @@
-// Reference: Replit Auth blueprint and WebSocket blueprint
+// Reference: WebSocket blueprint
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
-import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
+import cookieParser from "cookie-parser";
+import unifiedAuthRouter, { requireAuth, requireRole } from "./routes/unified-auth";
 import { NotFoundError, ValidationError } from "./errors";
 import express from "express";
 import memoizee from "memoizee";
 import { registerAdminImportRoutes } from "./routes/admin-import";
-import mobileAuthRouter from "./routes/mobile-auth";
 import { verifyToken } from "./utils/jwt-auth";
 
 // Webhook authentication middleware
@@ -150,10 +150,15 @@ async function calculateShiftHours(shiftId: string, driverName: string): Promise
 }
 
 export async function registerRoutes(app: Express): Promise<RoutesBootstrapResult> {
-  // Auth middleware
-  await setupAuth(app);
-
+  // Cookie parser for JWT auth cookies
+  app.use(cookieParser());
   app.use(express.json());
+
+  // ============ Unified Auth Routes (JWT-based for web and mobile) ============
+  app.use("/api/auth", unifiedAuthRouter);
+  
+  // Legacy mobile auth route (redirect to unified)
+  app.use("/api/mobile/auth", unifiedAuthRouter);
 
   // ============ Health Check (Public - for mobile app connectivity testing) ============
   
@@ -166,26 +171,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     });
   });
 
-  // ============ Auth routes (Required for Replit Auth) ============
-
-  app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
   // Update user profile
-  app.patch("/api/profile", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/profile", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { updateProfileSchema } = await import("@shared/schema");
       
       console.log(`[PATCH /api/profile] Request body:`, req.body);
@@ -243,9 +232,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   });
 
   // Delete user account permanently
-  app.delete("/api/profile/delete-account", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/profile/delete-account", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       
       if (!user) {
@@ -255,13 +244,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       // Delete user and all associated data
       await storage.deleteUser(userId);
       
-      // Log the user out by destroying session
-      req.logout((err: any) => {
-        if (err) {
-          console.error("Error logging out after account deletion:", err);
-        }
-        res.json({ success: true, message: "Account deleted successfully" });
-      });
+      // Clear auth cookie
+      res.clearCookie("auth_token");
+      res.json({ success: true, message: "Account deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting account:", error);
       res.status(500).json({ message: "Failed to delete account" });
@@ -271,7 +256,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // ============ Billing Portal Configuration Routes ============
 
   // Get enabled payment portals for parents
-  app.get("/api/billing/portals", isAuthenticated, async (req: any, res) => {
+  app.get("/api/billing/portals", requireAuth, async (req: any, res) => {
     try {
       const portals = await storage.getEnabledPaymentPortals();
       res.json(portals);
@@ -284,9 +269,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // ============ Push Notification Device Token Routes ============
 
   // Register or update device token for push notifications
-  app.post("/api/push-tokens", isAuthenticated, async (req: any, res) => {
+  app.post("/api/push-tokens", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { insertDeviceTokenSchema } = await import("@shared/schema");
       
       const result = insertDeviceTokenSchema.safeParse(req.body);
@@ -311,9 +296,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   });
 
   // Delete device token (when user logs out of device)
-  app.delete("/api/push-tokens/:token", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/push-tokens/:token", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { token } = req.params;
 
       await storage.deleteDeviceToken(userId, token);
@@ -354,9 +339,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  app.get("/api/user/unread-counts", isAuthenticated, async (req: any, res) => {
+  app.get("/api/user/unread-counts", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       
       if (!user) {
@@ -372,9 +357,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   });
 
   // Get unread announcement IDs for current user
-  app.get("/api/user/unread-announcements", isAuthenticated, async (req: any, res) => {
+  app.get("/api/user/unread-announcements", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       
       if (!user) {
@@ -448,9 +433,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   });
 
   // Mark messages as read
-  app.post("/api/messages/mark-read", isAuthenticated, async (req: any, res) => {
+  app.post("/api/messages/mark-read", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { senderId } = req.body;
 
       if (!senderId) {
@@ -466,9 +451,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   });
 
   // Mark announcement as read
-  app.post("/api/announcements/mark-read", isAuthenticated, async (req: any, res) => {
+  app.post("/api/announcements/mark-read", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { announcementId } = req.body;
 
       if (!announcementId) {
@@ -488,7 +473,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get dashboard statistics
   app.get(
     "/api/admin/stats",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -504,7 +489,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get GPS webhook configuration status
   app.get(
     "/api/admin/gps-webhook-status",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -523,7 +508,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get Samsara integration status
   app.get(
     "/api/admin/samsara/status",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -545,7 +530,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get Samsara vehicle mappings
   app.get(
     "/api/admin/samsara/vehicle-mappings",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -570,7 +555,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Sync vehicles from Samsara
   app.post(
     "/api/admin/samsara/sync-vehicles",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -655,7 +640,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get route health overview
   app.get(
     "/api/admin/route-health",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -720,7 +705,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get active drivers
   app.get(
     "/api/admin/active-drivers",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -736,7 +721,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get recent incidents
   app.get(
     "/api/admin/recent-incidents",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -752,7 +737,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all incidents
   app.get(
     "/api/admin/incidents",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -768,7 +753,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update incident status (resolve incident)
   app.patch(
     "/api/admin/incidents/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -793,7 +778,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all supplies requests
   app.get(
     "/api/admin/supplies-requests",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -809,13 +794,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update supplies request status
   app.patch(
     "/api/admin/supplies-requests/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
         const { id } = req.params;
         const { status, adminNotes } = req.body;
-        const approvedBy = req.user.claims.sub;
+        const approvedBy = req.user.id;
 
         if (!status || !["PENDING", "APPROVED", "ORDERED", "DELIVERED", "REJECTED"].includes(status)) {
           return res.status(400).json({ message: "Invalid status" });
@@ -839,7 +824,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all driver feedback
   app.get(
     "/api/admin/feedback",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -855,13 +840,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update driver feedback status
   app.patch(
     "/api/admin/feedback/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
         const { id } = req.params;
         const { status, adminResponse } = req.body;
-        const respondedBy = req.user.claims.sub;
+        const respondedBy = req.user.id;
 
         if (!status || !["NEW", "REVIEWING", "PLANNED", "COMPLETED", "DISMISSED"].includes(status)) {
           return res.status(400).json({ message: "Invalid status" });
@@ -885,7 +870,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all vehicle checklists (admin)
   app.get(
     "/api/admin/vehicle-checklists",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -901,7 +886,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete a vehicle checklist (admin)
   app.delete(
     "/api/admin/vehicle-checklists/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -923,7 +908,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all audit logs
   app.get(
     "/api/admin/audit-logs",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -939,7 +924,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get audit logs filtered by role
   app.get(
     "/api/admin/audit-logs/role/:role",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -959,7 +944,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get audit logs for a specific user
   app.get(
     "/api/admin/audit-logs/user/:userId",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -978,7 +963,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Detect timecard anomalies
   app.get(
     "/api/admin/timecard-anomalies",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -996,7 +981,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all admin settings
   app.get(
     "/api/admin/settings",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1012,7 +997,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get specific admin setting by key
   app.get(
     "/api/admin/settings/:key",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1032,12 +1017,12 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create or update admin setting
   app.post(
     "/api/admin/settings",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
         const { key, value, description } = req.body;
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
 
         if (!key || !value) {
           return res.status(400).json({ message: "Key and value are required" });
@@ -1057,7 +1042,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get drivers with BambooHR employee mapping
   app.get(
     "/api/admin/payroll/drivers",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1073,7 +1058,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update driver's BambooHR employee ID
   app.put(
     "/api/admin/payroll/drivers/:driverId/bamboo-id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1096,7 +1081,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Calculate payroll for a pay period (preview before export)
   app.post(
     "/api/admin/payroll/calculate",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1122,12 +1107,12 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create and execute payroll export to BambooHR
   app.post(
     "/api/admin/payroll/exports",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
         const { startDate, endDate, includeOvertime } = req.body;
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
 
         if (!startDate || !endDate) {
           return res.status(400).json({ message: "startDate and endDate are required" });
@@ -1320,7 +1305,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get list of payroll exports
   app.get(
     "/api/admin/payroll/exports",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1336,7 +1321,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get details of a specific payroll export
   app.get(
     "/api/admin/payroll/exports/:exportId",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1362,16 +1347,12 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
 
   // ============ Admin Import Routes ============
   // Register bulk import routes for stops and students
-  registerAdminImportRoutes(app, storage, isAuthenticated, requireRole);
-
-  // ============ Mobile Auth Routes ============
-  // JWT-based authentication for Capacitor mobile apps
-  app.use("/api/mobile/auth", mobileAuthRouter);
+  registerAdminImportRoutes(app, storage, requireAuth, requireRole);
 
   // Get all users
   app.get(
     "/api/admin/users",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1387,13 +1368,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update user role
   app.patch(
     "/api/admin/users/:userId/role",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
         const { userId } = req.params;
         const { role } = req.body;
-        const currentUserId = req.user.claims.sub;
+        const currentUserId = req.user.id;
 
         if (!role || !["admin", "driver", "parent"].includes(role)) {
           return res.status(400).json({ message: "Invalid role specified" });
@@ -1428,7 +1409,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all vehicles (for any authenticated user - drivers need this for checklists)
   app.get(
     "/api/vehicles",
-    isAuthenticated,
+    requireAuth,
     async (req, res) => {
       try {
         const vehicles = await storage.getAllVehicles();
@@ -1443,7 +1424,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all vehicles (admin-specific route)
   app.get(
     "/api/admin/vehicles",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1459,7 +1440,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create a new vehicle
   app.post(
     "/api/admin/vehicles",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1491,7 +1472,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update a vehicle
   app.put(
     "/api/admin/vehicles/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1527,7 +1508,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete a vehicle
   app.delete(
     "/api/admin/vehicles/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1552,7 +1533,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all geofences
   app.get(
     "/api/admin/geofences",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1568,7 +1549,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create a new geofence
   app.post(
     "/api/admin/geofences",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1595,7 +1576,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update a geofence
   app.patch(
     "/api/admin/geofences/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1628,7 +1609,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete a geofence
   app.delete(
     "/api/admin/geofences/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1649,7 +1630,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get geofence events (audit log)
   app.get(
     "/api/admin/geofence-events",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1667,7 +1648,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all route groups
   app.get(
     "/api/admin/route-groups",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1683,7 +1664,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create a new route group
   app.post(
     "/api/admin/route-groups",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1718,7 +1699,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update a route group
   app.patch(
     "/api/admin/route-groups/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1754,7 +1735,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete a route group
   app.delete(
     "/api/admin/route-groups/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1778,7 +1759,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all routes
   app.get(
     "/api/admin/routes",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1801,7 +1782,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create a new route
   app.post(
     "/api/admin/routes",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1837,7 +1818,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update a route
   app.patch(
     "/api/admin/routes/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1874,7 +1855,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete a route
   app.delete(
     "/api/admin/routes/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1896,7 +1877,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get stops for a specific route
   app.get(
     "/api/admin/routes/:routeId/stops",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1920,7 +1901,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all stops (independent of routes)
   app.get(
     "/api/admin/stops",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1936,7 +1917,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create a new stop (not tied to any route)
   app.post(
     "/api/admin/stops",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -1972,7 +1953,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update a stop
   app.patch(
     "/api/admin/stops/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2009,7 +1990,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete a stop
   app.delete(
     "/api/admin/stops/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2031,7 +2012,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Add a stop to a route (create route_stop junction)
   app.post(
     "/api/admin/routes/:routeId/stops",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2068,7 +2049,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update route stops (for reordering or changing scheduled times)
   app.patch(
     "/api/admin/routes/:routeId/stops",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2100,7 +2081,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Remove a stop from a route (delete route_stop junction)
   app.delete(
     "/api/admin/routes/:routeId/stops/:routeStopId",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2122,7 +2103,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all schedules
   app.get(
     "/api/admin/schedules",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2154,7 +2135,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all students for route assignment
   app.get(
     "/api/admin/students",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2233,7 +2214,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create new student (admin)
   app.post(
     "/api/admin/students",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -2284,7 +2265,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update student (admin)
   app.patch(
     "/api/admin/students/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -2353,7 +2334,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Assign student to route
   app.patch(
     "/api/admin/students/:id/assign-route",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -2419,7 +2400,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Unassign student from route
   app.delete(
     "/api/admin/students/:id/unassign-route",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -2447,7 +2428,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete student
   app.delete(
     "/api/admin/students/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -2472,7 +2453,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get student's route assignments
   app.get(
     "/api/admin/students/:id/routes",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2489,7 +2470,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create student-route assignment
   app.post(
     "/api/admin/students/:id/routes",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2518,7 +2499,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update student-route assignment stops
   app.patch(
     "/api/admin/student-routes/:assignmentId",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2545,7 +2526,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete student-route assignment
   app.delete(
     "/api/admin/student-routes/:assignmentId",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2567,7 +2548,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all driver assignments
   app.get(
     "/api/admin/driver-assignments",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2601,7 +2582,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create new driver assignment
   app.post(
     "/api/admin/driver-assignments",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -2640,7 +2621,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update driver assignment
   app.patch(
     "/api/admin/driver-assignments/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -2682,7 +2663,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete driver assignment
   app.delete(
     "/api/admin/driver-assignments/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -2706,7 +2687,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get shifts by date (optionally filtered by driver)
   app.get(
     "/api/admin/shifts",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2746,7 +2727,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create new shift
   app.post(
     "/api/admin/shifts",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2792,7 +2773,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Bulk create shifts from driver assignments
   app.post(
     "/api/admin/shifts/bulk",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2896,7 +2877,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create shifts from driver assignments
   app.post(
     "/api/admin/shifts/from-assignments",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -2999,7 +2980,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Bulk add shifts for selected dates and drivers
   app.post(
     "/api/admin/shifts/bulk-add",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3073,7 +3054,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Bulk delete shifts for selected dates and drivers
   app.post(
     "/api/admin/shifts/bulk-delete",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3122,7 +3103,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update shift
   app.patch(
     "/api/admin/shifts/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3166,7 +3147,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete shift
   app.delete(
     "/api/admin/shifts/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3188,7 +3169,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all clock events with optional date filtering (for admin time management dashboard)
   app.get(
     "/api/admin/all-clock-events",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3216,7 +3197,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get unresolved clock events (for admin time exceptions queue)
   app.get(
     "/api/admin/clock-events/unresolved",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3232,7 +3213,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Resolve clock event
   app.patch(
     "/api/admin/clock-events/:id/resolve",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3256,7 +3237,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Edit clock event (admin can edit any clock event)
   app.patch(
     "/api/admin/clock-events/:id/edit",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3295,7 +3276,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Auto-clockout orphaned shifts (run failsafe)
   app.post(
     "/api/admin/auto-clockout",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3330,7 +3311,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get driver payroll summary
   app.get(
     "/api/admin/reports/payroll/:driverId",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3365,7 +3346,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get single shift hours details
   app.get(
     "/api/admin/reports/shift/:shiftId",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3395,7 +3376,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get daily hours breakdown for all drivers
   app.get(
     "/api/admin/reports/daily-hours",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req, res) => {
       try {
@@ -3468,11 +3449,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get current time entry
   app.get(
     "/api/driver/current-time-entry",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const entry = await storage.getCurrentTimeEntry(driverId);
         res.json(entry || null);
       } catch (error) {
@@ -3485,11 +3466,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get today's shifts for driver
   app.get(
     "/api/driver/today-shifts",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const shifts = await storage.getDriverTodayShifts(driverId);
         
         // Enrich with route and vehicle information
@@ -3520,11 +3501,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get driver's shifts (with date range) - enriched with clock events and calculated hours
   app.get(
     "/api/driver/shifts",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { startDate, endDate } = req.query;
         
         const shifts = await storage.getShiftsByDriver(
@@ -3565,11 +3546,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Clock in for shift
   app.post(
     "/api/driver/shifts/:shiftId/clock-in",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { shiftId } = req.params;
         
         // Verify shift belongs to this driver
@@ -3615,11 +3596,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Clock out from shift
   app.post(
     "/api/driver/shifts/:shiftId/clock-out",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { shiftId } = req.params;
         const { notes } = req.body;
         
@@ -3673,11 +3654,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Start break
   app.post(
     "/api/driver/break/start",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { notes } = req.body;
         
         // Check if already on break
@@ -3706,11 +3687,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // End break
   app.post(
     "/api/driver/break/end",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { notes } = req.body;
         
         // End break
@@ -3728,11 +3709,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get active break status
   app.get(
     "/api/driver/break/status",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const activeBreak = await storage.getActiveBreak(driverId);
         
         res.json({ activeBreak });
@@ -3748,11 +3729,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Simple clock-in (general timekeeping, not tied to a specific shift)
   app.post(
     "/api/driver/clock-in",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         
         // Check if already clocked in
         const activeClockIn = await storage.getActiveClockIn(driverId);
@@ -3783,11 +3764,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Simple clock-out (general timekeeping)
   app.post(
     "/api/driver/clock-out",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { notes } = req.body;
         
         // Check if clocked in
@@ -3819,11 +3800,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get current clock status
   app.get(
     "/api/driver/clock-status",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const activeClockIn = await storage.getActiveClockIn(driverId);
         const activeBreak = await storage.getActiveBreak(driverId);
         
@@ -3843,11 +3824,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Complete vehicle inspection for a shift
   app.post(
     "/api/driver/shift/:shiftId/complete-inspection",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { shiftId } = req.params;
         const { tiresOk, lightsOk, brakesOk, fluidLevelsOk, cleanlinessOk, notes } = req.body;
         
@@ -3905,11 +3886,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Start route (requires clock-in and completed inspection)
   app.post(
     "/api/driver/shift/:shiftId/start-route",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { shiftId } = req.params;
         
         // Verify shift belongs to this driver
@@ -3966,11 +3947,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Record student ride event (board/deboard)
   app.post(
     "/api/driver/ride-events",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { shiftId, studentId, actualStopId, eventType, notes } = req.body;
 
         // Verify shift belongs to this driver and route is started
@@ -4059,11 +4040,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Finish route (requires all stops complete and all students processed)
   app.post(
     "/api/driver/shift/:shiftId/finish-route",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { shiftId } = req.params;
 
         // Verify shift belongs to this driver
@@ -4133,11 +4114,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Supplies Requests - Create new request
   app.post(
     "/api/driver/supplies-request",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { itemName, quantity, urgency, reason } = req.body;
 
         const request = await storage.createSuppliesRequest({
@@ -4159,11 +4140,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get driver's supplies requests
   app.get(
     "/api/driver/supplies-requests",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const requests = await storage.getSuppliesRequestsByDriver(driverId);
         res.json(requests);
       } catch (error) {
@@ -4176,11 +4157,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Vehicle Checklists - Create new checklist
   app.post(
     "/api/driver/vehicle-checklist",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const {
           vehicleId,
           shiftId,
@@ -4227,11 +4208,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get driver's vehicle checklists
   app.get(
     "/api/driver/vehicle-checklists",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const checklists = await storage.getVehicleChecklistsByDriver(driverId);
         res.json(checklists);
       } catch (error) {
@@ -4244,11 +4225,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get today's vehicle checklist for specific vehicle and type
   app.get(
     "/api/driver/vehicle-checklist/today",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { vehicleId, type } = req.query;
 
         if (!vehicleId || !type) {
@@ -4272,11 +4253,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Driver Feedback - Create new feedback
   app.post(
     "/api/driver/feedback",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { category, subject, description } = req.body;
 
         const feedback = await storage.createDriverFeedback({
@@ -4297,11 +4278,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get driver's feedback submissions
   app.get(
     "/api/driver/feedback",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const feedback = await storage.getDriverFeedbackByDriver(driverId);
         res.json(feedback);
       } catch (error) {
@@ -4314,11 +4295,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get active clock-in status
   app.get(
     "/api/driver/active-clock-in",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const activeClockIn = await storage.getActiveClockIn(driverId);
         res.json(activeClockIn);
       } catch (error) {
@@ -4331,11 +4312,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Clock in for unscheduled shift (creates shift on-the-fly)
   app.post(
     "/api/driver/clock-in-unscheduled",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         
         // Check if already clocked in
         const activeClockIn = await storage.getActiveClockIn(driverId);
@@ -4389,11 +4370,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Legacy clock in (kept for backwards compatibility, maps to shift-based system)
   app.post(
     "/api/driver/clock-in",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
 
         // Check if already clocked in
         const currentEntry = await storage.getCurrentTimeEntry(driverId);
@@ -4417,11 +4398,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Legacy clock out (kept for backwards compatibility)
   app.post(
     "/api/driver/clock-out",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
 
         const currentEntry = await storage.getCurrentTimeEntry(driverId);
         if (!currentEntry) {
@@ -4441,11 +4422,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update clock event (for drivers to fix mistakes)
   app.patch(
     "/api/driver/clock-event/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const eventId = req.params.id;
         const { updateClockEventSchema } = await import("@shared/schema");
 
@@ -4484,11 +4465,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get today's route (based on shifts)
   app.get(
     "/api/driver/today-route",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const today = new Date().toISOString().split("T")[0];
         const shifts = await storage.getShiftsByDate(today, driverId);
 
@@ -4531,11 +4512,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get comprehensive route context for unified driver dashboard
   app.get(
     "/api/driver/route/:shiftId",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { shiftId } = req.params;
 
         // Get shift and verify ownership
@@ -4571,11 +4552,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get today's shifts
   app.get(
     "/api/driver/shifts/today",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const today = new Date().toISOString().split("T")[0];
         const shifts = await storage.getShiftsByDate(today, driverId);
         res.json(shifts);
@@ -4589,11 +4570,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get driver's weekly schedule (returns shifts for the next 7 days)
   app.get(
     "/api/driver/schedule",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         
         // Get today's date
         const today = new Date();
@@ -4641,11 +4622,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Submit vehicle inspection
   app.post(
     "/api/driver/inspection",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { tiresOk, lightsOk, brakesOk, fluidLevelsOk, cleanlinessOk, notes } =
           req.body;
 
@@ -4679,11 +4660,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Report incident
   app.post(
     "/api/driver/incident",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { title, description, severity, location } = req.body;
 
         const incident = await storage.createIncident({
@@ -4707,11 +4688,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get route progress for driver's current shift
   app.get(
     "/api/driver/route-progress",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { shiftId } = req.query;
 
         if (!shiftId || typeof shiftId !== "string") {
@@ -4743,11 +4724,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Initialize route progress for a shift
   app.post(
     "/api/driver/route-progress/initialize",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { shiftId } = req.body;
 
         if (!shiftId) {
@@ -4780,11 +4761,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update stop status
   app.post(
     "/api/driver/route-progress/update-stop",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { shiftId, routeStopId, status, notes } = req.body;
 
         if (!shiftId || !routeStopId || !status) {
@@ -4821,11 +4802,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get route progress for student
   app.get(
     "/api/parent/student-progress/:studentId",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const { studentId } = req.params;
         const date = req.query.date || new Date().toISOString().split("T")[0];
 
@@ -4857,11 +4838,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Connect children by phone number matching
   app.post(
     "/api/parent/connect-children",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
         const user = await storage.getUser(userId);
         
         if (!user) {
@@ -4918,11 +4899,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get parent's students
   app.get(
     "/api/parent/students",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const students = await storage.getStudentsByParent(parentId);
         const today = new Date().toISOString().split('T')[0];
 
@@ -5077,11 +5058,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get vehicle location for parent's student
   app.get(
     "/api/parent/vehicle-location",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const students = await storage.getStudentsByParent(parentId);
 
         if (students.length === 0) {
@@ -5136,7 +5117,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create new child profile (DEPRECATED - parents should not create students directly)
   app.post(
     "/api/parent/students",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
@@ -5153,11 +5134,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update parent phone number with option to sync to children
   app.post(
     "/api/parent/update-phone",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const { z } = await import("zod");
         
         const schema = z.object({
@@ -5247,11 +5228,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update child profile
   app.patch(
     "/api/parent/students/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const studentId = req.params.id;
         const { updateStudentSchema } = await import("@shared/schema");
         
@@ -5293,11 +5274,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Delete child profile
   app.delete(
     "/api/parent/students/:id",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const studentId = req.params.id;
         
         // Verify the student belongs to this parent's household
@@ -5324,11 +5305,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get available stops for student's route (for pickup stop selection)
   app.get(
     "/api/parent/students/:id/available-stops",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const studentId = req.params.id;
         
         // Verify the student belongs to this parent's household
@@ -5360,14 +5341,14 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Update student's pickup stop
   app.patch(
     "/api/parent/students/:id/pickup-stop",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
         const { students } = await import("@shared/schema");
         const { eq } = await import("drizzle-orm");
 
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const studentId = req.params.id;
         const { pickupStopId } = req.body;
         
@@ -5412,13 +5393,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get ETA to student's pickup stop
   app.get(
     "/api/parent/eta/:studentId",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
         const { calculateDistance, calculateETA, formatDistance, formatETA } = await import("./gps-utils");
 
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const { studentId } = req.params;
         
         // Verify the student belongs to this parent's household
@@ -5494,11 +5475,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get drivers currently assigned to parent's children's routes
   app.get(
     "/api/parent/assigned-drivers",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const drivers = await storage.getActiveDriversForParent(parentId);
         res.json(drivers);
       } catch (error) {
@@ -5511,11 +5492,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get admins who have messaged this parent
   app.get(
     "/api/parent/admin-conversations",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         
         // Get all admins
         const admins = await storage.getUsersByRole("admin");
@@ -5543,7 +5524,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get driver info for parent
   app.get(
     "/api/parent/driver-info/:driverId",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
@@ -5563,11 +5544,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get messages between parent and specific driver
   app.get(
     "/api/parent/messages/:recipientId",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const recipientId = req.params.recipientId;
         
         // Check if recipient is admin - no route restriction needed for admin conversations
@@ -5619,11 +5600,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Send message from parent to driver
   app.post(
     "/api/parent/send-message",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const senderId = req.user.claims.sub;
+        const senderId = req.user.id;
         const { content, recipientId } = req.body;
 
         if (!recipientId) {
@@ -5675,11 +5656,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get admin contacts for parent (admins who have messaged this parent)
   app.get(
     "/api/parent/admin-contacts",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         
         // Get all admins who have messaged this parent
         const admins = await storage.getUsersByRole("admin");
@@ -5711,11 +5692,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all parents whose children are on driver's routes (can message any of them)
   app.get(
     "/api/driver/messageable-parents",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const parents = await storage.getMessageableParentsForDriver(driverId);
         res.json(parents);
       } catch (error) {
@@ -5728,11 +5709,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get admins who have messaged this driver
   app.get(
     "/api/driver/admin-conversations",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         
         // Get all admins
         const admins = await storage.getUsersByRole("admin");
@@ -5760,11 +5741,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get conversations (parents who have messaged this driver) - legacy endpoint for active conversations
   app.get(
     "/api/driver/conversations",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const conversations = await storage.getConversations(driverId);
         res.json(conversations);
       } catch (error) {
@@ -5777,11 +5758,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get messages between driver and specific parent/admin
   app.get(
     "/api/driver/messages/:recipientId",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const recipientId = req.params.recipientId;
         
         // Check if recipient is admin - no route restriction needed for admin conversations
@@ -5835,11 +5816,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Send message from driver to parent
   app.post(
     "/api/driver/send-message",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const senderId = req.user.claims.sub;
+        const senderId = req.user.id;
         const { content, recipientId } = req.body;
 
         if (!recipientId) {
@@ -5902,11 +5883,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get admin contacts for driver (admins who have messaged this driver)
   app.get(
     "/api/driver/admin-contacts",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         
         // Get all admins who have messaged this driver
         const admins = await storage.getUsersByRole("admin");
@@ -5936,11 +5917,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get driver notifications
   app.get(
     "/api/driver/notifications",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const notifications = await storage.getDriverNotifications(driverId);
         res.json(notifications);
       } catch (error) {
@@ -5953,11 +5934,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Dismiss driver notification
   app.post(
     "/api/driver/notifications/:id/dismiss",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const notificationId = req.params.id;
         await storage.dismissDriverNotification(notificationId, driverId);
         res.json({ message: "Notification dismissed" });
@@ -5976,7 +5957,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all drivers for admin to message
   app.get(
     "/api/admin/all-drivers",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -5992,7 +5973,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all parents for admin to message
   app.get(
     "/api/admin/all-parents",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -6008,11 +5989,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all admins (excluding current user) for admin-to-admin messaging
   app.get(
     "/api/admin/all-admins",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
-        const currentUserId = req.user.claims.sub;
+        const currentUserId = req.user.id;
         const admins = await storage.getUsersByRole("admin");
         // Filter out the current user
         const otherAdmins = admins.filter((admin: any) => admin.id !== currentUserId);
@@ -6027,11 +6008,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get direct messages between admin and specific user
   app.get(
     "/api/admin/direct-messages/:userId",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
-        const adminId = req.user.claims.sub;
+        const adminId = req.user.id;
         const userId = req.params.userId;
         
         const messages = await storage.getMessagesBetweenUsers(adminId, userId);
@@ -6060,11 +6041,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get message summaries for all users (for Recent tab)
   app.get(
     "/api/admin/message-summaries",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
-        const adminId = req.user.claims.sub;
+        const adminId = req.user.id;
         const summaries = await storage.getAdminMessageSummaries(adminId);
         res.json(summaries);
       } catch (error) {
@@ -6077,7 +6058,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get all conversations between drivers and parents
   app.get(
     "/api/admin/all-conversations",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -6093,7 +6074,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get messages for a specific conversation
   app.get(
     "/api/admin/conversation-messages/:conversationKey",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -6124,11 +6105,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Send message from admin to anyone
   app.post(
     "/api/admin/send-message",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
-        const senderId = req.user.claims.sub;
+        const senderId = req.user.id;
         const { content, recipientId } = req.body;
 
         if (!recipientId) {
@@ -6167,11 +6148,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Send intervention message in driver-parent conversation
   app.post(
     "/api/admin/send-conversation-message",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
-        const adminId = req.user.claims.sub;
+        const adminId = req.user.id;
         const { content, conversationId, driverId, parentId } = req.body;
 
         if (!content || !conversationId || !driverId || !parentId) {
@@ -6224,11 +6205,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create announcement
   app.post(
     "/api/admin/create-announcement",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
-        const adminId = req.user.claims.sub;
+        const adminId = req.user.id;
         const { title, content, targetRole } = req.body;
 
         if (!title || !content || !targetRole) {
@@ -6271,11 +6252,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Admin: Create route-specific announcement
   app.post(
     "/api/admin/route-announcements",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
-        const adminId = req.user.claims.sub;
+        const adminId = req.user.id;
         const { routeId, title, content } = req.body;
 
         if (!routeId || !title || !content) {
@@ -6301,11 +6282,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get announcements for drivers
   app.get(
     "/api/driver/announcements",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
         const announcements = await storage.getNonDismissedAnnouncementsByRole(userId, "driver");
         
         // Add admin details to each announcement
@@ -6330,11 +6311,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get announcements for parents
   app.get(
     "/api/parent/announcements",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
         const announcements = await storage.getNonDismissedAnnouncementsByRole(userId, "parent");
         
         // Add admin details to each announcement
@@ -6359,11 +6340,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get dismissed announcements for drivers
   app.get(
     "/api/driver/announcements/dismissed",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
         const announcements = await storage.getDismissedAnnouncementsByRole(userId, "driver");
         
         // Add admin details to each announcement
@@ -6388,11 +6369,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get dismissed announcements for parents
   app.get(
     "/api/parent/announcements/dismissed",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
         const announcements = await storage.getDismissedAnnouncementsByRole(userId, "parent");
         
         // Add admin details to each announcement
@@ -6417,10 +6398,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Dismiss an admin announcement
   app.post(
     "/api/announcements/:id/dismiss",
-    isAuthenticated,
+    requireAuth,
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
         const announcementId = req.params.id;
         await storage.dismissAnnouncement(userId, announcementId);
         res.json({ success: true });
@@ -6434,11 +6415,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Create a route announcement (driver only)
   app.post(
     "/api/route-announcements",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const { routeId, message } = req.body;
 
         if (!routeId || !message) {
@@ -6468,11 +6449,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get route announcements for driver
   app.get(
     "/api/route-announcements/driver",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const announcements = await storage.getRouteAnnouncementsForDriver(driverId);
         res.json(announcements);
       } catch (error) {
@@ -6485,11 +6466,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get route announcements for parent
   app.get(
     "/api/route-announcements/parent",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const parentId = req.user.claims.sub;
+        const parentId = req.user.id;
         const announcements = await storage.getRouteAnnouncementsForParent(parentId);
         res.json(announcements);
       } catch (error) {
@@ -6502,10 +6483,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Mark route announcement as read
   app.post(
     "/api/route-announcements/:id/read",
-    isAuthenticated,
+    requireAuth,
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
         const routeAnnouncementId = req.params.id;
         await storage.markRouteAnnouncementAsRead(userId, routeAnnouncementId);
         res.json({ success: true });
@@ -6519,10 +6500,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Dismiss a route announcement
   app.post(
     "/api/route-announcements/:id/dismiss",
-    isAuthenticated,
+    requireAuth,
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
         const routeAnnouncementId = req.params.id;
         await storage.dismissRouteAnnouncement(userId, routeAnnouncementId);
         res.json({ success: true });
@@ -6538,11 +6519,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get students on driver's route for attendance (driver-specific)
   app.get(
     "/api/driver/route-students/:routeId",
-    isAuthenticated,
+    requireAuth,
     requireRole("driver"),
     async (req: any, res) => {
       try {
-        const driverId = req.user.claims.sub;
+        const driverId = req.user.id;
         const routeId = req.params.routeId;
         const today = new Date().toISOString().split('T')[0];
         
@@ -6573,10 +6554,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Set student attendance (all roles) - supports single date or date range
   app.post(
     "/api/attendance",
-    isAuthenticated,
+    requireAuth,
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
         const { studentId, date, endDate, status, notes } = req.body;
         
         // Validate request
@@ -6728,7 +6709,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get attendance for a specific date (admin only)
   app.get(
     "/api/admin/attendance/:date",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -6745,11 +6726,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get student attendance for parent (their children only)
   app.get(
     "/api/parent/student-attendance/:studentId/:date",
-    isAuthenticated,
+    requireAuth,
     requireRole("parent"),
     async (req: any, res) => {
       try {
-        const userId = req.user.claims.sub;
+        const userId = req.user.id;
         const { studentId, date } = req.params;
         
         // Authorization check
@@ -6781,7 +6762,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get attendance overview for a specific date (admin only)
   app.get(
     "/api/admin/attendance/overview/:date",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -6798,7 +6779,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get attendance analytics for date range (admin only)
   app.get(
     "/api/admin/attendance/analytics",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -6818,7 +6799,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get monthly attendance stats (admin only)
   app.get(
     "/api/admin/attendance/monthly-stats/:year/:month",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
@@ -6839,7 +6820,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Get student absence report for date range (admin only)
   app.get(
     "/api/admin/attendance/student-absences/:studentId",
-    isAuthenticated,
+    requireAuth,
     requireRole("admin"),
     async (req: any, res) => {
       try {
