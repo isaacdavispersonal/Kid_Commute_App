@@ -45,16 +45,16 @@ export function useMobileAuth(): UseMobileAuthResult {
         }
 
         // Verify token is still valid and refresh user data
-        const response = await fetch(getApiUrl("/api/mobile/auth/me"), {
+        const response = await fetch(getApiUrl("/api/auth/user"), {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
         if (response.ok) {
-          const data = await response.json();
-          setUser(data.user);
-          await setStoredUser(data.user);
+          const userData = await response.json();
+          setUser(userData);
+          await setStoredUser(userData);
         } else {
           // Token is invalid, clear auth data
           await clearAuthData();
@@ -91,16 +91,16 @@ export function useMobileAuth(): UseMobileAuthResult {
     if (!token) return;
 
     try {
-      const response = await fetch(getApiUrl("/api/mobile/auth/me"), {
+      const response = await fetch(getApiUrl("/api/auth/user"), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-        await setStoredUser(data.user);
+        const userData = await response.json();
+        setUser(userData);
+        await setStoredUser(userData);
       }
     } catch (error) {
       console.error("[MobileAuth] Error refreshing user:", error);

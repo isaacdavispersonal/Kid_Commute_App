@@ -343,6 +343,7 @@ router.post("/change-password", async (req, res) => {
 /**
  * Middleware: Require JWT authentication
  * Attaches user info to req.user
+ * Also verifies the user's account is still active
  */
 export const requireAuth: RequestHandler = async (req: any, res, next) => {
   try {
@@ -363,6 +364,13 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    // Verify account is still active (check credentials status)
+    const credentials = await storage.getAuthCredentialsByUserId(payload.userId);
+    if (credentials && !credentials.isActive) {
+      res.clearCookie(COOKIE_NAME);
+      return res.status(401).json({ message: "Account is disabled" });
+    }
+
     // Attach user to request
     req.user = user;
     req.userId = user.id;
@@ -376,6 +384,7 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
 
 /**
  * Middleware: Require specific role(s)
+ * Also verifies the user's account is still active
  */
 export function requireRole(...roles: ("admin" | "driver" | "parent")[]): RequestHandler {
   return async (req: any, res, next) => {
@@ -395,6 +404,13 @@ export function requireRole(...roles: ("admin" | "driver" | "parent")[]): Reques
       if (!user) {
         res.clearCookie(COOKIE_NAME);
         return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Verify account is still active
+      const credentials = await storage.getAuthCredentialsByUserId(payload.userId);
+      if (credentials && !credentials.isActive) {
+        res.clearCookie(COOKIE_NAME);
+        return res.status(401).json({ message: "Account is disabled" });
       }
 
       if (!roles.includes(user.role as any)) {

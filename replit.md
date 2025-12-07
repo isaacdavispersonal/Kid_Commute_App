@@ -16,11 +16,15 @@ Preferred communication style: Simple, everyday language.
 
 ### Technical Implementations
 - **Backend**: Express.js on Node.js with TypeScript and ESM.
-- **Authentication**: Dual system with Replit OIDC for web (admin) and JWT-based authentication for mobile (drivers/parents) using Capacitor apps.
+- **Authentication**: Unified JWT-based authentication for all platforms (web and mobile).
+  - **Web**: Email/phone + password login, JWT stored in HTTP-only Secure cookies (SameSite=Lax, 7-day expiry).
+  - **Mobile**: Same credentials, JWT stored via Capacitor Preferences.
+  - **Endpoints**: `/api/auth/login`, `/api/auth/register`, `/api/auth/logout`, `/api/auth/user`.
+  - **Security**: bcrypt password hashing, JWT_SECRET for token signing, role-based middleware (`requireAuth`, `requireRole`).
 - **API**: RESTful APIs in JSON format with structured error handling.
 - **Real-Time Communication**: `ws` WebSocket server.
 - **Data Storage**: PostgreSQL via Neon serverless with Drizzle ORM.
-- **Core Data Model**: Includes Users (multi-role), Households, Vehicles, Routes, Stops, Students, Shifts, Clock Events, Messages, Incidents, and Vehicle Inspections.
+- **Core Data Model**: Includes Users (multi-role), AuthCredentials (password management), Households, Vehicles, Routes, Stops, Students, Shifts, Clock Events, Messages, Incidents, and Vehicle Inspections.
 - **Key Features**:
     - **Reusable Stops System**: Independently defined and assignable stops.
     - **Phone-Based Household System**: Links parents to students via phone numbers.
@@ -56,7 +60,6 @@ Preferred communication style: Simple, everyday language.
 ## External Dependencies
 
 ### Third-Party Services
-- **Replit Auth**: OpenID Connect provider.
 - **Neon Database**: Serverless PostgreSQL hosting.
 - **Leaflet.js**: Mapping library.
 - **Google Fonts**: Inter font family.
@@ -69,8 +72,9 @@ Preferred communication style: Simple, everyday language.
 - `drizzle-orm`, `drizzle-kit`: ORM and migrations.
 - `@neondatabase/serverless`: PostgreSQL client.
 - `ws`: WebSocket server.
-- `passport`, `openid-client`: Authentication.
-- `express-session`, `connect-pg-simple`: Session management.
+- `bcryptjs`: Password hashing.
+- `jsonwebtoken`: JWT token generation/verification.
+- `cookie-parser`: Cookie handling for JWT auth.
 - `@tanstack/react-query`: Client-side data fetching.
 - `date-fns`: Date utility library.
 - `zod`: Runtime schema validation.
