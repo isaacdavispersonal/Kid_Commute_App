@@ -159,15 +159,12 @@ export type MobileLoginRequest = z.infer<typeof mobileLoginSchema>;
 
 // Mobile registration request schema
 export const mobileRegisterSchema = z.object({
-  email: z.string().email("Invalid email").optional(),
+  email: z.string().min(1, "Email is required").email("Invalid email format"),
   phone: z.string().optional(),
   password: z.string().min(6, "Password must be at least 6 characters"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-}).refine(
-  (data) => data.email || data.phone,
-  { message: "Either email or phone is required", path: ["identifier"] }
-);
+});
 
 export type MobileRegisterRequest = z.infer<typeof mobileRegisterSchema>;
 

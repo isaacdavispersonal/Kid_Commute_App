@@ -218,11 +218,10 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
     try {
       await apiRequest("POST", "/api/auth/register", {
         email: formData.email,
-        phoneNumber: formData.phoneNumber || null,
+        phone: formData.phoneNumber || undefined,
         password: formData.password,
         firstName: formData.firstName,
-        lastName: formData.lastName || null,
-        role: "parent",
+        lastName: formData.lastName,
       });
       
       toast({
@@ -294,6 +293,9 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
           disabled={isLoading}
           data-testid="input-phone"
         />
+        <p className="text-xs text-muted-foreground">
+          If provided, your account will be linked to your household for student updates
+        </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="registerPassword">Password *</Label>
