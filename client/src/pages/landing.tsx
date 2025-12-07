@@ -1,8 +1,12 @@
-// Landing page for unauthenticated users
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Car, Users, MapPin, MessageSquare, Shield, Clock, UserPlus, Mail } from "lucide-react";
-import { getLoginUrl } from "@/lib/config";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Car, Users, MapPin, MessageSquare, Shield, Clock, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Landing() {
   return (
@@ -14,25 +18,8 @@ export default function Landing() {
             <h1 className="text-4xl font-bold">Kid Connect</h1>
           </div>
 
-          <div className="text-center max-w-2xl">
-            <h2 className="text-3xl font-semibold mb-4">
-              Safe, Reliable Transportation
-            </h2>
-            <p className="text-lg text-muted-foreground mb-8">
-              Connecting administrators, drivers, and parents with real-time tracking,
-              route scheduling, and seamless communication.
-            </p>
-            <Button
-              size="lg"
-              onClick={() => (window.location.href = getLoginUrl())}
-              data-testid="button-login"
-              className="px-12"
-            >
-              Login
-            </Button>
-            <p className="text-sm text-muted-foreground mt-4">
-              New parents can create an account. Staff members should contact your administrator for access.
-            </p>
+          <div className="w-full max-w-md">
+            <AuthCard />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl mt-8">
@@ -70,6 +57,282 @@ export default function Landing() {
         </div>
       </div>
     </div>
+  );
+}
+
+function AuthCard() {
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+
+  return (
+    <Card className="w-full">
+      <CardHeader className="text-center">
+        <CardTitle>Welcome</CardTitle>
+        <CardDescription>
+          Sign in to access your transportation dashboard
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "login" | "register")}>
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger value="login" data-testid="tab-login">Sign In</TabsTrigger>
+            <TabsTrigger value="register" data-testid="tab-register">Register</TabsTrigger>
+          </TabsList>
+          <TabsContent value="login">
+            <LoginForm />
+          </TabsContent>
+          <TabsContent value="register">
+            <RegisterForm onSuccess={() => setActiveTab("login")} />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LoginForm() {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!identifier || !password) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter your email or phone and password",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await apiRequest("POST", "/api/auth/login", { identifier, password });
+      
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      
+      toast({
+        title: "Welcome back!",
+        description: "You have been signed in successfully",
+      });
+    } catch (error: any) {
+      console.error("Login error:", error);
+      toast({
+        title: "Sign In Failed",
+        description: error.message || "Invalid credentials. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="identifier">Email or Phone</Label>
+        <Input
+          id="identifier"
+          type="text"
+          placeholder="email@example.com or phone number"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+          disabled={isLoading}
+          data-testid="input-identifier"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <Input
+          id="password"
+          type="password"
+          placeholder="Enter your password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={isLoading}
+          data-testid="input-password"
+        />
+      </div>
+      <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-login">
+        {isLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Signing in...
+          </>
+        ) : (
+          "Sign In"
+        )}
+      </Button>
+      <p className="text-xs text-center text-muted-foreground mt-4">
+        Staff members should contact their administrator for access credentials
+      </p>
+    </form>
+  );
+}
+
+function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: "",
+    phoneNumber: "",
+    password: "",
+    confirmPassword: "",
+    firstName: "",
+    lastName: "",
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.email || !formData.password || !formData.firstName) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      toast({
+        title: "Password Mismatch",
+        description: "Passwords do not match",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast({
+        title: "Password Too Short",
+        description: "Password must be at least 6 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await apiRequest("POST", "/api/auth/register", {
+        email: formData.email,
+        phoneNumber: formData.phoneNumber || null,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName || null,
+        role: "parent",
+      });
+      
+      toast({
+        title: "Account Created",
+        description: "Your account has been created. Please sign in.",
+      });
+      
+      onSuccess();
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      toast({
+        title: "Registration Failed",
+        description: error.message || "Could not create account. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="firstName">First Name *</Label>
+          <Input
+            id="firstName"
+            type="text"
+            placeholder="First name"
+            value={formData.firstName}
+            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+            disabled={isLoading}
+            data-testid="input-first-name"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="lastName">Last Name</Label>
+          <Input
+            id="lastName"
+            type="text"
+            placeholder="Last name"
+            value={formData.lastName}
+            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+            disabled={isLoading}
+            data-testid="input-last-name"
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="email">Email *</Label>
+        <Input
+          id="email"
+          type="email"
+          placeholder="email@example.com"
+          value={formData.email}
+          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          disabled={isLoading}
+          data-testid="input-email"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="phone">Phone Number</Label>
+        <Input
+          id="phone"
+          type="tel"
+          placeholder="(optional)"
+          value={formData.phoneNumber}
+          onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+          disabled={isLoading}
+          data-testid="input-phone"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="registerPassword">Password *</Label>
+        <Input
+          id="registerPassword"
+          type="password"
+          placeholder="At least 6 characters"
+          value={formData.password}
+          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+          disabled={isLoading}
+          data-testid="input-register-password"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="confirmPassword">Confirm Password *</Label>
+        <Input
+          id="confirmPassword"
+          type="password"
+          placeholder="Confirm your password"
+          value={formData.confirmPassword}
+          onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+          disabled={isLoading}
+          data-testid="input-confirm-password"
+        />
+      </div>
+      <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-register">
+        {isLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Creating account...
+          </>
+        ) : (
+          "Create Account"
+        )}
+      </Button>
+      <p className="text-xs text-center text-muted-foreground">
+        By registering, you agree to our Terms of Service and Privacy Policy
+      </p>
+    </form>
   );
 }
 

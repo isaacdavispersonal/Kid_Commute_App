@@ -1,4 +1,4 @@
-// Main App component with role-based routing - Reference: Replit Auth blueprint
+// Main App component with role-based routing - Unified JWT authentication
 import { Switch, Route, Link } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { isConfigured, getConfigError, getLogoutUrl, isNative } from "@/lib/config";
+import { isConfigured, getConfigError, isNative } from "@/lib/config";
 import { ConfigErrorScreen } from "@/components/config-error-screen";
 import MobileLogin from "@/pages/mobile-login";
 
@@ -71,7 +71,7 @@ function Router() {
   const webAuth = useAuth();
   const mobileAuth = useMobileAuth();
   
-  // On native, use mobile JWT auth; on web, use Replit OIDC
+  // On native, use mobile JWT auth with token storage; on web, use JWT with cookies
   const auth = isNative ? mobileAuth : webAuth;
   const { user, isAuthenticated, isLoading } = auth;
 
@@ -95,7 +95,7 @@ function Router() {
       );
     }
     
-    // On web, show landing page with Replit Auth login
+    // On web, show landing page with email/password login
     return (
       <Switch>
         <Route path="/" component={Landing} />
@@ -108,10 +108,21 @@ function Router() {
 
   const userRole = user.role || "parent";
   
-  // For mobile auth, create a logout handler
-  const handleLogout = isNative 
-    ? async () => { await mobileAuth.logout(); }
-    : () => { window.location.href = getLogoutUrl(); };
+  // Unified logout handler for both web and mobile
+  const handleLogout = async () => {
+    try {
+      if (isNative) {
+        await mobileAuth.logout();
+      } else {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+        queryClient.clear();
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+      window.location.reload();
+    }
+  };
 
   const sidebarStyle = {
     "--sidebar-width": "16rem",
