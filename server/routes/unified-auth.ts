@@ -262,6 +262,13 @@ router.get("/user", async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Verify account is still active
+    const credentials = await storage.getAuthCredentialsByUserId(payload.userId);
+    if (credentials && !credentials.isActive) {
+      res.clearCookie(COOKIE_NAME);
+      return res.status(401).json({ message: "Account is disabled" });
+    }
+
     res.json(formatUserResponse(user));
   } catch (error) {
     console.error("[Auth] Get user error:", error);
