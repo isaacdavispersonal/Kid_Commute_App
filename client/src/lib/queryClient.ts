@@ -2,6 +2,14 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { getApiUrl, isNative } from "./config";
 import { getAuthToken } from "./mobile-auth";
 
+// Debug logging for API calls
+const DEBUG_API = true;
+function debugLog(message: string, data?: any) {
+  if (DEBUG_API) {
+    console.log(`[QueryClient] ${message}`, data !== undefined ? data : '');
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -17,13 +25,20 @@ async function throwIfResNotOk(res: Response) {
 async function getFetchOptions(extraHeaders?: Record<string, string>): Promise<RequestInit> {
   const headers: Record<string, string> = { ...extraHeaders };
   
+  debugLog(`getFetchOptions called, isNative: ${isNative}`);
+  
   if (isNative) {
     const token = await getAuthToken();
+    debugLog(`Native mode - token retrieved: ${!!token}, length: ${token?.length || 0}`);
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
+      debugLog('Authorization header set');
+    } else {
+      debugLog('WARNING: No token available for native request!');
     }
     return { headers };
   } else {
+    debugLog('Web mode - using credentials: include');
     return { 
       headers,
       credentials: "include" as RequestCredentials,

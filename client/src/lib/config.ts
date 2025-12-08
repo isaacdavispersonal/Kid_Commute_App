@@ -20,8 +20,21 @@ function detectNativePlatform(): boolean {
        window.location?.protocol === 'ionic:' ||
        window.location?.hostname === 'localhost' && window.location?.port === '');
     
-    return capacitorNative || isCapacitorProtocol;
-  } catch {
+    const result = capacitorNative || isCapacitorProtocol;
+    
+    // Debug logging
+    console.log('[Config] Platform detection:', {
+      capacitorNative,
+      isCapacitorProtocol,
+      result,
+      platform: Capacitor.getPlatform(),
+      protocol: typeof window !== 'undefined' ? window.location?.protocol : 'N/A',
+      hostname: typeof window !== 'undefined' ? window.location?.hostname : 'N/A',
+    });
+    
+    return result;
+  } catch (error) {
+    console.log('[Config] Error detecting platform:', error);
     return false;
   }
 }

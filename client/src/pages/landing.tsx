@@ -136,8 +136,17 @@ function LoginForm() {
 
       const data = await response.json() as { token: string; user: User };
       
+      console.log('[Landing] Login response received:', {
+        hasToken: !!data.token,
+        tokenLength: data.token?.length || 0,
+        hasUser: !!data.user,
+        isNative,
+      });
+      
       if (isNative && data.token) {
+        console.log('[Landing] Storing token for native app...');
         await setAuthToken(data.token);
+        console.log('[Landing] Token stored successfully');
       }
       
       toast({
@@ -145,6 +154,7 @@ function LoginForm() {
         description: "You have been signed in successfully",
       });
 
+      console.log('[Landing] Reloading page...');
       window.location.reload();
     } catch (error: any) {
       console.error("[Auth] Login failed:", error?.message);

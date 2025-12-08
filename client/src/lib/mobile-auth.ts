@@ -5,6 +5,14 @@ import { isNative, getApiUrl } from "./config";
 const TOKEN_KEY = "kid_commute_auth_token";
 const USER_KEY = "kid_commute_user";
 
+// Debug logging for mobile auth
+const DEBUG_AUTH = true;
+function debugLog(message: string, data?: any) {
+  if (DEBUG_AUTH) {
+    console.log(`[MobileAuth] ${message}`, data !== undefined ? data : '');
+  }
+}
+
 export interface MobileUser {
   id: string;
   email: string | null;
@@ -19,10 +27,21 @@ export interface MobileUser {
  * Store auth token securely
  */
 export async function setAuthToken(token: string): Promise<void> {
-  if (isNative) {
-    await Preferences.set({ key: TOKEN_KEY, value: token });
-  } else {
-    localStorage.setItem(TOKEN_KEY, token);
+  debugLog(`setAuthToken called, isNative: ${isNative}, token length: ${token?.length || 0}`);
+  try {
+    if (isNative) {
+      await Preferences.set({ key: TOKEN_KEY, value: token });
+      debugLog('Token stored via Capacitor Preferences');
+      // Verify it was stored
+      const { value } = await Preferences.get({ key: TOKEN_KEY });
+      debugLog(`Verification - token stored: ${!!value}, length: ${value?.length || 0}`);
+    } else {
+      localStorage.setItem(TOKEN_KEY, token);
+      debugLog('Token stored via localStorage');
+    }
+  } catch (error) {
+    debugLog('Error storing token:', error);
+    throw error;
   }
 }
 
@@ -30,11 +49,20 @@ export async function setAuthToken(token: string): Promise<void> {
  * Get stored auth token
  */
 export async function getAuthToken(): Promise<string | null> {
-  if (isNative) {
-    const { value } = await Preferences.get({ key: TOKEN_KEY });
-    return value;
-  } else {
-    return localStorage.getItem(TOKEN_KEY);
+  debugLog(`getAuthToken called, isNative: ${isNative}`);
+  try {
+    if (isNative) {
+      const { value } = await Preferences.get({ key: TOKEN_KEY });
+      debugLog(`Token retrieved from Capacitor Preferences: ${!!value}, length: ${value?.length || 0}`);
+      return value;
+    } else {
+      const value = localStorage.getItem(TOKEN_KEY);
+      debugLog(`Token retrieved from localStorage: ${!!value}`);
+      return value;
+    }
+  } catch (error) {
+    debugLog('Error retrieving token:', error);
+    return null;
   }
 }
 
