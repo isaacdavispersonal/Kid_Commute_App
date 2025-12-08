@@ -4,6 +4,40 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
+// CORS configuration for mobile app support
+// Mobile apps (Capacitor) send requests from capacitor://localhost or https://localhost
+const allowedOrigins = [
+  'capacitor://localhost',
+  'ionic://localhost', 
+  'http://localhost',
+  'https://localhost',
+  'http://localhost:5000',
+  'https://kid-commute.replit.app',
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Allow requests with no origin (same-origin, mobile apps, curl, etc.)
+  if (!origin) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  } else if (allowedOrigins.includes(origin) || origin.endsWith('.replit.app') || origin.endsWith('.replit.dev')) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  
+  next();
+});
+
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown
