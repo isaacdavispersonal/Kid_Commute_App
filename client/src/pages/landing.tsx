@@ -114,13 +114,6 @@ function LoginForm() {
       const url = getApiUrl("/api/auth/login");
       const requestBody = { identifier, password };
       
-      // Debug logging for auth request
-      console.log("=== LOGIN REQUEST DEBUG ===");
-      console.log("AUTH URL:", url);
-      console.log("AUTH BODY:", JSON.stringify(requestBody));
-      console.log("isNative:", isNative);
-      console.log("===========================");
-      
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -128,27 +121,21 @@ function LoginForm() {
         body: JSON.stringify(requestBody),
       });
 
-      console.log("LOGIN RESPONSE STATUS:", response.status);
-      console.log("LOGIN RESPONSE OK:", response.ok);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("LOGIN ERROR RESPONSE:", errorText);
         let errorMessage = "Login failed";
         try {
           const errorJson = JSON.parse(errorText);
           errorMessage = errorJson.message || errorMessage;
-        } catch (e) {
+        } catch {
           errorMessage = errorText || errorMessage;
         }
         throw new Error(errorMessage);
       }
 
       const data = await response.json() as { token: string; user: User };
-      console.log("LOGIN SUCCESS, user:", data.user?.email);
       
       if (isNative && data.token) {
-        console.log("Storing token for native app...");
         await setAuthToken(data.token);
       }
       
@@ -159,13 +146,7 @@ function LoginForm() {
 
       window.location.reload();
     } catch (error: any) {
-      console.error("=== LOGIN ERROR DEBUG ===");
-      console.error("Error name:", error?.name);
-      console.error("Error message:", error?.message);
-      console.error("Error stack:", error?.stack);
-      console.error("Full error object:", error);
-      console.error("=========================");
-      
+      console.error("[Auth] Login failed:", error?.message);
       toast({
         title: "Sign In Failed",
         description: error.message || "Invalid credentials. Please try again.",
@@ -272,13 +253,6 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
         lastName: formData.lastName,
       };
       
-      // Debug logging for auth request
-      console.log("=== REGISTER REQUEST DEBUG ===");
-      console.log("AUTH URL:", url);
-      console.log("AUTH BODY:", JSON.stringify({ ...requestBody, password: "[REDACTED]" }));
-      console.log("isNative:", isNative);
-      console.log("==============================");
-      
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -286,27 +260,21 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
         body: JSON.stringify(requestBody),
       });
 
-      console.log("REGISTER RESPONSE STATUS:", response.status);
-      console.log("REGISTER RESPONSE OK:", response.ok);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("REGISTER ERROR RESPONSE:", errorText);
         let errorMessage = "Registration failed";
         try {
           const errorJson = JSON.parse(errorText);
           errorMessage = errorJson.message || errorMessage;
-        } catch (e) {
+        } catch {
           errorMessage = errorText || errorMessage;
         }
         throw new Error(errorMessage);
       }
 
       const data = await response.json() as { token: string; user: User };
-      console.log("REGISTER SUCCESS, user:", data.user?.email);
 
       if (isNative && data.token) {
-        console.log("Storing token for native app...");
         await setAuthToken(data.token);
         window.location.reload();
       } else {
@@ -317,13 +285,7 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
         onSuccess();
       }
     } catch (error: any) {
-      console.error("=== REGISTER ERROR DEBUG ===");
-      console.error("Error name:", error?.name);
-      console.error("Error message:", error?.message);
-      console.error("Error stack:", error?.stack);
-      console.error("Full error object:", error);
-      console.error("============================");
-      
+      console.error("[Auth] Registration failed:", error?.message);
       toast({
         title: "Registration Failed",
         description: error.message || "Could not create account. Please try again.",

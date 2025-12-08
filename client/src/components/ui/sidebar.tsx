@@ -109,6 +109,64 @@ function SidebarProvider({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [toggleSidebar])
 
+  // Swipe gesture support for mobile - swipe right from left edge to open sidebar
+  // Uses refs to track gesture state across touch events
+  const swipeRef = React.useRef({
+    startX: 0,
+    startY: 0,
+    isEdgeSwipe: false,
+  })
+
+  React.useEffect(() => {
+    if (!isMobile) return
+
+    const EDGE_THRESHOLD = 30 // px from left edge to trigger swipe
+    const MIN_SWIPE_DISTANCE = 50 // minimum px to consider a swipe
+    const MAX_VERTICAL_DISTANCE = 100 // max vertical movement to still count as horizontal swipe
+
+    const handleTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0]
+      swipeRef.current.startX = touch.clientX
+      swipeRef.current.startY = touch.clientY
+      // Lock in edge detection at touch start - persists through move/end
+      swipeRef.current.isEdgeSwipe = touch.clientX < EDGE_THRESHOLD
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      // Keep tracking - don't reset isEdgeSwipe even if finger leaves edge zone
+      // This ensures swipes that start at edge continue to be recognized
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const { startX, startY, isEdgeSwipe } = swipeRef.current
+      const touch = e.changedTouches[0]
+      const deltaX = touch.clientX - startX
+      const deltaY = Math.abs(touch.clientY - startY)
+
+      // Swipe right from left edge to open (only when sidebar is closed)
+      if (isEdgeSwipe && !openMobile && deltaX > MIN_SWIPE_DISTANCE && deltaY < MAX_VERTICAL_DISTANCE) {
+        setOpenMobile(true)
+      }
+      // Swipe left to close (when sidebar is open)
+      else if (openMobile && deltaX < -MIN_SWIPE_DISTANCE && deltaY < MAX_VERTICAL_DISTANCE) {
+        setOpenMobile(false)
+      }
+
+      // Reset for next gesture
+      swipeRef.current.isEdgeSwipe = false
+    }
+
+    document.addEventListener("touchstart", handleTouchStart, { passive: true })
+    document.addEventListener("touchmove", handleTouchMove, { passive: true })
+    document.addEventListener("touchend", handleTouchEnd, { passive: true })
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart)
+      document.removeEventListener("touchmove", handleTouchMove)
+      document.removeEventListener("touchend", handleTouchEnd)
+    }
+  }, [isMobile, openMobile, setOpenMobile])
+
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed"
@@ -187,7 +245,7 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="bg-sidebar text-sidebar-foreground w-[var(--sidebar-width)] p-0 [&>button]:hidden"
+          className="bg-sidebar text-sidebar-foreground w-[var(--sidebar-width)] p-0 [&>button]:hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -265,8 +323,8 @@ function SidebarTrigger({
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
       variant="ghost"
-      size="icon"
-      className={cn("h-7 w-7", className)}
+      size="icon-touch"
+      className={cn(className)}
       onClick={(event) => {
         onClick?.(event)
         toggleSidebar()

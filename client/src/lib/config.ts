@@ -14,26 +14,14 @@ function detectNativePlatform(): boolean {
     // Primary check: Capacitor's official method
     const capacitorNative = Capacitor.isNativePlatform();
     
-    // Secondary check: Look for Capacitor-specific globals
-    const hasCapacitorBridge = typeof (window as any)?.Capacitor !== 'undefined';
-    
-    // Tertiary check: Check if we're NOT in a standard browser environment
+    // Secondary check: Check if we're NOT in a standard browser environment
     const isCapacitorProtocol = typeof window !== 'undefined' && 
       (window.location?.protocol === 'capacitor:' || 
        window.location?.protocol === 'ionic:' ||
        window.location?.hostname === 'localhost' && window.location?.port === '');
     
-    console.log("[Config] Native detection:", {
-      capacitorNative,
-      hasCapacitorBridge,
-      isCapacitorProtocol,
-      protocol: typeof window !== 'undefined' ? window.location?.protocol : 'N/A',
-      hostname: typeof window !== 'undefined' ? window.location?.hostname : 'N/A',
-    });
-    
     return capacitorNative || isCapacitorProtocol;
-  } catch (e) {
-    console.warn("[Config] Error detecting native platform:", e);
+  } catch {
     return false;
   }
 }
@@ -48,29 +36,14 @@ export function initializeConfig(): void {
   // Allow reinitialization if previous attempt failed
   if (_initialized && _apiBaseUrl !== null) return;
 
-  console.log("[Config] Initializing configuration...");
-  console.log("[Config] isNative:", isNative);
-  console.log("[Config] window.location:", typeof window !== 'undefined' ? {
-    protocol: window.location?.protocol,
-    hostname: window.location?.hostname,
-    port: window.location?.port,
-    href: window.location?.href,
-  } : 'N/A');
-
   if (isNative) {
     // Mobile app: Use production URL
     const envUrl = import.meta.env.VITE_API_URL as string | undefined;
-    
-    console.log("[Config] VITE_API_URL from env:", envUrl);
-    
     _apiBaseUrl = (envUrl || PRODUCTION_API_URL).replace(/\/$/, "");
     _configError = null;
-    
-    console.log("[Config] Mobile app configured with backend:", _apiBaseUrl);
   } else {
     // Web version uses relative URLs (same origin)
     _apiBaseUrl = "";
-    console.log("[Config] Web app using relative URLs");
   }
   
   _initialized = true;
@@ -86,7 +59,7 @@ initializeConfig();
 export function resetConfig(): void {
   _apiBaseUrl = null;
   _configError = null;
-  console.log('[Config] Configuration reset, will reinitialize on next access');
+  _initialized = false;
 }
 
 /**

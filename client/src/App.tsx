@@ -1,5 +1,5 @@
 // Main App component with role-based routing - Unified JWT authentication
-import { Switch, Route, Link } from "wouter";
+import { Switch, Route, Link, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -89,13 +89,18 @@ function Router() {
   }
 
   const userRole = user.role || "parent";
+  const [, setLocation] = useLocation();
   
   // Unified logout handler for both web and mobile
   const handleLogout = async () => {
     try {
       await logout();
+      // Navigate to landing page after logout
+      setLocation("/");
     } catch (error) {
       console.error("Logout error:", error);
+      // Even on error, navigate to landing page
+      setLocation("/");
     }
   };
 
@@ -109,11 +114,11 @@ function Router() {
       <div className="flex h-screen w-full">
         <AppSidebar userRole={userRole} />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b bg-card">
+          <header className="flex items-center justify-between gap-4 p-4 border-b bg-card pt-[max(1rem,env(safe-area-inset-top))]">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="gap-2" data-testid="button-user-menu">
+                <Button variant="ghost" size="touch" className="gap-2" data-testid="button-user-menu">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={user.profileImageUrl || undefined} />
                     <AvatarFallback className="bg-primary/10 text-primary">
@@ -153,7 +158,7 @@ function Router() {
               </DropdownMenuContent>
             </DropdownMenu>
           </header>
-          <main className="flex-1 overflow-y-auto p-6">
+          <main className="flex-1 overflow-y-auto p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             <Switch>
               {/* Common routes for all roles */}
               <Route path="/profile" component={Profile} />
