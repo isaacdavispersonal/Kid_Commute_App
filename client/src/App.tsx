@@ -67,6 +67,7 @@ import AdminMessages from "@/pages/admin/messages";
 function Router() {
   // Unified auth hook works for both web and mobile platforms
   const { user, isAuthenticated, isLoading, logout } = useUnifiedAuth();
+  const [, setLocation] = useLocation();
 
   if (isLoading) {
     return (
@@ -89,7 +90,6 @@ function Router() {
   }
 
   const userRole = user.role || "parent";
-  const [, setLocation] = useLocation();
   
   // Unified logout handler for both web and mobile
   const handleLogout = async () => {

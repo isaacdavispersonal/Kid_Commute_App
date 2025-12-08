@@ -5,6 +5,9 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
+// Trust proxy for proper HTTPS detection on Replit (behind reverse proxy)
+app.set('trust proxy', 1);
+
 // CORS configuration for mobile app support (Capacitor iOS/Android)
 app.use(
   cors({
