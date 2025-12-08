@@ -1,0 +1,48 @@
+The CORS fix is fine to add, but it does NOT explain the main symptom.
+
+Important: When I try to log in or register from the iOS (Capacitor) app, **the Replit server logs show no request at all**. There is no OPTIONS or POST hit for /api/login or /api/register. That means the request is not even reaching the backend, so CORS cannot be the root cause.
+
+Please do NOT focus on CORS right now. Instead, do the following:
+
+1. FIND WHERE THE AUTH REQUEST URL IS BUILT
+   - Search for the login and registration API calls in the client code.
+   - Identify the exact function where we call fetch/axios for login and register.
+   - Show me:
+     - the file path(s)
+     - how the final URL is constructed (including apiBaseUrl).
+
+2. OPEN client/src/lib/config.ts AND EXPLAIN NATIVE BEHAVIOR
+   - Explain exactly how the API base URL is determined for:
+     - browser dev
+     - browser production
+     - Capacitor native builds
+   - For a Capacitor iOS build, what does apiBaseUrl actually become?
+   - We want it to be:
+     - https://kid-commute.replit.app
+   - If it’s anything else (localhost, 127.0.0.1, empty string, etc.), FIX that logic so native builds ALWAYS default to https://kid-commute.replit.app unless VITE_API_URL is explicitly set.
+
+3. ADD LOGGING AROUND THE LOGIN/REGISTER REQUESTS
+   - In the login and register functions, right before the fetch/axios call, add:
+     - console.log('AUTH URL:', finalUrl);
+     - console.log('AUTH BODY:', body);
+   - In the catch/error handler, log the full error object.
+   - Do NOT just show “Load failed” to the user. Make sure the developer console sees the real error.
+
+4. VERIFY THE REQUEST ACTUALLY FIRES
+   - After adding these logs, I should be able to:
+     - run the app in the browser, open the devtools console, and see the auth URL and body.
+     - run the iOS app and, via Safari’s Develop > [Device] > WebView inspector, see the same logs.
+   - The goal is to confirm:
+     - that the login/register function is executing
+     - and what URL it is actually calling.
+
+5. ONLY AFTER THAT, CHECK BACKEND VISIBILITY
+   - If the URL is correct (https://kid-commute.replit.app/api/login or /api/register) and the request is firing, then:
+     - we should see something in the Replit server logs.
+     - if we still do not, investigate any App Transport Security (ATS) settings or http vs https.
+   - If the URL is wrong, fix it and test again.
+
+Please summarize:
+- What apiBaseUrl was for native builds before the fix.
+- What you changed in client/src/lib/config.ts.
+- The exact final URLs (e.g., https://kid-commute.replit.app/api/register) now being used by the login and registration calls.

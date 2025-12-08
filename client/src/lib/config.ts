@@ -5,41 +5,78 @@ import { Capacitor } from '@capacitor/core';
  * Handles both web and mobile (Capacitor) environments
  */
 
-// Detect native environment
-export const isNative = Capacitor.isNativePlatform();
+// Production backend URL - ALWAYS use this for native apps
+const PRODUCTION_API_URL = "https://kid-commute.replit.app";
 
-let _apiBaseUrl: string | null = null;
-let _configError: string | null = null;
-
-export function initializeConfig(): void {
-  // Allow reinitialization if previous attempt failed
-  if (_apiBaseUrl) return; // Only skip if we already have a REAL working value
-
-  if (isNative) {
-    const FALLBACK_API_URL = "https://kid-commute.replit.app";
-
-    console.log("[Config] Raw import.meta.env:", import.meta.env);
-    console.log("[Config] VITE_API_URL read from env:", import.meta.env.VITE_API_URL);
-
-    let productionUrl = import.meta.env.VITE_API_URL as string | undefined;
-
-    if (!productionUrl) {
-      console.warn(
-        "[Config] VITE_API_URL is missing at build time. Falling back to hardcoded native URL:",
-        FALLBACK_API_URL,
-      );
-      productionUrl = FALLBACK_API_URL;
-    }
-
-    _apiBaseUrl = productionUrl.replace(/\/$/, "");
-    _configError = null;
-    console.log("[Config] Mobile app configured with backend:", _apiBaseUrl);
-  } else {
-    // Web version uses relative URLs
-    _apiBaseUrl = "";
+// Detect native environment - check multiple ways for robustness
+function detectNativePlatform(): boolean {
+  try {
+    // Primary check: Capacitor's official method
+    const capacitorNative = Capacitor.isNativePlatform();
+    
+    // Secondary check: Look for Capacitor-specific globals
+    const hasCapacitorBridge = typeof (window as any)?.Capacitor !== 'undefined';
+    
+    // Tertiary check: Check if we're NOT in a standard browser environment
+    const isCapacitorProtocol = typeof window !== 'undefined' && 
+      (window.location?.protocol === 'capacitor:' || 
+       window.location?.protocol === 'ionic:' ||
+       window.location?.hostname === 'localhost' && window.location?.port === '');
+    
+    console.log("[Config] Native detection:", {
+      capacitorNative,
+      hasCapacitorBridge,
+      isCapacitorProtocol,
+      protocol: typeof window !== 'undefined' ? window.location?.protocol : 'N/A',
+      hostname: typeof window !== 'undefined' ? window.location?.hostname : 'N/A',
+    });
+    
+    return capacitorNative || isCapacitorProtocol;
+  } catch (e) {
+    console.warn("[Config] Error detecting native platform:", e);
+    return false;
   }
 }
 
+export const isNative = detectNativePlatform();
+
+let _apiBaseUrl: string | null = null;
+let _configError: string | null = null;
+let _initialized = false;
+
+export function initializeConfig(): void {
+  // Allow reinitialization if previous attempt failed
+  if (_initialized && _apiBaseUrl !== null) return;
+
+  console.log("[Config] Initializing configuration...");
+  console.log("[Config] isNative:", isNative);
+  console.log("[Config] window.location:", typeof window !== 'undefined' ? {
+    protocol: window.location?.protocol,
+    hostname: window.location?.hostname,
+    port: window.location?.port,
+    href: window.location?.href,
+  } : 'N/A');
+
+  if (isNative) {
+    // Mobile app: Use production URL
+    const envUrl = import.meta.env.VITE_API_URL as string | undefined;
+    
+    console.log("[Config] VITE_API_URL from env:", envUrl);
+    
+    _apiBaseUrl = (envUrl || PRODUCTION_API_URL).replace(/\/$/, "");
+    _configError = null;
+    
+    console.log("[Config] Mobile app configured with backend:", _apiBaseUrl);
+  } else {
+    // Web version uses relative URLs (same origin)
+    _apiBaseUrl = "";
+    console.log("[Config] Web app using relative URLs");
+  }
+  
+  _initialized = true;
+}
+
+// Run initialization immediately
 initializeConfig();
 
 /**
