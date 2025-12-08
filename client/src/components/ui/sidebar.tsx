@@ -120,9 +120,9 @@ function SidebarProvider({
   React.useEffect(() => {
     if (!isMobile) return
 
-    const EDGE_THRESHOLD = 30 // px from left edge to trigger swipe
-    const MIN_SWIPE_DISTANCE = 50 // minimum px to consider a swipe
-    const MAX_VERTICAL_DISTANCE = 100 // max vertical movement to still count as horizontal swipe
+    const EDGE_THRESHOLD = 60 // px from left edge to trigger swipe (widened for easier access)
+    const MIN_SWIPE_DISTANCE = 40 // minimum px to consider a swipe (reduced for better responsiveness)
+    const MAX_VERTICAL_DISTANCE = 120 // max vertical movement to still count as horizontal swipe
 
     const handleTouchStart = (e: TouchEvent) => {
       const touch = e.touches[0]

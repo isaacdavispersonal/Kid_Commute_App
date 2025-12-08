@@ -15,6 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { useState, useEffect } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 
 interface PaymentPortal {
   id: string;
@@ -137,15 +138,16 @@ export default function ParentDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1">Parent Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Track your children's transportation
-        </p>
-      </div>
+    <PullToRefresh queryKeys={[["/api/parent/students"], ["/api/billing/portals"]]}>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Parent Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Track your children's transportation
+          </p>
+        </div>
 
-      <IncompleteProfileBanner />
+        <IncompleteProfileBanner />
       
       <ParentTutorialBanner />
       
@@ -414,7 +416,8 @@ export default function ParentDashboard() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -840,16 +841,17 @@ export default function ConnectChildrenPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1">Connect Children</h1>
-        <p className="text-sm text-muted-foreground">
-          Link your account to your children using your phone number
-        </p>
-      </div>
+    <PullToRefresh queryKeys={[["/api/parent/students"], ["/api/auth/user"]]}>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Connect Children</h1>
+          <p className="text-sm text-muted-foreground">
+            Link your account to your children using your phone number
+          </p>
+        </div>
 
-      {/* Phone Number Status Card */}
-      <Card>
+        {/* Phone Number Status Card */}
+        <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Phone className="h-5 w-5" />
@@ -1000,6 +1002,7 @@ export default function ConnectChildrenPage() {
           </AlertDescription>
         </Alert>
       )}
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }

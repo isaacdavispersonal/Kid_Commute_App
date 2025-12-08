@@ -1,10 +1,33 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { getApiUrl } from "./config";
+import { getApiUrl, isNative } from "./config";
+import { getAuthToken } from "./mobile-auth";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);
+  }
+}
+
+/**
+ * Get fetch options based on platform (native vs web)
+ * - Native: Use Bearer token from Capacitor Preferences
+ * - Web: Use credentials: "include" for cookies
+ */
+async function getFetchOptions(extraHeaders?: Record<string, string>): Promise<RequestInit> {
+  const headers: Record<string, string> = { ...extraHeaders };
+  
+  if (isNative) {
+    const token = await getAuthToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return { headers };
+  } else {
+    return { 
+      headers,
+      credentials: "include" as RequestCredentials,
+    };
   }
 }
 
@@ -14,11 +37,13 @@ export async function apiRequest(
   data?: unknown | undefined,
 ): Promise<Response> {
   const fullUrl = getApiUrl(url);
+  const baseHeaders: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
+  const fetchOptions = await getFetchOptions(baseHeaders);
+  
   const res = await fetch(fullUrl, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    ...fetchOptions,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
   });
 
   await throwIfResNotOk(res);
@@ -33,9 +58,9 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const path = queryKey.join("/") as string;
     const fullUrl = getApiUrl(path);
-    const res = await fetch(fullUrl, {
-      credentials: "include",
-    });
+    const fetchOptions = await getFetchOptions();
+    
+    const res = await fetch(fullUrl, fetchOptions);
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
