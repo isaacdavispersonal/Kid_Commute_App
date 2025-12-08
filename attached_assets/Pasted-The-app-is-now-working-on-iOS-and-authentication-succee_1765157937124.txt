@@ -1,0 +1,61 @@
+The app is now working on iOS and authentication succeeds. I want to perform a simple cleanup and stabilization pass. Please complete the following tasks carefully, WITHOUT making any large architectural changes and without altering working logic.
+
+====================
+STAGE 1 — DATABASE CLEANUP
+====================
+1. Remove all test/demo user accounts from the database so we can start fresh.
+2. Remove any leftover sessions, tokens, or orphaned user-related records.
+3. Do NOT delete any actual schema or production tables.
+
+====================
+STAGE 2 — UI/UX FIXES FOR iOS
+====================
+The iOS UI needs basic spacing and interaction adjustments.
+
+1. Increase padding/touch area for:
+   - The top-left menu button
+   - The top-right profile button  
+   Ensure these respect Apple’s minimum recommended 44pt touch targets.
+
+2. Enable a “Swipe Right to Open Menu” gesture:
+   - Swiping from the left edge should open the sidebar menu smoothly.
+   - Swiping left or tapping outside should close it.
+   - Do NOT interfere with existing navigation behavior.
+
+3. Ensure consistent safe-area padding on all iPhones, especially devices with a notch.
+
+====================
+STAGE 3 — SIGN OUT ROUTING FIX
+====================
+Current issue: After signing out, the user is redirected to a 404 page.
+
+Fix:
+1. Ensure sign-out correctly clears local auth state.
+2. Ensure navigation routes the user back to the login/landing page.
+3. Verify no broken or missing navigation routes remain.
+
+====================
+STAGE 4 — INTERNAL BUG HUNT (SAFE MODE)
+====================
+Perform a non-destructive scan of the project for small internal issues.  
+ONLY fix minor bugs; do NOT rewrite architecture or major components.
+
+Check for:
+- Unused imports or variables
+- Missing awaits, missing error handling
+- Console warnings or minor runtime errors
+- Small UI layout glitches
+- Incorrect or fragile route paths
+- Minor backend errors such as inconsistent JSON responses or missing try/catch blocks
+
+Fix ONLY small issues. If anything is large or structural, DO NOT change it — instead leave a comment noting the issue.
+
+====================
+IMPORTANT CONSTRAINTS
+====================
+- Do NOT implement any new UI features beyond what is described.
+- Do NOT redesign or refactor major systems.
+- Do NOT significantly change backend logic.
+- Keep all existing working behavior intact.
+
+Proceed carefully and update code step-by-step.
