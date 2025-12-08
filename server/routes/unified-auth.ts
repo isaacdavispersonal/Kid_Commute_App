@@ -17,13 +17,19 @@ const router = Router();
 
 // Cookie settings for web browsers
 const COOKIE_NAME = "auth_token";
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  path: "/",
-};
+
+// Helper to get cookie options based on request
+function getCookieOptions(req: Request) {
+  // Always use secure cookies on HTTPS (Replit always serves over HTTPS)
+  const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === "production";
+  return {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: "lax" as const,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: "/",
+  };
+}
 
 /**
  * Helper to extract JWT token from request
@@ -113,7 +119,7 @@ router.post("/login", async (req, res) => {
     const token = generateToken(user.id, user.role);
 
     // Set cookie for web browsers
-    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+    res.cookie(COOKIE_NAME, token, getCookieOptions(req));
 
     res.json({
       token,
@@ -226,7 +232,7 @@ router.post("/register", async (req, res) => {
     const token = generateToken(user.id, user.role);
 
     // Set cookie for web browsers
-    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+    res.cookie(COOKIE_NAME, token, getCookieOptions(req));
 
     res.status(201).json({
       token,
