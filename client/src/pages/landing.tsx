@@ -6,7 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Car, Users, MapPin, MessageSquare, Shield, Clock, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { isNative, getApiUrl } from "@/lib/config";
+import { setAuthToken } from "@/lib/mobile-auth";
+import type { User } from "@shared/schema";
 
 export default function Landing() {
   return (
@@ -109,14 +111,31 @@ function LoginForm() {
 
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/login", { identifier, password });
+      const url = getApiUrl("/api/auth/login");
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ identifier, password }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Login failed");
+      }
+
+      const data = await response.json() as { token: string; user: User };
       
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      if (isNative && data.token) {
+        await setAuthToken(data.token);
+      }
       
       toast({
         title: "Welcome back!",
         description: "You have been signed in successfully",
       });
+
+      window.location.reload();
     } catch (error: any) {
       console.error("Login error:", error);
       toast({
@@ -216,20 +235,37 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
 
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/register", {
-        email: formData.email,
-        phone: formData.phoneNumber || undefined,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
+      const url = getApiUrl("/api/auth/register");
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: formData.email,
+          phone: formData.phoneNumber || undefined,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+        }),
       });
-      
-      toast({
-        title: "Account Created",
-        description: "Your account has been created. Please sign in.",
-      });
-      
-      onSuccess();
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Registration failed");
+      }
+
+      const data = await response.json() as { token: string; user: User };
+
+      if (isNative && data.token) {
+        await setAuthToken(data.token);
+        window.location.reload();
+      } else {
+        toast({
+          title: "Account Created",
+          description: "Your account has been created. Please sign in.",
+        });
+        onSuccess();
+      }
     } catch (error: any) {
       console.error("Registration error:", error);
       toast({

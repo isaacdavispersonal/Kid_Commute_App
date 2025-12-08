@@ -6,8 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { useAuth } from "@/hooks/useAuth";
-import { useMobileAuth } from "@/hooks/useMobileAuth";
+import { useUnifiedAuth } from "@/hooks/useUnifiedAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, UserCog } from "lucide-react";
 import {
@@ -19,9 +18,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { isConfigured, getConfigError, isNative } from "@/lib/config";
+import { isConfigured, getConfigError } from "@/lib/config";
 import { ConfigErrorScreen } from "@/components/config-error-screen";
-import MobileLogin from "@/pages/mobile-login";
 
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
@@ -67,13 +65,8 @@ import DriverMessages from "@/pages/driver/messages";
 import AdminMessages from "@/pages/admin/messages";
 
 function Router() {
-  // Use different auth systems based on platform
-  const webAuth = useAuth();
-  const mobileAuth = useMobileAuth();
-  
-  // On native, use mobile JWT auth with token storage; on web, use JWT with cookies
-  const auth = isNative ? mobileAuth : webAuth;
-  const { user, isAuthenticated, isLoading } = auth;
+  // Unified auth hook works for both web and mobile platforms
+  const { user, isAuthenticated, isLoading, logout } = useUnifiedAuth();
 
   if (isLoading) {
     return (
@@ -84,18 +77,7 @@ function Router() {
   }
 
   if (!isAuthenticated || !user) {
-    // On mobile, show the mobile login screen
-    if (isNative) {
-      return (
-        <MobileLogin 
-          onLoginSuccess={async (token, userData) => {
-            await mobileAuth.login(token, userData);
-          }} 
-        />
-      );
-    }
-    
-    // On web, show landing page with email/password login
+    // Show unified landing page for both web and mobile
     return (
       <Switch>
         <Route path="/" component={Landing} />
@@ -111,16 +93,9 @@ function Router() {
   // Unified logout handler for both web and mobile
   const handleLogout = async () => {
     try {
-      if (isNative) {
-        await mobileAuth.logout();
-      } else {
-        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-        queryClient.clear();
-        window.location.reload();
-      }
+      await logout();
     } catch (error) {
       console.error("Logout error:", error);
-      window.location.reload();
     }
   };
 

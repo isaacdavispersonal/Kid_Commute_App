@@ -108,9 +108,9 @@ export async function isAuthenticated(): Promise<boolean> {
   const token = await getAuthToken();
   if (!token) return false;
   
-  // Verify token is still valid by calling /me endpoint
+  // Verify token is still valid by calling unified auth endpoint
   try {
-    const response = await fetch(getApiUrl("/api/mobile/auth/me"), {
+    const response = await fetch(getApiUrl("/api/auth/user"), {
       headers: {
         Authorization: `Bearer ${token}`,
       },
