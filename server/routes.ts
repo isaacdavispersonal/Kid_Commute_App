@@ -1061,6 +1061,26 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // ============ Public Settings Routes (for drivers/parents) ============
+
+  // Get emergency phone setting (accessible by all authenticated users)
+  app.get(
+    "/api/settings/emergency-phone",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const setting = await storage.getAdminSetting("emergency_phone");
+        if (!setting) {
+          return res.json(null);
+        }
+        res.json({ settingValue: setting.settingValue });
+      } catch (error) {
+        console.error("Error fetching emergency phone setting:", error);
+        res.status(500).json({ message: "Failed to fetch emergency phone setting" });
+      }
+    }
+  );
+
   // ============ Admin Payroll Export Routes (BambooHR Integration) ============
 
   // Get drivers with BambooHR employee mapping

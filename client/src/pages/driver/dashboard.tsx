@@ -26,6 +26,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmergencyButton } from "@/components/emergency-button";
 
 function useElapsedTime(startTime: string | Date | null): string {
   const [elapsed, setElapsed] = useState<string>("00:00:00");
@@ -761,6 +762,16 @@ export default function DriverDashboard() {
           </Card>
         )}
       </div>
+
+      {/* Emergency Button */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Safety</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EmergencyButton />
+        </CardContent>
+      </Card>
 
       {/* Clock Out Notes Dialog */}
       <Dialog open={showClockOutDialog} onOpenChange={setShowClockOutDialog}>
