@@ -270,12 +270,13 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
       <SidebarMenuItem key={item.title}>
         <SidebarMenuButton
           asChild
+          size="lg"
           className={isActive ? "bg-sidebar-accent" : ""}
           data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
         >
           <Link href={item.url} onClick={handleNavigation}>
-            <item.icon className="h-4 w-4" />
-            <span>{item.title}</span>
+            <item.icon className="h-5 w-5" />
+            <span className="text-base">{item.title}</span>
             {showBadge && (
               <Badge 
                 variant="destructive" 
@@ -293,9 +294,9 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
 
   return (
     <Sidebar>
-      <SidebarContent>
+      <SidebarContent className="pt-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sm font-semibold px-2 py-4">
+          <SidebarGroupLabel className="text-base font-semibold px-3 py-4 mb-2">
             Kid Connect
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -304,15 +305,15 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
                 {adminMenuSections.map((section, sectionIndex) => (
                   <div key={sectionIndex}>
                     {section.label && (
-                      <SidebarGroupLabel className="mt-4 mb-2 text-xs font-medium text-muted-foreground px-2">
+                      <SidebarGroupLabel className="mt-6 mb-2 text-sm font-medium text-muted-foreground px-3">
                         {section.label}
                       </SidebarGroupLabel>
                     )}
-                    <SidebarMenu>
+                    <SidebarMenu className="gap-1.5">
                       {section.items.map(renderMenuItem)}
                     </SidebarMenu>
                     {sectionIndex < adminMenuSections.length - 1 && (
-                      <SidebarSeparator className="my-2" />
+                      <SidebarSeparator className="my-3" />
                     )}
                   </div>
                 ))}
@@ -323,22 +324,22 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
                 {driverMenuSections.map((section, sectionIndex) => (
                   <div key={sectionIndex}>
                     {section.label && sectionIndex > 0 && (
-                      <SidebarGroupLabel className="mt-4 mb-2 text-xs font-medium text-muted-foreground px-2">
+                      <SidebarGroupLabel className="mt-6 mb-2 text-sm font-medium text-muted-foreground px-3">
                         {section.label}
                       </SidebarGroupLabel>
                     )}
-                    <SidebarMenu>
+                    <SidebarMenu className="gap-1.5">
                       {section.items.map(renderMenuItem)}
                     </SidebarMenu>
                     {sectionIndex < driverMenuSections.length - 1 && sectionIndex === 0 && (
-                      <SidebarSeparator className="my-2" />
+                      <SidebarSeparator className="my-3" />
                     )}
                   </div>
                 ))}
               </>
             )}
             {userRole === "parent" && (
-              <SidebarMenu>
+              <SidebarMenu className="gap-1.5">
                 {parentMenuItems.map(renderMenuItem)}
               </SidebarMenu>
             )}
