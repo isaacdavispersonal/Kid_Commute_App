@@ -28,6 +28,7 @@ interface EnrichedIncident {
   reporterId: string;
   vehicleId: string | null;
   routeId: string | null;
+  studentId: string | null;
   title: string;
   description: string;
   severity: "low" | "medium" | "high" | "critical";
@@ -39,6 +40,8 @@ interface EnrichedIncident {
   reporterFirstName: string;
   reporterLastName: string;
   reporterEmail: string;
+  studentFirstName: string | null;
+  studentLastName: string | null;
 }
 
 export default function AdminIncidentsPage() {
@@ -188,6 +191,11 @@ export default function AdminIncidentsPage() {
                     <User className="h-3.5 w-3.5" />
                     <span>{incident.reporterFirstName} {incident.reporterLastName}</span>
                   </div>
+                  {incident.studentFirstName && incident.studentLastName && (
+                    <Badge variant="secondary" className="text-xs">
+                      Child: {incident.studentFirstName} {incident.studentLastName}
+                    </Badge>
+                  )}
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5" />
                     <span>{format(new Date(incident.createdAt), "MMM d, yyyy 'at' h:mm a")}</span>
@@ -248,6 +256,18 @@ export default function AdminIncidentsPage() {
                     <p className="text-xs text-muted-foreground">{selectedIncident.reporterEmail}</p>
                   </div>
                 </div>
+
+                {selectedIncident.studentFirstName && selectedIncident.studentLastName && (
+                  <div className="flex items-start gap-3">
+                    <User className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium mb-0.5">Child Involved</p>
+                      <p className="text-sm text-muted-foreground" data-testid="text-student-name">
+                        {selectedIncident.studentFirstName} {selectedIncident.studentLastName}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-start gap-3">
                   <Clock className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />

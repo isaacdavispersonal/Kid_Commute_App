@@ -1,6 +1,6 @@
 // Driver incident reporting form
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,11 +12,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, FileText, User, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { getLoginUrl } from "@/lib/config";
+
+interface StudentWithRoute {
+  id: string;
+  firstName: string;
+  lastName: string;
+  grade?: string | null;
+  routeId: string;
+  routeName: string;
+}
+
+interface RouteWithStudents {
+  id: string;
+  name: string;
+  routeType?: string | null;
+  students: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    grade?: string | null;
+  }>;
+}
+
+interface IncidentStudentsResponse {
+  routes: RouteWithStudents[];
+  students: StudentWithRoute[];
+}
 
 export default function DriverIncident() {
   const { toast } = useToast();
@@ -25,11 +51,22 @@ export default function DriverIncident() {
     description: "",
     severity: "",
     location: "",
+    studentId: "",
+    routeId: "",
+  });
+
+  // Fetch students available for incident reporting
+  const { data: incidentData, isLoading: isLoadingStudents } = useQuery<IncidentStudentsResponse>({
+    queryKey: ["/api/driver/incident-students"],
   });
 
   const submitIncidentMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", "/api/driver/incident", formData);
+      return await apiRequest("POST", "/api/driver/incident", {
+        ...formData,
+        studentId: formData.studentId || null,
+        routeId: formData.routeId || null,
+      });
     },
     onSuccess: () => {
       toast({
@@ -41,6 +78,8 @@ export default function DriverIncident() {
         description: "",
         severity: "",
         location: "",
+        studentId: "",
+        routeId: "",
       });
     },
     onError: (error: Error) => {
@@ -76,8 +115,24 @@ export default function DriverIncident() {
     submitIncidentMutation.mutate();
   };
 
+  // Handle student selection - also set the route
+  const handleStudentChange = (studentId: string) => {
+    if (studentId === "none") {
+      setFormData({ ...formData, studentId: "", routeId: "" });
+      return;
+    }
+    const student = incidentData?.students.find(s => s.id === studentId);
+    setFormData({
+      ...formData,
+      studentId,
+      routeId: student?.routeId || "",
+    });
+  };
+
   const isFormValid =
     formData.title && formData.description && formData.severity;
+
+  const students = incidentData?.students || [];
 
   return (
     <div className="space-y-6">
@@ -97,6 +152,43 @@ export default function DriverIncident() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Child Selection Dropdown */}
+            <div className="space-y-2">
+              <label htmlFor="student" className="text-sm font-medium flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Child Involved (Optional)
+              </label>
+              {isLoadingStudents ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading students...
+                </div>
+              ) : students.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">
+                  No students found on your assigned routes
+                </p>
+              ) : (
+                <Select
+                  value={formData.studentId || "none"}
+                  onValueChange={handleStudentChange}
+                >
+                  <SelectTrigger data-testid="select-student">
+                    <SelectValue placeholder="Select a child (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No specific child</SelectItem>
+                    {students.map((student) => (
+                      <SelectItem key={student.id} value={student.id}>
+                        {student.firstName} {student.lastName}
+                        {student.grade ? ` (Grade ${student.grade})` : ""}
+                        {" - "}{student.routeName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
             <div className="space-y-2">
               <label htmlFor="title" className="text-sm font-medium">
                 Incident Title <span className="text-destructive">*</span>
@@ -173,11 +265,12 @@ export default function DriverIncident() {
               className="w-full"
               size="lg"
               variant="destructive"
-              data-testid="button-submit-incident"
+              data-testid="button-file-report"
             >
+              <FileText className="h-5 w-5 mr-2" />
               {submitIncidentMutation.isPending
-                ? "Submitting Report..."
-                : "Submit Incident Report"}
+                ? "Filing Report..."
+                : "File Incident Report"}
             </Button>
           </form>
         </CardContent>

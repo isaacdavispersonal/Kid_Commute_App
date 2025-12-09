@@ -742,7 +742,31 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req, res) => {
       try {
         const incidents = await storage.getAllIncidents();
-        res.json(incidents);
+        
+        // Enrich with student info if available
+        const enrichedIncidents = await Promise.all(
+          incidents.map(async (incident: any) => {
+            let studentFirstName: string | null = null;
+            let studentLastName: string | null = null;
+            
+            if (incident.studentId) {
+              const student = await storage.getStudent(incident.studentId);
+              if (student) {
+                studentFirstName = student.firstName;
+                studentLastName = student.lastName;
+              }
+            }
+            
+            return {
+              ...incident,
+              studentId: incident.studentId || null,
+              studentFirstName,
+              studentLastName,
+            };
+          })
+        );
+        
+        res.json(enrichedIncidents);
       } catch (error) {
         console.error("Error fetching incidents:", error);
         res.status(500).json({ message: "Failed to fetch incidents" });
@@ -4769,6 +4793,70 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Get students available for incident reporting (from driver's assigned routes)
+  app.get(
+    "/api/driver/incident-students",
+    requireAuth,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.id;
+        
+        // Get driver's assigned routes
+        const assignments = await storage.getDriverAssignments(driverId);
+        
+        if (!assignments || assignments.length === 0) {
+          return res.json({ routes: [], students: [] });
+        }
+        
+        // Get unique route IDs
+        const routeIds = [...new Set(assignments.map(a => a.routeId))];
+        
+        // Fetch routes and their students
+        const routesWithStudents = await Promise.all(
+          routeIds.map(async (routeId) => {
+            const route = await storage.getRoute(routeId);
+            if (!route) return null;
+            
+            // Get students assigned to this route
+            const students = await storage.getStudentsByRoute(routeId);
+            
+            return {
+              id: route.id,
+              name: route.name,
+              routeType: route.routeType,
+              students: students.map(s => ({
+                id: s.id,
+                firstName: s.firstName,
+                lastName: s.lastName,
+                grade: s.grade,
+              })),
+            };
+          })
+        );
+        
+        const validRoutes = routesWithStudents.filter(Boolean);
+        
+        // Flatten all students with route info
+        const allStudents = validRoutes.flatMap(r => 
+          r!.students.map(s => ({
+            ...s,
+            routeId: r!.id,
+            routeName: r!.name,
+          }))
+        );
+        
+        res.json({
+          routes: validRoutes,
+          students: allStudents,
+        });
+      } catch (error) {
+        console.error("Error fetching incident students:", error);
+        res.status(500).json({ message: "Failed to fetch students" });
+      }
+    }
+  );
+
   // Report incident
   app.post(
     "/api/driver/incident",
@@ -4777,7 +4865,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req: any, res) => {
       try {
         const driverId = req.user.id;
-        const { title, description, severity, location } = req.body;
+        const { title, description, severity, location, studentId, routeId } = req.body;
 
         const incident = await storage.createIncident({
           reporterId: driverId,
@@ -4785,6 +4873,8 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           description,
           severity,
           location: location || null,
+          studentId: studentId || null,
+          routeId: routeId || null,
         });
 
         res.json(incident);
