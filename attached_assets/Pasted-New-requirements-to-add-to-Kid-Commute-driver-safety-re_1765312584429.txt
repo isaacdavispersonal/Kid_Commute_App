@@ -1,0 +1,97 @@
+New requirements to add to Kid Commute (driver safety, refresh UX, student info):
+
+1. Driver Emergency Button & Flow
+
+Screen: Driver dashboard (main screen drivers see after login).
+
+We need an “Emergency” button that drivers can press when something serious happens.
+
+Flow:
+
+Driver taps Emergency.
+
+App asks: “What kind of emergency is this?” with options like:
+
+Behavior issue
+
+Medical emergency
+
+Vehicle issue
+
+Other
+
+After selection, show a verification step, e.g.:
+
+“Are you sure you want to trigger an emergency notification?”
+
+[Confirm] [Cancel]
+
+After confirmation, ask who to contact:
+
+Option A: Contact Admin → open the phone dialer with one of the admin phone numbers pre-filled.
+
+Option B: Contact Emergency Services → open the phone dialer with 911 pre-filled.
+
+Implementation hint: On mobile this should just use a standard tel: link to open the native phone app with the number filled in. We’re not actually placing the call inside our app; we just hand off to the dialer.
+
+2. Refresh / Pull-to-Refresh Behavior
+
+Our current dropdown/refresh interaction feels clunky and not like the native iOS pull-to-refresh.
+
+Also, in some views, data is not actually refreshed, so users still have to close and reopen the app to see changes.
+
+Expected behavior:
+
+Use a smooth, native-style pull-to-refresh gesture on lists and key pages (especially routes, students, scheduler, etc.).
+
+When pull-to-refresh is triggered, the app must:
+
+Call the appropriate data refetch function(s).
+
+Update the UI with fresh data.
+
+Users should never need to force close the app just to see new info.
+
+Treat this as both a UX improvement and a data refreshing reliability fix.
+
+3. Student Medical Info & Badges
+
+Each child should have medical info fields, editable by parents and admins, including:
+
+Allergy information
+
+Important medical notes (e.g. asthma, epilepsy, medication notes, etc.)
+
+When any medical info exists for a child:
+
+Assign a badge to that child (e.g. a small icon or label).
+
+This badge should appear next to their name anywhere in the app, especially:
+
+In route lists
+
+In driver views
+
+In student lists
+
+When a driver or admin taps the student, they should be able to see the full medical info in the detail view.
+
+4. Driver Student List Screen
+
+Drivers need a Student section in their app that shows all students assigned to their route(s).
+
+Behavior:
+
+Show a list of all students assigned to that driver’s current route(s).
+
+Each item should be tappable:
+
+When tapped, show a student detail view with:
+
+Basic info (name, pickup/dropoff, school, etc.)
+
+Medical info if present (from section 3).
+
+Medical badge clearly visible.
+
+This should stay in sync with our existing logic where students are assigned to routes. The driver view is essentially a filtered view of students on that driver’s routes.
