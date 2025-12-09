@@ -716,11 +716,11 @@ export default function AdminRoutes() {
   const groupsWithRoutes = routeGroups || [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="space-y-6 overflow-x-hidden px-4 sm:px-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Route Management</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Route Management</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Create and manage transportation routes and stops
           </p>
         </div>
@@ -856,16 +856,17 @@ export default function AdminRoutes() {
                       onOpenChange={() => toggleGroupExpansion(group.id)}
                     >
                       <CollapsibleTrigger asChild>
-                        <div className="flex items-center justify-between gap-4 p-4 cursor-pointer hover-elevate" data-testid={`group-${group.id}`}>
-                          <div className="flex items-center gap-3">
-                            <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-                            <span className="font-medium">{group.name}</span>
-                            <Badge variant="secondary">{groupRoutes.length} {groupRoutes.length === 1 ? 'route' : 'routes'}</Badge>
+                        <div className="flex items-center justify-between gap-2 p-3 sm:p-4 cursor-pointer hover-elevate" data-testid={`group-${group.id}`}>
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                            <span className="font-medium truncate">{group.name}</span>
+                            <Badge variant="secondary" className="shrink-0">{groupRoutes.length}</Badge>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 shrink-0">
                             <Button
-                              size="sm"
+                              size="icon"
                               variant="ghost"
+                              className="h-8 w-8"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedGroup(group);
@@ -876,8 +877,9 @@ export default function AdminRoutes() {
                               <Pencil className="h-4 w-4" />
                             </Button>
                             <Button
-                              size="sm"
+                              size="icon"
                               variant="ghost"
+                              className="h-8 w-8"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedGroup(group);
@@ -891,71 +893,79 @@ export default function AdminRoutes() {
                         </div>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <div className="px-4 pb-4 space-y-2">
+                        <div className="px-2 sm:px-4 pb-3 sm:pb-4 space-y-2">
                           {groupRoutes.map((route) => (
                             <Card key={route.id}>
-                              <CardContent className="flex items-center justify-between p-4">
-                                <div>
-                                  <p className="font-medium">{route.name}</p>
-                                  {route.description && (
-                                    <p className="text-sm text-muted-foreground">{route.description}</p>
-                                  )}
-                                  <div className="flex items-center gap-2 mt-1">
-                                    {route.routeType && <Badge variant="outline">{route.routeType}</Badge>}
-                                    <span className="text-xs text-muted-foreground">{route.stopCount} stops</span>
-                                    {!route.isActive && <Badge variant="secondary">Inactive</Badge>}
+                              <CardContent className="p-3 sm:p-4 space-y-2">
+                                {/* Route info */}
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium text-sm sm:text-base truncate">{route.name}</p>
+                                    {route.description && (
+                                      <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{route.description}</p>
+                                    )}
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                      {route.routeType && <Badge variant="outline" className="text-xs">{route.routeType}</Badge>}
+                                      <span className="text-xs text-muted-foreground">{route.stopCount} stops</span>
+                                      {!route.isActive && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
+                                    </div>
+                                  </div>
+                                  {/* Action buttons - always visible */}
+                                  <div className="flex items-center gap-0.5 shrink-0">
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8"
+                                      onClick={() => {
+                                        setSelectedRoute(route);
+                                        setIsManageStopsDialogOpen(true);
+                                      }}
+                                      data-testid={`button-manage-stops-${route.id}`}
+                                    >
+                                      <List className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8"
+                                      onClick={() => handleEditRouteClick(route)}
+                                      data-testid={`button-edit-route-${route.id}`}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8"
+                                      onClick={() => handleDeleteRouteClick(route)}
+                                      data-testid={`button-delete-route-${route.id}`}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <Select
-                                    value={route.groupId || "none"}
-                                    onValueChange={(value) => {
-                                      updateRouteMutation.mutate({
-                                        id: route.id,
-                                        data: { groupId: value === "none" ? null : value } as InsertRoute
-                                      });
-                                    }}
-                                  >
-                                    <SelectTrigger className="w-[140px] h-8" data-testid={`select-route-group-${route.id}`}>
-                                      <SelectValue placeholder="Assign group" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">No Group</SelectItem>
-                                      {routeGroups?.map((group) => (
-                                        <SelectItem key={group.id} value={group.id}>
-                                          {group.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => {
-                                      setSelectedRoute(route);
-                                      setIsManageStopsDialogOpen(true);
-                                    }}
-                                    data-testid={`button-manage-stops-${route.id}`}
-                                  >
-                                    <List className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => handleEditRouteClick(route)}
-                                    data-testid={`button-edit-route-${route.id}`}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => handleDeleteRouteClick(route)}
-                                    data-testid={`button-delete-route-${route.id}`}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </div>
+                                {/* Group selector - full width on mobile */}
+                                <Select
+                                  value={route.groupId || "none"}
+                                  onValueChange={(value) => {
+                                    updateRouteMutation.mutate({
+                                      id: route.id,
+                                      data: { groupId: value === "none" ? null : value } as InsertRoute
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-full h-9" data-testid={`select-route-group-${route.id}`}>
+                                    <SelectValue placeholder="Assign group" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No Group</SelectItem>
+                                    {routeGroups?.map((group) => (
+                                      <SelectItem key={group.id} value={group.id}>
+                                        {group.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </CardContent>
                             </Card>
                           ))}
@@ -973,81 +983,89 @@ export default function AdminRoutes() {
                     defaultOpen={true}
                   >
                     <CollapsibleTrigger asChild>
-                      <div className="flex items-center justify-between gap-4 p-4 cursor-pointer hover-elevate" data-testid="ungrouped-routes">
-                        <div className="flex items-center gap-3">
-                          <ChevronDown className="h-4 w-4" />
-                          <Tag className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">Ungrouped Routes</span>
-                          <Badge variant="secondary">{groupedRoutes.ungrouped.length} {groupedRoutes.ungrouped.length === 1 ? 'route' : 'routes'}</Badge>
+                      <div className="flex items-center justify-between gap-2 p-3 sm:p-4 cursor-pointer hover-elevate" data-testid="ungrouped-routes">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                          <ChevronDown className="h-4 w-4 shrink-0" />
+                          <Tag className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="font-medium truncate">Ungrouped Routes</span>
+                          <Badge variant="secondary" className="shrink-0">{groupedRoutes.ungrouped.length}</Badge>
                         </div>
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="px-4 pb-4 space-y-2">
+                      <div className="px-2 sm:px-4 pb-3 sm:pb-4 space-y-2">
                         {groupedRoutes.ungrouped.map((route) => (
                           <Card key={route.id}>
-                            <CardContent className="flex items-center justify-between p-4">
-                              <div>
-                                <p className="font-medium">{route.name}</p>
-                                {route.description && (
-                                  <p className="text-sm text-muted-foreground">{route.description}</p>
-                                )}
-                                <div className="flex items-center gap-2 mt-1">
-                                  {route.routeType && <Badge variant="outline">{route.routeType}</Badge>}
-                                  <span className="text-xs text-muted-foreground">{route.stopCount} stops</span>
-                                  {!route.isActive && <Badge variant="secondary">Inactive</Badge>}
+                            <CardContent className="p-3 sm:p-4 space-y-2">
+                              {/* Route info */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-sm sm:text-base truncate">{route.name}</p>
+                                  {route.description && (
+                                    <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{route.description}</p>
+                                  )}
+                                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                    {route.routeType && <Badge variant="outline" className="text-xs">{route.routeType}</Badge>}
+                                    <span className="text-xs text-muted-foreground">{route.stopCount} stops</span>
+                                    {!route.isActive && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
+                                  </div>
+                                </div>
+                                {/* Action buttons - always visible */}
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                      setSelectedRoute(route);
+                                      setIsManageStopsDialogOpen(true);
+                                    }}
+                                    data-testid={`button-manage-stops-${route.id}`}
+                                  >
+                                    <List className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => handleEditRouteClick(route)}
+                                    data-testid={`button-edit-route-${route.id}`}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => handleDeleteRouteClick(route)}
+                                    data-testid={`button-delete-route-${route.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Select
-                                  value={route.groupId || "none"}
-                                  onValueChange={(value) => {
-                                    updateRouteMutation.mutate({
-                                      id: route.id,
-                                      data: { groupId: value === "none" ? null : value } as InsertRoute
-                                    });
-                                  }}
-                                >
-                                  <SelectTrigger className="w-[140px] h-8" data-testid={`select-route-group-${route.id}`}>
-                                    <SelectValue placeholder="Assign group" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">No Group</SelectItem>
-                                    {routeGroups?.map((group) => (
-                                      <SelectItem key={group.id} value={group.id}>
-                                        {group.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setSelectedRoute(route);
-                                    setIsManageStopsDialogOpen(true);
-                                  }}
-                                  data-testid={`button-manage-stops-${route.id}`}
-                                >
-                                  <List className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleEditRouteClick(route)}
-                                  data-testid={`button-edit-route-${route.id}`}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleDeleteRouteClick(route)}
-                                  data-testid={`button-delete-route-${route.id}`}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
+                              {/* Group selector - full width on mobile */}
+                              <Select
+                                value={route.groupId || "none"}
+                                onValueChange={(value) => {
+                                  updateRouteMutation.mutate({
+                                    id: route.id,
+                                    data: { groupId: value === "none" ? null : value } as InsertRoute
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="w-full h-9" data-testid={`select-route-group-${route.id}`}>
+                                  <SelectValue placeholder="Assign group" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">No Group</SelectItem>
+                                  {routeGroups?.map((group) => (
+                                    <SelectItem key={group.id} value={group.id}>
+                                      {group.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </CardContent>
                           </Card>
                         ))}

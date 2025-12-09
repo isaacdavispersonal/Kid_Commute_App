@@ -2989,18 +2989,25 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const schema = z.object({
           dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")).min(1),
           driverIds: z.array(z.string()).min(1),
-          vehicleId: z.string().min(1, "Vehicle ID is required"),
-          plannedStart: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
-          plannedEnd: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)"),
+          vehicleId: z.string().optional(),
+          plannedStart: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)").optional(),
+          plannedEnd: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)").optional(),
         });
 
         const data = schema.parse(req.body);
         
         const createdShifts = [];
+        const skipped: { driverId: string; reason: string }[] = [];
         
         // For each driver, get their assignments and create shifts for each selected date
         for (const driverId of data.driverIds) {
           const assignments = await storage.getDriverAssignmentsByDriver(driverId);
+          
+          // If driver has no assignments, skip with a message
+          if (!assignments || assignments.length === 0) {
+            skipped.push({ driverId, reason: "No driver assignments found" });
+            continue;
+          }
           
           for (const date of data.dates) {
             // Create shifts from all of this driver's assignments
@@ -3011,15 +3018,19 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
                 shiftType = route.routeType as "MORNING" | "AFTERNOON" | "EXTRA";
               }
               
+              // Use provided values or defaults from assignment/route type
+              const defaultStart = shiftType === "MORNING" ? "07:00" : shiftType === "AFTERNOON" ? "14:00" : "09:00";
+              const defaultEnd = shiftType === "MORNING" ? "09:00" : shiftType === "AFTERNOON" ? "16:00" : "11:00";
+              
               const shiftData = {
                 driverId: assignment.driverId,
                 driverAssignmentId: assignment.id,
                 date,
                 shiftType,
                 routeId: assignment.routeId,
-                vehicleId: data.vehicleId,
-                plannedStart: data.plannedStart,
-                plannedEnd: data.plannedEnd,
+                vehicleId: data.vehicleId || assignment.vehicleId || null,
+                plannedStart: data.plannedStart || defaultStart,
+                plannedEnd: data.plannedEnd || defaultEnd,
                 status: "SCHEDULED" as const,
                 notes: assignment.notes,
               };
@@ -3037,7 +3048,8 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         
         res.json({ 
           count: createdShifts.length,
-          shifts: createdShifts 
+          shifts: createdShifts,
+          skipped: skipped.length > 0 ? skipped : undefined
         });
       } catch (error: any) {
         console.error("Error bulk adding shifts:", error);

@@ -647,24 +647,24 @@ export default function AdminSchedule() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden px-4 sm:px-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-semibold mb-1" data-testid="title-schedule">
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1" data-testid="title-schedule">
             Shift Schedule
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Manage driver shifts - click on any day to see all scheduled drivers
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Manage driver shifts - tap any day to view details
           </p>
         </div>
         <Button
           onClick={toggleBulkEditMode}
           variant={bulkEditMode ? "default" : "outline"}
-          className="gap-2"
+          className="gap-2 self-start sm:self-auto"
           data-testid="button-bulk-edit"
         >
           <Edit className="h-4 w-4" />
-          {bulkEditMode ? "Exit Bulk Edit" : "Bulk Edit"}
+          <span className="text-xs sm:text-sm">{bulkEditMode ? "Exit Bulk" : "Bulk Edit"}</span>
         </Button>
       </div>
 
@@ -1316,22 +1316,22 @@ export default function AdminSchedule() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk Edit Floating Action Panel */}
+      {/* Bulk Edit Floating Action Panel - Mobile responsive */}
       {bulkEditMode && selectedDates.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-          <Card className="w-[600px] shadow-lg border-2">
-            <CardContent className="p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Bulk Edit Mode</h3>
-                <Badge variant="secondary">{selectedDates.length} days selected</Badge>
+        <div className="fixed bottom-4 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-50">
+          <Card className="w-full sm:w-[500px] shadow-lg border-2">
+            <CardContent className="p-3 sm:p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-semibold text-sm sm:text-base">Bulk Edit</h3>
+                <Badge variant="secondary" className="text-xs">{selectedDates.length} {selectedDates.length === 1 ? 'day' : 'days'}</Badge>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-sm">Select Drivers</Label>
-                <ScrollArea className="h-32 border rounded-md p-2">
-                  <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs sm:text-sm">Select Drivers</Label>
+                <ScrollArea className="h-24 sm:h-32 border rounded-md p-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                     {drivers.map((driver) => (
-                      <div key={driver.id} className="flex items-center space-x-2">
+                      <div key={driver.id} className="flex items-center space-x-2 py-0.5">
                         <Checkbox
                           id={`bulk-driver-${driver.id}`}
                           checked={selectedDriverIdsForBulkEdit.includes(driver.id)}
@@ -1340,7 +1340,7 @@ export default function AdminSchedule() {
                         />
                         <label
                           htmlFor={`bulk-driver-${driver.id}`}
-                          className="text-sm cursor-pointer"
+                          className="text-xs sm:text-sm cursor-pointer truncate"
                         >
                           {getDriverDisplayName(driver)}
                         </label>
@@ -1348,27 +1348,30 @@ export default function AdminSchedule() {
                     ))}
                   </div>
                 </ScrollArea>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">
+                  {selectedDriverIdsForBulkEdit.length} driver{selectedDriverIdsForBulkEdit.length !== 1 ? 's' : ''} selected
+                </p>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button
                   onClick={handleBulkAdd}
                   disabled={selectedDriverIdsForBulkEdit.length === 0 || bulkAddMutation.isPending}
-                  className="flex-1"
+                  className="flex-1 h-10"
                   data-testid="button-bulk-add"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add to Selected Days
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  <span className="text-xs sm:text-sm">Add Shifts</span>
                 </Button>
                 <Button
                   onClick={handleBulkDelete}
                   disabled={selectedDriverIdsForBulkEdit.length === 0 || bulkDeleteMutation.isPending}
                   variant="destructive"
-                  className="flex-1"
+                  className="flex-1 h-10"
                   data-testid="button-bulk-delete"
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Remove from Selected Days
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  <span className="text-xs sm:text-sm">Remove Shifts</span>
                 </Button>
               </div>
             </CardContent>

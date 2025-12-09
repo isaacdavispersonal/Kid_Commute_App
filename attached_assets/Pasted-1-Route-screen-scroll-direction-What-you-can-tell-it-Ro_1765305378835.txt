@@ -1,0 +1,124 @@
+1️⃣ Route screen scroll direction
+
+What you can tell it:
+
+Route screen scroll direction (mobile bug)
+
+Screen: Admin → Routes (route list / route groups view) on mobile.
+
+Device: iPhone-sized viewport (~390px wide).
+
+Steps to reproduce:
+
+Log in as an admin.
+
+Go to Routes and view the list of routes / route groups.
+
+Try to scroll through the list normally.
+
+Actual behavior:
+The whole route screen pans left/right (horizontal scroll) when dragging, instead of staying fixed and only scrolling vertically. It feels like the main container is wider than the viewport so the app can be dragged sideways.
+
+Expected behavior:
+The Routes page should be locked to vertical scrolling only on mobile (no horizontal panning). The route list should fit the screen width with no horizontal overflow.
+
+Implementation hint:
+Make sure the main container on the Routes page has overflow-x: hidden and the layout is responsive so content doesn’t exceed the viewport width on phone-sized screens.
+
+2️⃣ Layout / spacing fixes
+
+What you can tell it:
+
+Layout / spacing fixes (global mobile polish)
+
+This is a general UI pass request for mobile, not just one element.
+
+Goal:
+Add consistent padding, spacing, and borders so content doesn’t feel cramped against the edges of the screen.
+
+Examples:
+
+On several admin pages (Dashboard, Routes, Scheduler), cards and lists sit flush against the left/right edges on a phone screen.
+
+Text, buttons, and icons often sit too close to each other with no clear separation.
+
+Expected behavior / design rule:
+
+Use consistent page padding (e.g. ~16px) on left and right on all screens.
+
+Add vertical spacing between stacked components (cards, lists, forms).
+
+Use card borders or subtle separators to visually group related info (e.g. each route block, each shift block).
+
+Implementation hint:
+Even if you can’t see the exact misalignment, assume we want a mobile-first layout where nothing touches the phone edges and related content is grouped into clearly separated sections/cards.
+
+If you want, you can add a couple specific screens you know look bad: “Routes page”, “Scheduler”, “Bulk shifts modal”.
+
+3️⃣ Route Manager UI adjustments
+
+What you can tell it:
+
+Route Manager UI adjustments
+
+Screen: Admin → Routes / Route Manager.
+
+Problems:
+
+When a route group is collapsed/expanded, the UI for edit route / delete route acts glitchy. Sometimes buttons jump or are too close together to tap accurately on mobile.
+
+It’s not visually clear which items are route groups, which are individual routes, and which students are assigned.
+
+Expected behavior:
+
+Each route group should look like a clear card/header that can be expanded, with:
+
+Group name
+
+Route color indicator (for morning/afternoon)
+
+When expanded, the child routes should appear indented with clear spacing and stable Edit / Delete buttons that don’t move or overlap.
+
+On mobile, tap targets for edit/delete need to be large enough and spaced apart.
+
+Implementation hint:
+Treat this as a small UI refactor: clear hierarchy (group → routes → students), consistent padding, and stable positions for action buttons so they don’t shift when expanding/collapsing.
+
+4️⃣ Bulk Shifts UI issues
+
+What you can tell it:
+
+Bulk Shifts UI issues (mobile)
+
+Screen: Admin → Scheduler → Bulk Add Shifts.
+
+Functional + UI problems:
+
+Functionally, “Bulk add shifts” often results in “0 shifts created successfully” even when valid data is entered.
+
+On a phone-sized screen, the Bulk Shifts form is cramped:
+
+Inputs and labels are tightly packed.
+
+It’s not clear what fields are required.
+
+The submit/confirm button can be hard to see or feels buried.
+
+Expected behavior:
+
+Bulk add should create the correct number of shifts, or show a clear validation error explaining what failed (e.g. “No drivers selected”, “Date range empty”, etc.).
+
+The form should be mobile-friendly:
+
+Clear vertical flow (one field per line).
+
+Enough spacing between rows.
+
+Submit button clearly visible and easy to tap.
+
+Implementation hint:
+Please check both:
+
+Logic for counting/creating shifts and returning errors.
+
+Responsive layout of the Bulk Shifts modal/page at ~390px width (no horizontal scroll, readable form, clear success/error messages).
