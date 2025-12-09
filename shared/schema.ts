@@ -501,6 +501,7 @@ export const students = pgTable("students", {
   race: varchar("race"),
   gender: varchar("gender"),
   photoUrl: varchar("photo_url"),
+  allergies: text("allergies"),
   medicalNotes: text("medical_notes"),
   specialNeeds: text("special_needs"),
   emergencyContactName: varchar("emergency_contact_name"),
