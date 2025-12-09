@@ -685,17 +685,20 @@ export default function AdminSchedule() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <div className="min-w-[800px]">
-            <div className="grid grid-cols-7 gap-2 mb-2">
-              {DAY_NAMES.map(day => (
-                <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
-                  {day}
+        <CardContent className="overflow-x-auto p-2 sm:p-6">
+          <div className="min-w-[320px] sm:min-w-[700px]">
+            {/* Day names header - abbreviated on mobile */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-1 sm:mb-2">
+              {DAY_NAMES.map((day, i) => (
+                <div key={day} className="text-center text-[10px] sm:text-sm font-medium text-muted-foreground py-1 sm:py-2">
+                  <span className="hidden sm:inline">{day}</span>
+                  <span className="sm:hidden">{day.slice(0, 1)}</span>
                 </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-7 gap-2">
+            {/* Calendar grid */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {daysInMonth.map((date, index) => {
                 const isPlaceholder = date.getTime() === 0;
                 const dateStr = isPlaceholder ? "" : date.toISOString().split('T')[0];
@@ -706,7 +709,7 @@ export default function AdminSchedule() {
                 return (
                   <div
                     key={index}
-                    className={`min-h-[100px] p-2 rounded-md border transition-all ${
+                    className={`min-h-[60px] sm:min-h-[100px] p-1 sm:p-2 rounded-md border transition-all ${
                       isPlaceholder ? "bg-muted/20" : "bg-card"
                     } ${isToday ? "border-primary" : ""} ${
                       bulkEditMode && !isPlaceholder ? "cursor-pointer hover-elevate" : ""
@@ -718,29 +721,29 @@ export default function AdminSchedule() {
                   >
                     {!isPlaceholder && summary && (
                       <>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className={`text-sm font-medium ${isToday ? "text-primary" : ""}`}>
+                        <div className="flex items-center justify-between mb-1 sm:mb-2">
+                          <span className={`text-xs sm:text-sm font-medium ${isToday ? "text-primary" : ""}`}>
                             {date.getDate()}
                           </span>
                           {!bulkEditMode && (
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-6 w-6 p-0"
+                              className="h-5 w-5 sm:h-6 sm:w-6 p-0"
                               onClick={() => handleAddShift(dateStr)}
                               data-testid={`button-add-${dateStr}`}
                             >
-                              <Plus className="h-3.5 w-3.5" />
+                              <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                             </Button>
                           )}
                           {bulkEditMode && isSelected && (
-                            <Checkbox checked={true} className="pointer-events-none" />
+                            <Checkbox checked={true} className="pointer-events-none h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           )}
                         </div>
 
                         {summary.total > 0 ? (
                           <div
-                            className={`space-y-1.5 p-2 rounded-md bg-accent/30 ${!bulkEditMode ? "cursor-pointer hover-elevate" : ""}`}
+                            className={`space-y-0.5 sm:space-y-1.5 p-1 sm:p-2 rounded-md bg-accent/30 ${!bulkEditMode ? "cursor-pointer hover-elevate" : ""}`}
                             onClick={(e) => {
                               if (!bulkEditMode) {
                                 e.stopPropagation();
@@ -749,37 +752,46 @@ export default function AdminSchedule() {
                             }}
                             data-testid={`summary-${dateStr}`}
                           >
-                            <div className="text-xs font-medium text-muted-foreground mb-1">
-                              {summary.total} {summary.total === 1 ? 'shift' : 'shifts'}
+                            {/* Mobile: Compact summary */}
+                            <div className="sm:hidden text-center">
+                              <div className="text-[10px] font-medium">{summary.total}</div>
                             </div>
                             
-                            {summary.MORNING > 0 && (
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <SHIFT_TYPE_LABELS.MORNING.Icon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                                <span className="text-muted-foreground">Morning:</span>
-                                <span className="font-medium">{summary.MORNING}</span>
+                            {/* Desktop: Detailed breakdown */}
+                            <div className="hidden sm:block">
+                              <div className="text-xs font-medium text-muted-foreground mb-1">
+                                {summary.total} {summary.total === 1 ? 'shift' : 'shifts'}
                               </div>
-                            )}
-                            
-                            {summary.AFTERNOON > 0 && (
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <SHIFT_TYPE_LABELS.AFTERNOON.Icon className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
-                                <span className="text-muted-foreground">Afternoon:</span>
-                                <span className="font-medium">{summary.AFTERNOON}</span>
-                              </div>
-                            )}
-                            
-                            {summary.EXTRA > 0 && (
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <SHIFT_TYPE_LABELS.EXTRA.Icon className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                                <span className="text-muted-foreground">Extra:</span>
-                                <span className="font-medium">{summary.EXTRA}</span>
-                              </div>
-                            )}
+                              
+                              {summary.MORNING > 0 && (
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <SHIFT_TYPE_LABELS.MORNING.Icon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                  <span className="text-muted-foreground">Morning:</span>
+                                  <span className="font-medium">{summary.MORNING}</span>
+                                </div>
+                              )}
+                              
+                              {summary.AFTERNOON > 0 && (
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <SHIFT_TYPE_LABELS.AFTERNOON.Icon className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                                  <span className="text-muted-foreground">Afternoon:</span>
+                                  <span className="font-medium">{summary.AFTERNOON}</span>
+                                </div>
+                              )}
+                              
+                              {summary.EXTRA > 0 && (
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <SHIFT_TYPE_LABELS.EXTRA.Icon className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                                  <span className="text-muted-foreground">Extra:</span>
+                                  <span className="font-medium">{summary.EXTRA}</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ) : (
-                          <div className="text-xs text-muted-foreground text-center py-4">
-                            No shifts
+                          <div className="text-[10px] sm:text-xs text-muted-foreground text-center py-1 sm:py-4">
+                            <span className="hidden sm:inline">No shifts</span>
+                            <span className="sm:hidden">-</span>
                           </div>
                         )}
                       </>

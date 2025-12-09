@@ -11,13 +11,15 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { User, Mail, Phone, MapPin, Save, CreditCard, Trash2, AlertTriangle, Users } from "lucide-react";
+import { User, Mail, Phone, MapPin, Save, CreditCard, Trash2, AlertTriangle, Users, ArrowLeft } from "lucide-react";
+import { useLocation } from "wouter";
 import type { User as UserType, UpdateProfile } from "@shared/schema";
 import { formatPhoneNumber } from "@/lib/phoneFormat";
 
 export default function Profile() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [isEditing, setIsEditing] = useState(false);
   const [showPhoneDialog, setShowPhoneDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -183,8 +185,33 @@ export default function Profile() {
 
   const isComplete = profile?.firstName && profile?.lastName && profile?.email && profile?.phoneNumber && profile?.address;
 
+  // Navigate back based on user role
+  const handleBack = () => {
+    if (user?.role === 'admin') {
+      navigate('/admin');
+    } else if (user?.role === 'driver') {
+      navigate('/driver');
+    } else if (user?.role === 'parent') {
+      navigate('/parent');
+    } else {
+      navigate('/');
+    }
+  };
+
   return (
     <div className="container max-w-3xl mx-auto p-6 space-y-6">
+      {/* Back button */}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleBack}
+        className="gap-2 -ml-2"
+        data-testid="button-back"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Button>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <div>

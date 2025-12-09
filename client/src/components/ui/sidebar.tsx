@@ -109,51 +109,70 @@ function SidebarProvider({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [toggleSidebar])
 
-  // Swipe gesture support for mobile - swipe right from left edge to open sidebar
+  // Swipe gesture support for mobile - swipe from left edge to open sidebar
   // Uses refs to track gesture state across touch events
   const swipeRef = React.useRef({
     startX: 0,
     startY: 0,
-    isEdgeSwipe: false,
+    startTime: 0,
+    isEdgeStart: false,
   })
 
   React.useEffect(() => {
     if (!isMobile) return
 
-    const EDGE_THRESHOLD = 60 // px from left edge to trigger swipe (widened for easier access)
-    const MIN_SWIPE_DISTANCE = 40 // minimum px to consider a swipe (reduced for better responsiveness)
-    const MAX_VERTICAL_DISTANCE = 120 // max vertical movement to still count as horizontal swipe
+    // Thresholds for swipe detection
+    const EDGE_ZONE = 30 // px from left edge to initiate swipe (narrow gutter to avoid conflicts)
+    const MIN_SWIPE_DISTANCE = 60 // minimum px to consider a swipe
+    const MAX_VERTICAL_DISTANCE = 80 // max vertical movement to still count as horizontal swipe
+    const MIN_VELOCITY = 0.3 // minimum px/ms velocity for quick swipes
+    const QUICK_SWIPE_DISTANCE = 40 // shorter distance allowed for fast swipes
 
     const handleTouchStart = (e: TouchEvent) => {
       const touch = e.touches[0]
       swipeRef.current.startX = touch.clientX
       swipeRef.current.startY = touch.clientY
-      // Lock in edge detection at touch start - persists through move/end
-      swipeRef.current.isEdgeSwipe = touch.clientX < EDGE_THRESHOLD
+      swipeRef.current.startTime = Date.now()
+      // Only track edge swipes to open - must start near left edge
+      swipeRef.current.isEdgeStart = touch.clientX < EDGE_ZONE
     }
 
     const handleTouchMove = (e: TouchEvent) => {
-      // Keep tracking - don't reset isEdgeSwipe even if finger leaves edge zone
-      // This ensures swipes that start at edge continue to be recognized
+      // Could add visual feedback here if needed
     }
 
     const handleTouchEnd = (e: TouchEvent) => {
-      const { startX, startY, isEdgeSwipe } = swipeRef.current
+      const { startX, startY, startTime, isEdgeStart } = swipeRef.current
       const touch = e.changedTouches[0]
       const deltaX = touch.clientX - startX
       const deltaY = Math.abs(touch.clientY - startY)
+      const duration = Date.now() - startTime
+      const velocity = Math.abs(deltaX) / duration // px/ms
 
-      // Swipe right from left edge to open (only when sidebar is closed)
-      if (isEdgeSwipe && !openMobile && deltaX > MIN_SWIPE_DISTANCE && deltaY < MAX_VERTICAL_DISTANCE) {
-        setOpenMobile(true)
-      }
-      // Swipe left to close (when sidebar is open)
-      else if (openMobile && deltaX < -MIN_SWIPE_DISTANCE && deltaY < MAX_VERTICAL_DISTANCE) {
-        setOpenMobile(false)
-      }
+      // Check if it's a horizontal swipe (not mostly vertical)
+      const isHorizontalSwipe = deltaY < MAX_VERTICAL_DISTANCE
 
-      // Reset for next gesture
-      swipeRef.current.isEdgeSwipe = false
+      if (!isHorizontalSwipe) return
+
+      // Swipe right to open (when sidebar is closed)
+      // ONLY allow from left edge to prevent interference with other gestures
+      if (!openMobile && deltaX > 0 && isEdgeStart) {
+        const isLongSwipe = deltaX > MIN_SWIPE_DISTANCE
+        const isQuickSwipe = velocity > MIN_VELOCITY && deltaX > QUICK_SWIPE_DISTANCE
+        
+        if (isLongSwipe || isQuickSwipe) {
+          setOpenMobile(true)
+        }
+      }
+      // Swipe left to close (when sidebar is open) - can happen anywhere
+      else if (openMobile && deltaX < 0) {
+        const isLongSwipe = Math.abs(deltaX) > MIN_SWIPE_DISTANCE
+        const isQuickSwipe = velocity > MIN_VELOCITY && Math.abs(deltaX) > QUICK_SWIPE_DISTANCE
+        
+        if (isLongSwipe || isQuickSwipe) {
+          setOpenMobile(false)
+        }
+      }
     }
 
     document.addEventListener("touchstart", handleTouchStart, { passive: true })

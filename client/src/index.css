@@ -349,3 +349,20 @@
     inset: -1px;
   }
 }
+
+/* Leaflet map z-index constraints - ensure modals/sheets appear above maps */
+.leaflet-pane,
+.leaflet-control,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 1 !important;
+}
+
+.leaflet-pane.leaflet-popup-pane {
+  z-index: 10 !important;
+}
+
+.leaflet-container {
+  z-index: 0;
+  isolation: isolate;
+}

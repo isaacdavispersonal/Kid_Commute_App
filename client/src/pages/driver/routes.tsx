@@ -11,16 +11,39 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 
+interface TodayRouteData {
+  routeName: string;
+  startTime: string;
+  endTime: string;
+  stops: Array<{
+    id: string;
+    name: string;
+    address: string;
+    scheduledTime: string;
+    notes?: string;
+  }>;
+}
+
+interface RouteProgress {
+  routeStopId: string;
+  status: string;
+  stop?: { id: string };
+}
+
+interface TodayShift {
+  id: string;
+}
+
 export default function DriverRoutes() {
   const { toast } = useToast();
   const [shiftId, setShiftId] = useState<string | null>(null);
   
-  const { data: todayRoute, isLoading } = useQuery({
+  const { data: todayRoute, isLoading } = useQuery<TodayRouteData | null>({
     queryKey: ["/api/driver/today-route"],
   });
 
   // Fetch today's shift to get the shift ID
-  const { data: todayShift } = useQuery({
+  const { data: todayShift } = useQuery<TodayShift[]>({
     queryKey: ["/api/driver/shifts/today"],
     enabled: !!todayRoute,
   });
@@ -33,7 +56,7 @@ export default function DriverRoutes() {
   }, [todayShift]);
 
   // Fetch route progress
-  const { data: routeProgress, isLoading: progressLoading } = useQuery({
+  const { data: routeProgress, isLoading: progressLoading } = useQuery<RouteProgress[]>({
     queryKey: ["/api/driver/route-progress", shiftId],
     enabled: !!shiftId,
   });
@@ -42,10 +65,7 @@ export default function DriverRoutes() {
   const initializeMutation = useMutation({
     mutationFn: async () => {
       if (!shiftId) throw new Error("No shift ID");
-      return apiRequest("/api/driver/route-progress/initialize", {
-        method: "POST",
-        body: JSON.stringify({ shiftId }),
-      });
+      return apiRequest("POST", "/api/driver/route-progress/initialize", { shiftId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/driver/route-progress", shiftId] });
@@ -56,10 +76,7 @@ export default function DriverRoutes() {
   const updateStopMutation = useMutation({
     mutationFn: async ({ routeStopId, status }: { routeStopId: string; status: string }) => {
       if (!shiftId) throw new Error("No shift ID");
-      return apiRequest("/api/driver/route-progress/update-stop", {
-        method: "POST",
-        body: JSON.stringify({ shiftId, routeStopId, status }),
-      });
+      return apiRequest("POST", "/api/driver/route-progress/update-stop", { shiftId, routeStopId, status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/driver/route-progress", shiftId] });

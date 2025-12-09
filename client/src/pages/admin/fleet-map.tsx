@@ -6,6 +6,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 
+// Declare Leaflet on window for TypeScript
+declare global {
+  interface Window {
+    L: any;
+  }
+}
+
 interface VehicleLocation {
   id: string;
   name: string;
