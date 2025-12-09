@@ -294,7 +294,7 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
 
   return (
     <Sidebar>
-      <SidebarContent className="pt-4">
+      <SidebarContent className="pt-4 pb-8">
         <SidebarGroup>
           <SidebarGroupLabel className="text-base font-semibold px-3 py-4 mb-2">
             Kid Connect
