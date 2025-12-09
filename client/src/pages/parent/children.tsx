@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { MedicalBadge } from "@/components/medical-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -33,6 +34,7 @@ interface EnrichedStudent {
   heightInches?: number | null;
   race?: string | null;
   photoUrl?: string | null;
+  allergies?: string | null;
   medicalNotes?: string | null;
   specialNeeds?: string | null;
   emergencyContactName?: string | null;
@@ -72,6 +74,7 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
       gender: student.gender || "",
       heightInches: student.heightInches || undefined,
       race: student.race || "",
+      allergies: student.allergies || "",
       medicalNotes: student.medicalNotes || "",
       specialNeeds: student.specialNeeds || "",
       emergencyContactName: student.emergencyContactName || "",
@@ -317,12 +320,26 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
 
             <FormField
               control={form.control}
+              name="allergies"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Allergies</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} value={field.value || ""} rows={2} placeholder="List any food, medication, or environmental allergies..." data-testid="input-allergies" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="medicalNotes"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Medical Notes</FormLabel>
                   <FormControl>
-                    <Textarea {...field} value={field.value || ""} rows={3} placeholder="Any medical conditions, allergies, or important health information..." data-testid="input-medical-notes" />
+                    <Textarea {...field} value={field.value || ""} rows={3} placeholder="Any medical conditions or important health information..." data-testid="input-medical-notes" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -939,12 +956,15 @@ export default function ConnectChildrenPage() {
                         {student.firstName} {student.lastName}
                       </CardTitle>
                     </div>
-                    {student.assignedRouteId && (
-                      <Badge className="bg-success/10 text-success border-success/20">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Assigned
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <MedicalBadge allergies={student.allergies} medicalNotes={student.medicalNotes} />
+                      {student.assignedRouteId && (
+                        <Badge className="bg-success/10 text-success border-success/20">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Assigned
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">

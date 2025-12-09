@@ -9,6 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPhoneNumber } from "@/lib/phoneFormat";
+import { MedicalBadge } from "@/components/medical-badge";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +70,9 @@ interface EnrichedStudent {
   dropoffStopId: string | null;
   pickupStop: any;
   dropoffStop: any;
+  allergies?: string | null;
+  medicalNotes?: string | null;
+  specialNeeds?: string | null;
   assignedRoutes?: Array<{
     assignmentId: string;
     routeId: string;
@@ -506,6 +510,7 @@ export default function AdminStudentsPage() {
       race: student.race || "",
       gender: student.gender || "",
       photoUrl: student.photoUrl || "",
+      allergies: student.allergies || "",
       medicalNotes: student.medicalNotes || "",
       specialNeeds: student.specialNeeds || "",
       emergencyContactName: student.emergencyContactName || "",
@@ -675,7 +680,8 @@ export default function AdminStudentsPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 flex items-center gap-2">
+                  <MedicalBadge allergies={student.allergies} medicalNotes={student.medicalNotes} />
                   {(student.assignedRouteId || (student.assignedRoutes && student.assignedRoutes.length > 0)) ? (
                     <Badge className="bg-success/10 text-success border-success/20" data-testid={`badge-assigned-${student.id}`}>
                       <CheckCircle className="h-3 w-3 mr-1" />

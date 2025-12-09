@@ -157,6 +157,11 @@ const driverMenuSections = [
         url: "/driver/attendance",
         icon: ClipboardCheck,
       },
+      {
+        title: "My Students",
+        url: "/driver/students",
+        icon: Users,
+      },
     ],
   },
   {

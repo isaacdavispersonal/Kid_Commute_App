@@ -6738,6 +6738,50 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
 
   // ============ Student Attendance Routes ============
 
+  // Get all students from driver's assigned routes for today (view only, no route start required)
+  app.get(
+    "/api/driver/students",
+    requireAuth,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.id;
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Get all driver's shifts for today
+        const todayShifts = await storage.getShiftsByDriver(driverId, today, today);
+        
+        if (todayShifts.length === 0) {
+          return res.json([]);
+        }
+        
+        // Get unique route IDs from shifts
+        const routeIds = [...new Set(todayShifts.map(s => s.routeId).filter(Boolean))];
+        
+        // Get students from all routes
+        const allStudents: any[] = [];
+        for (const routeId of routeIds) {
+          if (routeId) {
+            const students = await storage.getStudentsByRouteForDate(routeId, today);
+            const route = await storage.getRoute(routeId);
+            const shift = todayShifts.find(s => s.routeId === routeId);
+            allStudents.push(...students.map(s => ({ 
+              ...s, 
+              routeName: route?.name || "Unknown Route",
+              routeId,
+              shiftType: shift?.shiftType
+            })));
+          }
+        }
+        
+        res.json(allStudents);
+      } catch (error) {
+        console.error("Error fetching driver students:", error);
+        res.status(500).json({ message: "Failed to fetch students" });
+      }
+    }
+  );
+
   // Get students on driver's route for attendance (driver-specific)
   app.get(
     "/api/driver/route-students/:routeId",
