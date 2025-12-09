@@ -294,11 +294,18 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
 
   return (
     <Sidebar>
-      <SidebarContent className="pt-4 pb-8">
+      <SidebarContent className="pt-6 pb-8">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-base font-semibold px-3 py-4 mb-2">
-            Kid Connect
-          </SidebarGroupLabel>
+          {/* App Title - visually distinct from menu items */}
+          <div className="px-3 mb-6">
+            <h1 className="text-xl font-bold text-primary tracking-tight">
+              Kid Commute
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Transportation Management
+            </p>
+          </div>
+          <SidebarSeparator className="mb-4" />
           <SidebarGroupContent>
             {userRole === "admin" && (
               <>
