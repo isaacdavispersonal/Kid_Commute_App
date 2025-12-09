@@ -304,8 +304,8 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
         data-testid={`shift-card-${shift.id}`}
       >
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge 
                 className={SHIFT_TYPE_LABELS[shift.shiftType].color}
                 data-testid={`badge-shift-type-${shift.id}`}
@@ -328,8 +328,8 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
               )}
             </div>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span data-testid={`text-shift-time-${shift.id}`}>
+              <Clock className="h-4 w-4 flex-shrink-0" />
+              <span data-testid={`text-shift-time-${shift.id}`} className="whitespace-nowrap">
                 {shift.plannedStart} - {shift.plannedEnd}
               </span>
             </div>
@@ -393,7 +393,7 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2">
             {!isCompleted && !isRouteStarted ? (
               shift.routeId ? (
                 <Button
@@ -618,7 +618,7 @@ export default function DriverDashboard() {
     <PullToRefresh queryKeys={[["/api/driver/shifts/today"], ["/api/driver/clock-status"]]}>
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-3 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <h1 className="text-2xl font-semibold" data-testid="title-dashboard">
             Driver Dashboard
           </h1>
@@ -667,8 +667,9 @@ export default function DriverDashboard() {
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
                 <Button
+                  className="w-full"
                   variant={isOnBreak ? "default" : "outline"}
                   onClick={() => {
                     if (isOnBreak) {
@@ -690,7 +691,7 @@ export default function DriverDashboard() {
                   {isOnBreak ? "End Break" : "Start Break"}
                 </Button>
                 <Button
-                  className="flex-1"
+                  className="w-full"
                   variant="destructive"
                   onClick={() => setShowClockOutDialog(true)}
                   disabled={clockOutMutation.isPending}
