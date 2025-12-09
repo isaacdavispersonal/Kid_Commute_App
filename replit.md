@@ -57,6 +57,14 @@ Preferred communication style: Simple, everyday language.
     - **Automated Data Retention**: Scheduled cleanup service for old data (Messages, GPS/geofence events, audit logs, announcements, device tokens) with configurable retention periods.
     - **BambooHR Payroll Integration**: Automated driver clock-in/out data export with federal/Arizona overtime rules, including employee mapping, pay period selection, preview, batch submission, and audit trail.
 
+## Backlog / Future Features
+
+### Driver-Side Tools (Planned)
+- **Stop Timeline**: Show drivers a visual timeline of when they need to be at each stop and when they must leave for the next stop.
+- **Route Map Visualization**: Interactive map for drivers showing their assigned routes with stop markers and navigation guidance.
+- **Emergency Button**: Quick emergency alert button on driver dashboard that notifies admins and relevant parties immediately.
+- **Enhanced Lead Driver Role**: Expand lead driver privileges to include route editing, driver assignment, and schedule management capabilities.
+
 ## External Dependencies
 
 ### Third-Party Services

@@ -3216,7 +3216,48 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
         
         const events = await storage.getClockEventsByDriver("", startDateObj, endDateObj);
-        res.json(events);
+        
+        // Enrich events with driver names and shift info
+        const enrichedEvents = await Promise.all(
+          events.map(async (event) => {
+            const driver = await storage.getUser(event.driverId);
+            let shiftDate: string | null = null;
+            let shiftType: string | null = null;
+            
+            if (event.shiftId) {
+              const shift = await storage.getShift(event.shiftId);
+              if (shift) {
+                shiftDate = shift.date;
+                shiftType = shift.shiftType;
+              }
+            }
+            
+            // Build driver name
+            let driverName = "Unknown Driver";
+            if (driver) {
+              const firstName = driver.firstName?.trim();
+              const lastName = driver.lastName?.trim();
+              if (firstName && lastName) {
+                driverName = `${firstName} ${lastName}`;
+              } else if (firstName) {
+                driverName = firstName;
+              } else if (lastName) {
+                driverName = lastName;
+              } else if (driver.email) {
+                driverName = driver.email;
+              }
+            }
+            
+            return {
+              ...event,
+              driverName,
+              shiftDate,
+              shiftType,
+            };
+          })
+        );
+        
+        res.json(enrichedEvents);
       } catch (error) {
         console.error("Error fetching all clock events:", error);
         res.status(500).json({ message: "Failed to fetch clock events" });
@@ -3232,7 +3273,48 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req, res) => {
       try {
         const events = await storage.getUnresolvedClockEvents();
-        res.json(events);
+        
+        // Enrich events with driver names and shift info
+        const enrichedEvents = await Promise.all(
+          events.map(async (event) => {
+            const driver = await storage.getUser(event.driverId);
+            let shiftDate: string | null = null;
+            let shiftType: string | null = null;
+            
+            if (event.shiftId) {
+              const shift = await storage.getShift(event.shiftId);
+              if (shift) {
+                shiftDate = shift.date;
+                shiftType = shift.shiftType;
+              }
+            }
+            
+            // Build driver name
+            let driverName = "Unknown Driver";
+            if (driver) {
+              const firstName = driver.firstName?.trim();
+              const lastName = driver.lastName?.trim();
+              if (firstName && lastName) {
+                driverName = `${firstName} ${lastName}`;
+              } else if (firstName) {
+                driverName = firstName;
+              } else if (lastName) {
+                driverName = lastName;
+              } else if (driver.email) {
+                driverName = driver.email;
+              }
+            }
+            
+            return {
+              ...event,
+              driverName,
+              shiftDate,
+              shiftType,
+            };
+          })
+        );
+        
+        res.json(enrichedEvents);
       } catch (error) {
         console.error("Error fetching unresolved clock events:", error);
         res.status(500).json({ message: "Failed to fetch unresolved clock events" });

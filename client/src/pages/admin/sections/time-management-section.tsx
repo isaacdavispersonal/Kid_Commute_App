@@ -245,8 +245,20 @@ export default function TimeManagementSection() {
   });
 
   // Enrich events with driver and shift information
-  const enrichEvents = (events: ClockEvent[]): EnrichedClockEvent[] => {
+  // Backend now provides driverName, shiftDate, shiftType - use them if available
+  const enrichEvents = (events: (ClockEvent & { driverName?: string; shiftDate?: string | null; shiftType?: string | null })[]): EnrichedClockEvent[] => {
     return (events || []).map((event) => {
+      // Use backend-provided enrichment if available, otherwise fallback to local lookup
+      if (event.driverName) {
+        return {
+          ...event,
+          driverName: event.driverName,
+          shiftDate: event.shiftDate ?? null,
+          shiftType: event.shiftType ?? null,
+        };
+      }
+      
+      // Fallback to local driver lookup
       const driver = drivers?.find((d) => d.id === event.driverId);
       const shift = shifts?.find((s: any) => s.id === event.shiftId);
       
