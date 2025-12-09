@@ -53,7 +53,7 @@ export default function AdminMessagesPage() {
   });
 
   // Get message summaries for Recent tab
-  const { data: messageSummaries = [], isLoading: summariesLoading } = useQuery<any[]>({
+  const { data: messageSummaries, isLoading: summariesLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/message-summaries"],
     refetchInterval: 5000,
   });
@@ -98,18 +98,23 @@ export default function AdminMessagesPage() {
 
   // Show toast notification when new messages arrive (based on message timestamps)
   useEffect(() => {
-    // Don't process if no data or still loading initial data
-    if (!messageSummaries || summariesLoading) return;
+    // Don't process if still loading initial data
+    if (summariesLoading) return;
+    // Skip if messageSummaries is undefined (query not yet returned)
+    if (messageSummaries === undefined) return;
     
     const prevMap = prevMessageTimesRef.current;
     const isInitialized = hasInitializedRef.current;
     
     let newMessageCount = 0;
+    const currentSenderIds = new Set<string>();
     
     for (const summary of messageSummaries) {
       const senderId = summary.senderId;
       const lastTime = summary.lastMessageTime;
       if (!senderId || !lastTime) continue;
+      
+      currentSenderIds.add(senderId);
       
       // Only detect changes after initialization
       if (isInitialized) {
@@ -120,8 +125,18 @@ export default function AdminMessagesPage() {
         }
       }
       
-      // Update the timestamp map (merge, don't replace entirely)
+      // Update the timestamp in our tracking map
       prevMessageTimesRef.current[senderId] = lastTime;
+    }
+    
+    // Clean up senders that are no longer in the list
+    // This allows us to detect them as "new" if they reappear with a message
+    if (isInitialized) {
+      for (const oldSenderId of Object.keys(prevMap)) {
+        if (!currentSenderIds.has(oldSenderId)) {
+          delete prevMessageTimesRef.current[oldSenderId];
+        }
+      }
     }
     
     // Show toast if we detected new messages (after initialization)
@@ -132,9 +147,9 @@ export default function AdminMessagesPage() {
       });
     }
     
-    // Mark as initialized only after we have some data to establish baseline
-    // This ensures the first real message triggers a toast
-    if (!isInitialized && messageSummaries.length > 0) {
+    // Mark as initialized after first successful query (even if empty)
+    // This prevents false positives on page load
+    if (!isInitialized) {
       hasInitializedRef.current = true;
     }
   }, [messageSummaries, summariesLoading, toast]);
@@ -341,6 +356,7 @@ export default function AdminMessagesPage() {
   };
 
   const buildRecentConversations = (): UnifiedConversation[] => {
+    if (!messageSummaries) return [];
     return messageSummaries.map((summary: any) => ({
       id: summary.userId,
       name: `${summary.firstName} ${summary.lastName}`,
