@@ -25,7 +25,8 @@ interface ActiveDriver {
   firstName: string | null;
   lastName: string | null;
   email: string;
-  routeName?: string;
+  routeName?: string | null;
+  clockInTime?: string | null;
 }
 
 // Helper function to safely display driver names
@@ -315,6 +316,11 @@ export default function AdminDashboard() {
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {driver.routeName || "No route assigned"}
+                          {driver.clockInTime && (
+                            <span className="ml-2">
+                              • Clocked in {new Date(driver.clockInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>

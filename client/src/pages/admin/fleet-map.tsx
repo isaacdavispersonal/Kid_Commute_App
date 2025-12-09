@@ -198,7 +198,8 @@ export default function AdminFleetMap() {
           {trackedVehicles.length > 0 ? (
             <div
               ref={mapRef}
-              className="w-full h-[600px] rounded-b-lg"
+              className="w-full h-[600px] rounded-b-lg relative z-0"
+              style={{ isolation: 'isolate' }}
               data-testid="map-container"
             />
           ) : (

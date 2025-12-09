@@ -27,6 +27,8 @@ export default function AdminMessagesPage() {
   const [adminSearch, setAdminSearch] = useState("");
   const [showArchive, setShowArchive] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevMessageTimesRef = useRef<Record<string, string>>({});
+  const hasInitializedRef = useRef(false);
   const { toast } = useToast();
 
   // Get all conversations between drivers and parents
@@ -93,6 +95,49 @@ export default function AdminMessagesPage() {
     queryKey: ["/api/user/unread-counts"],
     refetchInterval: 5000,
   });
+
+  // Show toast notification when new messages arrive (based on message timestamps)
+  useEffect(() => {
+    // Don't process if no data or still loading initial data
+    if (!messageSummaries || summariesLoading) return;
+    
+    const prevMap = prevMessageTimesRef.current;
+    const isInitialized = hasInitializedRef.current;
+    
+    let newMessageCount = 0;
+    
+    for (const summary of messageSummaries) {
+      const senderId = summary.senderId;
+      const lastTime = summary.lastMessageTime;
+      if (!senderId || !lastTime) continue;
+      
+      // Only detect changes after initialization
+      if (isInitialized) {
+        const prevTime = prevMap[senderId];
+        // Detect: new sender OR existing sender with newer timestamp
+        if (!prevTime || lastTime > prevTime) {
+          newMessageCount++;
+        }
+      }
+      
+      // Update the timestamp map (merge, don't replace entirely)
+      prevMessageTimesRef.current[senderId] = lastTime;
+    }
+    
+    // Show toast if we detected new messages (after initialization)
+    if (isInitialized && newMessageCount > 0) {
+      toast({
+        title: "New message received",
+        description: `You have ${newMessageCount} new message${newMessageCount > 1 ? 's' : ''}`,
+      });
+    }
+    
+    // Mark as initialized only after we have some data to establish baseline
+    // This ensures the first real message triggers a toast
+    if (!isInitialized && messageSummaries.length > 0) {
+      hasInitializedRef.current = true;
+    }
+  }, [messageSummaries, summariesLoading, toast]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({

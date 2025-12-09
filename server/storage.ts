@@ -2763,6 +2763,33 @@ export class DatabaseStorage implements IStorage {
 
     const activeDriverIds = new Set(currentTimeEntries.map((e) => e.driverId));
 
+    // Get today's shifts to find route info for clocked-in drivers
+    const today = new Date().toISOString().split('T')[0];
+    const todayShifts = await db
+      .select({
+        shift: shifts,
+        route: routes,
+      })
+      .from(shifts)
+      .leftJoin(routes, eq(shifts.routeId, routes.id))
+      .where(eq(shifts.date, today));
+
+    // Create a map of driverId to route name
+    const driverRouteMap = new Map<string, string>();
+    todayShifts.forEach(({ shift, route }) => {
+      if (shift.driverId && route?.name) {
+        driverRouteMap.set(shift.driverId, route.name);
+      }
+    });
+
+    // Get clock-in times from current time entries (convert Date to ISO string)
+    const clockInTimeMap = new Map<string, string>();
+    currentTimeEntries.forEach((entry) => {
+      if (entry.clockIn) {
+        clockInTimeMap.set(entry.driverId, entry.clockIn.toISOString());
+      }
+    });
+
     return drivers
       .filter((d) => activeDriverIds.has(d.id))
       .map((d) => ({
@@ -2770,6 +2797,8 @@ export class DatabaseStorage implements IStorage {
         firstName: d.firstName,
         lastName: d.lastName,
         email: d.email,
+        routeName: driverRouteMap.get(d.id) || null,
+        clockInTime: clockInTimeMap.get(d.id) || null,
       }));
   }
 
