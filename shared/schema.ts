@@ -1469,6 +1469,9 @@ export const incidents = pgTable("incidents", {
   routeId: varchar("route_id").references(() => routes.id, {
     onDelete: "set null",
   }),
+  studentId: varchar("student_id").references(() => students.id, {
+    onDelete: "set null",
+  }),
   title: varchar("title").notNull(),
   description: text("description").notNull(),
   severity: incidentSeverityEnum("severity").notNull(),
