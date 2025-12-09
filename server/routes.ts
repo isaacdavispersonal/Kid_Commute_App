@@ -1764,17 +1764,35 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req, res) => {
       try {
         const routes = await storage.getAllRoutes();
-        // Enrich with stop count
+        // Enrich with stop count and student count
         const enrichedRoutes = await Promise.all(
           routes.map(async (route) => {
             const stops = await storage.getRouteStops(route.id);
-            return { ...route, stopCount: stops.length };
+            const students = await storage.getStudentsByRoute(route.id);
+            return { ...route, stopCount: stops.length, studentCount: students.length };
           })
         );
         res.json(enrichedRoutes);
       } catch (error) {
         console.error("Error fetching routes:", error);
         res.status(500).json({ message: "Failed to fetch routes" });
+      }
+    }
+  );
+
+  // Get students for a specific route
+  app.get(
+    "/api/admin/routes/:routeId/students",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { routeId } = req.params;
+        const students = await storage.getStudentsByRoute(routeId);
+        res.json(students);
+      } catch (error) {
+        console.error("Error fetching route students:", error);
+        res.status(500).json({ message: "Failed to fetch students for route" });
       }
     }
   );

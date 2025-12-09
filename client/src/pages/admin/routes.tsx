@@ -44,19 +44,77 @@ import {
 } from "@/components/ui/select";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
-import { Plus, MapPin, Pencil, Trash2, List, Clock, ArrowUp, ArrowDown, ChevronDown, Tag } from "lucide-react";
+import { Plus, MapPin, Pencil, Trash2, List, Clock, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Tag, Users, Palette, LayoutGrid } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 
-interface RouteWithStopCount {
+interface RouteWithCounts {
   id: string;
   name: string;
   description: string | null;
   routeType: "MORNING" | "AFTERNOON" | "EXTRA" | null;
   groupId: string | null;
+  color: string | null;
   isActive: boolean;
   stopCount: number;
+  studentCount: number;
+}
+
+interface Student {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+// Expandable student list component for route cards
+function RouteStudentList({ routeId, studentCount }: { routeId: string; studentCount: number }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  const { data: students, isLoading } = useQuery<Student[]>({
+    queryKey: ["/api/admin/routes", routeId, "students"],
+    enabled: isExpanded && studentCount > 0,
+  });
+
+  if (studentCount === 0) {
+    return (
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Users className="h-3 w-3" />
+        <span>No students</span>
+      </div>
+    );
+  }
+
+  return (
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <CollapsibleTrigger asChild>
+        <button 
+          className="flex items-center gap-1 text-xs text-primary hover:underline cursor-pointer"
+          onClick={(e) => e.stopPropagation()}
+          data-testid={`button-expand-students-${routeId}`}
+        >
+          {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          <Users className="h-3 w-3" />
+          <span>{studentCount} student{studentCount !== 1 ? 's' : ''}</span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-2 pl-4 border-l-2 border-muted space-y-0.5">
+          {isLoading ? (
+            <p className="text-xs text-muted-foreground">Loading...</p>
+          ) : students && students.length > 0 ? (
+            students.map((student) => (
+              <p key={student.id} className="text-xs text-muted-foreground" data-testid={`text-student-${student.id}`}>
+                {student.firstName} {student.lastName}
+              </p>
+            ))
+          ) : (
+            <p className="text-xs text-muted-foreground">No students assigned</p>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 export default function AdminRoutes() {
@@ -72,12 +130,13 @@ export default function AdminRoutes() {
   const [isCreateGroupDialogOpen, setIsCreateGroupDialogOpen] = useState(false);
   const [isEditGroupDialogOpen, setIsEditGroupDialogOpen] = useState(false);
   const [isDeleteGroupDialogOpen, setIsDeleteGroupDialogOpen] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState<RouteWithStopCount | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<RouteWithCounts | null>(null);
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<RouteGroup | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [groupingMode, setGroupingMode] = useState<"groups" | "colors">("groups");
 
-  const { data: routes, isLoading: routesLoading } = useQuery<RouteWithStopCount[]>({
+  const { data: routes, isLoading: routesLoading } = useQuery<RouteWithCounts[]>({
     queryKey: ["/api/admin/routes"],
   });
 
@@ -437,7 +496,7 @@ export default function AdminRoutes() {
     updateRouteMutation.mutate({ id: selectedRoute.id, data });
   };
 
-  const handleEditRouteClick = (route: RouteWithStopCount) => {
+  const handleEditRouteClick = (route: RouteWithCounts) => {
     setSelectedRoute(route);
     editRouteForm.reset({
       name: route.name,
@@ -450,7 +509,7 @@ export default function AdminRoutes() {
     setIsEditRouteDialogOpen(true);
   };
 
-  const handleDeleteRouteClick = (route: RouteWithStopCount) => {
+  const handleDeleteRouteClick = (route: RouteWithCounts) => {
     setSelectedRoute(route);
     setIsDeleteRouteDialogOpen(true);
   };
@@ -518,7 +577,7 @@ export default function AdminRoutes() {
     deleteGroupMutation.mutate(selectedGroup.id);
   };
 
-  const handleManageStopsClick = (route: RouteWithStopCount) => {
+  const handleManageStopsClick = (route: RouteWithCounts) => {
     setSelectedRoute(route);
     setIsManageStopsDialogOpen(true);
   };
@@ -621,7 +680,7 @@ export default function AdminRoutes() {
     {
       header: "Actions",
       accessor: "id",
-      cell: (_value: string, row: RouteWithStopCount) => (
+      cell: (_value: string, row: RouteWithCounts) => (
         <div className="flex items-center gap-2">
           <Button
             size="sm"
@@ -710,7 +769,24 @@ export default function AdminRoutes() {
     }
     acc[groupKey].push(route);
     return acc;
-  }, {} as Record<string, RouteWithStopCount[]>) || {};
+  }, {} as Record<string, RouteWithCounts[]>) || {};
+
+  // Group routes by color (same color = route pair)
+  const colorGroupedRoutes = routes?.reduce((acc, route) => {
+    const colorKey = route.color || "no-color";
+    if (!acc[colorKey]) {
+      acc[colorKey] = [];
+    }
+    acc[colorKey].push(route);
+    return acc;
+  }, {} as Record<string, RouteWithCounts[]>) || {};
+
+  // Get sorted color keys (put "no-color" at the end)
+  const colorKeys = Object.keys(colorGroupedRoutes).sort((a, b) => {
+    if (a === "no-color") return 1;
+    if (b === "no-color") return -1;
+    return a.localeCompare(b);
+  });
 
   // Show all groups (even those without routes)
   const groupsWithRoutes = routeGroups || [];
@@ -733,7 +809,30 @@ export default function AdminRoutes() {
         </TabsList>
 
         <TabsContent value="routes" className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            {/* Grouping Mode Toggle */}
+            <div className="flex items-center gap-1 border rounded-md p-1">
+              <Button
+                variant={groupingMode === "groups" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setGroupingMode("groups")}
+                className="h-8 px-3"
+                data-testid="button-group-by-groups"
+              >
+                <LayoutGrid className="h-4 w-4 mr-1.5" />
+                Groups
+              </Button>
+              <Button
+                variant={groupingMode === "colors" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setGroupingMode("colors")}
+                className="h-8 px-3"
+                data-testid="button-group-by-colors"
+              >
+                <Palette className="h-4 w-4 mr-1.5" />
+                AM/PM Pairs
+              </Button>
+            </div>
             <Dialog open={isCreateRouteDialogOpen} onOpenChange={setIsCreateRouteDialogOpen}>
               <DialogTrigger asChild>
                 <Button data-testid="button-add-route">
@@ -842,9 +941,118 @@ export default function AdminRoutes() {
             <div className="text-center py-8 text-muted-foreground">
               No routes found. Create your first route to get started.
             </div>
+          ) : groupingMode === "colors" ? (
+            /* Color-based grouping view (AM/PM pairs) */
+            <div className="space-y-4">
+              {colorKeys.map((colorKey) => {
+                const colorRoutes = colorGroupedRoutes[colorKey] || [];
+                const isExpanded = expandedGroups.has(`color-${colorKey}`);
+                const colorName = colorKey === "no-color" ? "No Color Assigned" : colorKey.charAt(0).toUpperCase() + colorKey.slice(1);
+                
+                // Sort routes: MORNING first, then AFTERNOON, then others
+                const sortedRoutes = [...colorRoutes].sort((a, b) => {
+                  const typeOrder = { MORNING: 0, AFTERNOON: 1, EXTRA: 2 };
+                  const aOrder = typeOrder[a.routeType as keyof typeof typeOrder] ?? 3;
+                  const bOrder = typeOrder[b.routeType as keyof typeof typeOrder] ?? 3;
+                  return aOrder - bOrder;
+                });
+                
+                return (
+                  <Card key={colorKey}>
+                    <Collapsible
+                      open={isExpanded}
+                      onOpenChange={() => toggleGroupExpansion(`color-${colorKey}`)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <div className="flex items-center justify-between gap-2 p-3 sm:p-4 cursor-pointer hover-elevate" data-testid={`color-group-${colorKey}`}>
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                            {colorKey !== "no-color" && (
+                              <div 
+                                className="w-4 h-4 rounded-full shrink-0 border border-border" 
+                                style={{ backgroundColor: colorKey }}
+                              />
+                            )}
+                            <span className="font-medium truncate">{colorName}</span>
+                            <Badge variant="secondary" className="shrink-0">{colorRoutes.length}</Badge>
+                          </div>
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="px-2 sm:px-4 pb-3 sm:pb-4 space-y-2">
+                          {sortedRoutes.map((route) => (
+                            <Card key={route.id}>
+                              <CardContent className="p-3 sm:p-4 space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium text-sm sm:text-base truncate">{route.name}</p>
+                                    {route.description && (
+                                      <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{route.description}</p>
+                                    )}
+                                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                                      {route.routeType && (
+                                        <Badge 
+                                          variant="outline" 
+                                          className={`text-xs ${
+                                            route.routeType === 'MORNING' ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400' :
+                                            route.routeType === 'AFTERNOON' ? 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-400' :
+                                            ''
+                                          }`}
+                                        >
+                                          {route.routeType === 'MORNING' ? 'AM' : route.routeType === 'AFTERNOON' ? 'PM' : route.routeType}
+                                        </Badge>
+                                      )}
+                                      <span className="text-xs text-muted-foreground">{route.stopCount} stops</span>
+                                      <RouteStudentList routeId={route.id} studentCount={route.studentCount} />
+                                      {!route.isActive && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-0.5 shrink-0">
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8"
+                                      onClick={() => {
+                                        setSelectedRoute(route);
+                                        setIsManageStopsDialogOpen(true);
+                                      }}
+                                      data-testid={`button-manage-stops-${route.id}`}
+                                    >
+                                      <List className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8"
+                                      onClick={() => handleEditRouteClick(route)}
+                                      data-testid={`button-edit-route-${route.id}`}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8"
+                                      onClick={() => handleDeleteRouteClick(route)}
+                                      data-testid={`button-delete-route-${route.id}`}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </Card>
+                );
+              })}
+            </div>
           ) : (
             <div className="space-y-4">
-              {/* Grouped Routes */}
+              {/* Grouped Routes by Route Group */}
               {groupsWithRoutes.map((group) => {
                 const groupRoutes = groupedRoutes[group.id] || [];
                 const isExpanded = expandedGroups.has(group.id);
@@ -904,9 +1112,10 @@ export default function AdminRoutes() {
                                     {route.description && (
                                       <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{route.description}</p>
                                     )}
-                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                    <div className="flex flex-wrap items-center gap-2 mt-1">
                                       {route.routeType && <Badge variant="outline" className="text-xs">{route.routeType}</Badge>}
                                       <span className="text-xs text-muted-foreground">{route.stopCount} stops</span>
+                                      <RouteStudentList routeId={route.id} studentCount={route.studentCount} />
                                       {!route.isActive && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
                                     </div>
                                   </div>
@@ -1004,9 +1213,10 @@ export default function AdminRoutes() {
                                   {route.description && (
                                     <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{route.description}</p>
                                   )}
-                                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                  <div className="flex flex-wrap items-center gap-2 mt-1">
                                     {route.routeType && <Badge variant="outline" className="text-xs">{route.routeType}</Badge>}
                                     <span className="text-xs text-muted-foreground">{route.stopCount} stops</span>
+                                    <RouteStudentList routeId={route.id} studentCount={route.studentCount} />
                                     {!route.isActive && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
                                   </div>
                                 </div>

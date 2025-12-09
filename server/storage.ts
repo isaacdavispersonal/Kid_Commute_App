@@ -3209,6 +3209,32 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getStudentsByRoute(routeId: string): Promise<Student[]> {
+    // Get students from direct assignment
+    const directStudents = await db
+      .select()
+      .from(students)
+      .where(eq(students.assignedRouteId, routeId));
+    
+    // Get students from junction table
+    const junctionStudents = await db
+      .select({ student: students })
+      .from(studentRoutes)
+      .innerJoin(students, eq(studentRoutes.studentId, students.id))
+      .where(eq(studentRoutes.routeId, routeId));
+    
+    // Combine and deduplicate
+    const studentMap = new Map<string, Student>();
+    directStudents.forEach(s => studentMap.set(s.id, s));
+    junctionStudents.forEach(({ student }) => studentMap.set(student.id, student));
+    
+    // Sort by lastName, firstName
+    return Array.from(studentMap.values()).sort((a, b) => {
+      const lastCmp = (a.lastName || '').localeCompare(b.lastName || '');
+      return lastCmp !== 0 ? lastCmp : (a.firstName || '').localeCompare(b.firstName || '');
+    });
+  }
+
   async getStudentsByRouteForDate(routeId: string, date: string): Promise<any[]> {
     // Get all students assigned to this route
     const routeStudents = await db

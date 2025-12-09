@@ -61,6 +61,8 @@ import {
 } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Pencil, Trash2, User, Route, ChevronRight, Car, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -133,6 +135,7 @@ export default function AdminDriverAssignments() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<EnrichedDriverAssignment | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<EnrichedDriverAssignment | null>(null);
+  const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -143,6 +146,14 @@ export default function AdminDriverAssignments() {
       notes: "",
     },
   });
+
+  const toggleRouteSelection = (routeId: string) => {
+    setSelectedRouteIds(prev => 
+      prev.includes(routeId) 
+        ? prev.filter(id => id !== routeId)
+        : [...prev, routeId]
+    );
+  };
 
   const { data: assignments, isLoading: assignmentsLoading } = useQuery<EnrichedDriverAssignment[]>({
     queryKey: ["/api/admin/driver-assignments"],
@@ -178,6 +189,41 @@ export default function AdminDriverAssignments() {
       toast({
         title: "Error",
         description: error.message || "Failed to create driver assignment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Bulk create mutation for multiple route selection
+  const bulkCreateMutation = useMutation({
+    mutationFn: async (assignments: FormData[]) => {
+      const results = await Promise.allSettled(
+        assignments.map(data => apiRequest("POST", "/api/admin/driver-assignments", data))
+      );
+      const successful = results.filter(r => r.status === "fulfilled").length;
+      const failed = results.filter(r => r.status === "rejected").length;
+      return { successful, failed };
+    },
+    onSuccess: ({ successful, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
+      handleCloseDialog();
+      if (failed > 0) {
+        toast({
+          title: "Partial Success",
+          description: `Created ${successful} assignment(s). ${failed} failed (may already exist).`,
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `Created ${successful} driver assignment(s)`,
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create driver assignments",
         variant: "destructive",
       });
     },
@@ -232,6 +278,7 @@ export default function AdminDriverAssignments() {
   const handleOpenDialog = (assignment?: EnrichedDriverAssignment) => {
     if (assignment) {
       setEditingAssignment(assignment);
+      setSelectedRouteIds([]);
       form.reset({
         driverId: assignment.driverId,
         routeId: assignment.routeId,
@@ -240,6 +287,7 @@ export default function AdminDriverAssignments() {
       });
     } else {
       setEditingAssignment(null);
+      setSelectedRouteIds([]);
       form.reset({
         driverId: "",
         routeId: "",
@@ -253,6 +301,7 @@ export default function AdminDriverAssignments() {
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setEditingAssignment(null);
+    setSelectedRouteIds([]);
     form.reset();
   };
 
@@ -260,7 +309,23 @@ export default function AdminDriverAssignments() {
     if (editingAssignment) {
       updateMutation.mutate({ id: editingAssignment.id, data });
     } else {
-      createMutation.mutate(data);
+      // For new assignments, use selected routes
+      if (selectedRouteIds.length > 0) {
+        const assignments = selectedRouteIds.map(routeId => ({
+          ...data,
+          routeId,
+        }));
+        bulkCreateMutation.mutate(assignments);
+      } else if (data.routeId) {
+        // Fallback to single route if somehow selected
+        createMutation.mutate(data);
+      } else {
+        toast({
+          title: "Error",
+          description: "Please select at least one route",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -460,30 +525,61 @@ export default function AdminDriverAssignments() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="routeId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Route</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-route">
-                          <SelectValue placeholder="Select a route" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {routes?.map((route) => (
-                          <SelectItem key={route.id} value={route.id}>
+              {editingAssignment ? (
+                /* Single route select when editing */
+                <FormField
+                  control={form.control}
+                  name="routeId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Route</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-route">
+                            <SelectValue placeholder="Select a route" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {routes?.map((route) => (
+                            <SelectItem key={route.id} value={route.id}>
+                              {route.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : (
+                /* Multi-route checkboxes when creating */
+                <div className="space-y-2">
+                  <FormLabel>Routes (select one or more)</FormLabel>
+                  <ScrollArea className="h-48 border rounded-md p-3">
+                    <div className="space-y-2">
+                      {routes?.map((route) => (
+                        <div key={route.id} className="flex items-center space-x-3 py-1">
+                          <Checkbox
+                            id={`route-${route.id}`}
+                            checked={selectedRouteIds.includes(route.id)}
+                            onCheckedChange={() => toggleRouteSelection(route.id)}
+                            data-testid={`checkbox-route-${route.id}`}
+                          />
+                          <label
+                            htmlFor={`route-${route.id}`}
+                            className="text-sm cursor-pointer flex-1"
+                          >
                             {route.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedRouteIds.length} route{selectedRouteIds.length !== 1 ? 's' : ''} selected
+                  </p>
+                </div>
+              )}
 
               <FormField
                 control={form.control}
@@ -540,10 +636,14 @@ export default function AdminDriverAssignments() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending}
+                  disabled={createMutation.isPending || updateMutation.isPending || bulkCreateMutation.isPending}
                   data-testid="button-submit"
                 >
-                  {editingAssignment ? "Update Assignment" : "Create Assignment"}
+                  {editingAssignment 
+                    ? "Update Assignment" 
+                    : selectedRouteIds.length > 1 
+                      ? `Create ${selectedRouteIds.length} Assignments`
+                      : "Create Assignment"}
                 </Button>
               </div>
             </form>
