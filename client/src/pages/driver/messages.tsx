@@ -15,6 +15,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { getLoginUrl } from "@/lib/config";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 
 const quickReplies = [
   "Running 5 minutes late",
@@ -362,6 +363,7 @@ export default function DriverMessagesPage() {
   const selectedContactData = filteredContacts.find((c: any) => c.id === selectedParent);
 
   return (
+    <PullToRefresh queryKeys={[["/api/driver/messageable-parents"], ["/api/driver/admin-contacts"], ["/api/user/unread-counts"], ["/api/driver/announcements"], ["/api/driver/announcements/dismissed"], ["/api/driver/notifications"], ["/api/user/unread-announcements"], ["/api/driver/messages"], ["/api/driver/route-announcements"]]}>
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold mb-1">Messages</h1>
@@ -832,6 +834,7 @@ export default function DriverMessagesPage() {
         </Card>
       </div>
     </div>
+    </PullToRefresh>
   );
 }
 

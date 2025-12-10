@@ -7,6 +7,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistance } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 
 interface Announcement {
   id: string;
@@ -50,6 +51,7 @@ export default function DriverAnnouncements() {
   const totalUnread = unreadGlobalCount + unreadRouteCount;
 
   return (
+    <PullToRefresh queryKeys={[["/api/announcements"], ["/api/driver/route-announcements"]]}>
     <div className="container mx-auto p-6 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -279,5 +281,6 @@ export default function DriverAnnouncements() {
         </TabsContent>
       </Tabs>
     </div>
+    </PullToRefresh>
   );
 }

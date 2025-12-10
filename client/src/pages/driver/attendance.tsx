@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, XCircle, Users, Clock, Bell } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 
 type Student = {
   id: string;
@@ -123,6 +124,7 @@ export default function DriverAttendance() {
   const pendingCount = students.filter(s => !s.attendance || s.attendance.status === "PENDING").length;
 
   return (
+    <PullToRefresh queryKeys={[["/api/driver/my-assignments"], ["/api/driver/route-students"]]}>
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Student Attendance</h1>
@@ -251,5 +253,6 @@ export default function DriverAttendance() {
         </Card>
       )}
     </div>
+    </PullToRefresh>
   );
 }
