@@ -109,54 +109,65 @@ function SidebarProvider({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [toggleSidebar])
 
-  // Swipe gesture support for mobile - swipe from left edge to open sidebar
+  // Swipe gesture support for mobile - swipe right anywhere to open sidebar
   // Uses refs to track gesture state across touch events
   const swipeRef = React.useRef({
     startX: 0,
     startY: 0,
     startTime: 0,
-    isEdgeStart: false,
+    isTracking: false,
   })
 
   React.useEffect(() => {
     if (!isMobile) return
 
-    // Thresholds for swipe detection
-    const EDGE_ZONE = 30 // px from left edge to initiate swipe (narrow gutter to avoid conflicts)
-    const MIN_SWIPE_DISTANCE = 60 // minimum px to consider a swipe
-    const MAX_VERTICAL_DISTANCE = 80 // max vertical movement to still count as horizontal swipe
-    const MIN_VELOCITY = 0.3 // minimum px/ms velocity for quick swipes
-    const QUICK_SWIPE_DISTANCE = 40 // shorter distance allowed for fast swipes
+    // Thresholds for swipe detection - tuned for comfortable anywhere-swipe
+    const MIN_SWIPE_DISTANCE = 80 // minimum px to consider a swipe (slightly longer for anywhere swipe)
+    const MAX_VERTICAL_DISTANCE = 50 // max vertical movement - stricter to avoid conflicts with scroll
+    const MIN_VELOCITY = 0.4 // minimum px/ms velocity for quick swipes
+    const QUICK_SWIPE_DISTANCE = 50 // shorter distance allowed for fast swipes
+    const HORIZONTAL_RATIO = 2.5 // horizontal movement must be this many times greater than vertical
 
     const handleTouchStart = (e: TouchEvent) => {
       const touch = e.touches[0]
       swipeRef.current.startX = touch.clientX
       swipeRef.current.startY = touch.clientY
       swipeRef.current.startTime = Date.now()
-      // Only track edge swipes to open - must start near left edge
-      swipeRef.current.isEdgeStart = touch.clientX < EDGE_ZONE
+      swipeRef.current.isTracking = true
     }
 
     const handleTouchMove = (e: TouchEvent) => {
-      // Could add visual feedback here if needed
+      // Early exit if vertical scrolling detected - stop tracking this gesture
+      if (!swipeRef.current.isTracking) return
+      
+      const touch = e.touches[0]
+      const deltaX = touch.clientX - swipeRef.current.startX
+      const deltaY = Math.abs(touch.clientY - swipeRef.current.startY)
+      
+      // If user is scrolling vertically, stop tracking this as a sidebar swipe
+      if (deltaY > MAX_VERTICAL_DISTANCE || (deltaY > 10 && Math.abs(deltaX) < deltaY)) {
+        swipeRef.current.isTracking = false
+      }
     }
 
     const handleTouchEnd = (e: TouchEvent) => {
-      const { startX, startY, startTime, isEdgeStart } = swipeRef.current
+      if (!swipeRef.current.isTracking) return
+      
+      const { startX, startY, startTime } = swipeRef.current
       const touch = e.changedTouches[0]
       const deltaX = touch.clientX - startX
       const deltaY = Math.abs(touch.clientY - startY)
       const duration = Date.now() - startTime
       const velocity = Math.abs(deltaX) / duration // px/ms
 
-      // Check if it's a horizontal swipe (not mostly vertical)
-      const isHorizontalSwipe = deltaY < MAX_VERTICAL_DISTANCE
+      // Check if it's a horizontal swipe - must be predominantly horizontal
+      const isHorizontalSwipe = deltaY < MAX_VERTICAL_DISTANCE && 
+                                 Math.abs(deltaX) > deltaY * HORIZONTAL_RATIO
 
       if (!isHorizontalSwipe) return
 
-      // Swipe right to open (when sidebar is closed)
-      // ONLY allow from left edge to prevent interference with other gestures
-      if (!openMobile && deltaX > 0 && isEdgeStart) {
+      // Swipe right to open (when sidebar is closed) - works from anywhere on screen
+      if (!openMobile && deltaX > 0) {
         const isLongSwipe = deltaX > MIN_SWIPE_DISTANCE
         const isQuickSwipe = velocity > MIN_VELOCITY && deltaX > QUICK_SWIPE_DISTANCE
         
@@ -164,7 +175,7 @@ function SidebarProvider({
           setOpenMobile(true)
         }
       }
-      // Swipe left to close (when sidebar is open) - can happen anywhere
+      // Swipe left to close (when sidebar is open)
       else if (openMobile && deltaX < 0) {
         const isLongSwipe = Math.abs(deltaX) > MIN_SWIPE_DISTANCE
         const isQuickSwipe = velocity > MIN_VELOCITY && Math.abs(deltaX) > QUICK_SWIPE_DISTANCE
