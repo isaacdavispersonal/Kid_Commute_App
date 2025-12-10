@@ -601,17 +601,18 @@ export default function AdminStudentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1">Student Management</h1>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Student Management</h1>
           <p className="text-sm text-muted-foreground">
             Create students and manage route assignments
           </p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-student">
+        <Button onClick={() => setIsCreateDialogOpen(true)} size="sm" data-testid="button-create-student">
           <Plus className="h-4 w-4 mr-2" />
-          Create Student
+          <span className="hidden sm:inline">Create Student</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
 
@@ -635,17 +636,19 @@ export default function AdminStudentsPage() {
         />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant={filter === "all" ? "default" : "outline"}
           onClick={() => setFilter("all")}
+          size="sm"
           data-testid="filter-all"
         >
-          All Students ({students?.length || 0})
+          All ({students?.length || 0})
         </Button>
         <Button
           variant={filter === "assigned" ? "default" : "outline"}
           onClick={() => setFilter("assigned")}
+          size="sm"
           data-testid="filter-assigned"
         >
           Assigned ({students?.filter((s) => s.assignedRouteId || (s.assignedRoutes && s.assignedRoutes.length > 0)).length || 0})
@@ -653,6 +656,7 @@ export default function AdminStudentsPage() {
         <Button
           variant={filter === "unassigned" ? "default" : "outline"}
           onClick={() => setFilter("unassigned")}
+          size="sm"
           data-testid="filter-unassigned"
         >
           Unassigned ({unassignedCount})
