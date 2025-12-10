@@ -366,3 +366,17 @@
   z-index: 0;
   isolation: isolate;
 }
+
+/* iOS Safe Area Inset Support for notch/Dynamic Island devices */
+@supports (padding-top: env(safe-area-inset-top)) {
+  html {
+    /* Ensure the html extends behind the status bar */
+    min-height: 100%;
+    background-color: hsl(var(--card));
+  }
+  
+  body {
+    /* Background color extends into safe area */
+    background-color: hsl(var(--background));
+  }
+}
