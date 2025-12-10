@@ -321,7 +321,8 @@ export default function AdminSchedule() {
 
   const bulkAddMutation = useMutation({
     mutationFn: async (data: { dates: string[]; driverIds: string[] }) => {
-      return await apiRequest("POST", "/api/admin/shifts/bulk-add", data);
+      const res = await apiRequest("POST", "/api/admin/shifts/bulk-add", data);
+      return await res.json();
     },
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
@@ -345,7 +346,7 @@ export default function AdminSchedule() {
       } else {
         toast({
           title: "Success",
-          description: `Added ${count} shifts successfully`,
+          description: `Created ${count} shift${count !== 1 ? 's' : ''} successfully`,
         });
       }
     },
@@ -360,7 +361,8 @@ export default function AdminSchedule() {
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (data: { dates: string[]; driverIds: string[] }) => {
-      return await apiRequest("POST", "/api/admin/shifts/bulk-delete", data);
+      const res = await apiRequest("POST", "/api/admin/shifts/bulk-delete", data);
+      return await res.json();
     },
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
@@ -368,7 +370,7 @@ export default function AdminSchedule() {
       setSelectedDriverIdsForBulkEdit([]);
       toast({
         title: "Success",
-        description: `Removed ${response.count || 0} shifts successfully`,
+        description: `Removed ${response.count || 0} shift${response.count !== 1 ? 's' : ''} successfully`,
       });
     },
     onError: (error: any) => {
@@ -382,7 +384,8 @@ export default function AdminSchedule() {
 
   const addFromAssignmentsMutation = useMutation({
     mutationFn: async (data: { date: string; assignmentIds: string[] }) => {
-      return await apiRequest("POST", "/api/admin/shifts/from-assignments", data);
+      const res = await apiRequest("POST", "/api/admin/shifts/from-assignments", data);
+      return await res.json();
     },
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
