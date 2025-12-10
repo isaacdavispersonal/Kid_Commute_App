@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, User, Clock, Edit, Sun, Sunset, Star, CalendarPlus, Copy, Car } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, Trash2, User, Clock, Edit, Sun, Sunset, Star, CalendarPlus, Copy, Car } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -204,6 +204,7 @@ export default function AdminSchedule() {
   const [addFromAssignmentsOpen, setAddFromAssignmentsOpen] = useState(false);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedDriversForAll, setSelectedDriversForAll] = useState<string[]>([]); // Track which drivers have "all" selected
+  const [bulkPanelExpanded, setBulkPanelExpanded] = useState(false); // Collapsible bulk edit panel
 
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
@@ -1367,70 +1368,104 @@ export default function AdminSchedule() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk Edit Floating Action Panel - Mobile responsive */}
+      {/* Bulk Edit Floating Action Panel - Mobile responsive & collapsible */}
       {bulkEditMode && selectedDates.length > 0 && (
-        <div className="fixed bottom-4 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-50">
+        <div className="fixed bottom-4 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-50 pb-[env(safe-area-inset-bottom)]">
           <Card className="w-full sm:w-[500px] shadow-lg border-2">
-            <CardContent className="p-3 sm:p-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="font-semibold text-sm sm:text-base">Bulk Edit</h3>
-                <Badge variant="secondary" className="text-xs">{selectedDates.length} {selectedDates.length === 1 ? 'day' : 'days'}</Badge>
+            <CardContent className="p-3 sm:p-4 space-y-0">
+              {/* Collapsed Header - Always visible, tap to expand on mobile only */}
+              <div 
+                className="flex items-center justify-between gap-2 cursor-pointer sm:cursor-default"
+                onClick={() => {
+                  if (window.innerWidth < 640) {
+                    setBulkPanelExpanded(!bulkPanelExpanded);
+                  }
+                }}
+                data-testid="bulk-panel-header"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3 className="font-semibold text-sm sm:text-base">Bulk Edit</h3>
+                  <Badge variant="secondary" className="text-xs flex-shrink-0">
+                    {selectedDates.length} {selectedDates.length === 1 ? 'day' : 'days'}
+                  </Badge>
+                  {selectedDriverIdsForBulkEdit.length > 0 && (
+                    <Badge variant="outline" className="text-xs flex-shrink-0">
+                      {selectedDriverIdsForBulkEdit.length} driver{selectedDriverIdsForBulkEdit.length !== 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 sm:hidden flex-shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBulkPanelExpanded(!bulkPanelExpanded);
+                  }}
+                  data-testid="button-toggle-bulk-panel"
+                >
+                  {bulkPanelExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                </Button>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs sm:text-sm">Select Drivers</Label>
-                <ScrollArea className="h-24 sm:h-32 border rounded-md p-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
-                    {drivers.map((driver) => {
-                      const hasAssignments = (driverAssignments || []).some(a => a.driverId === driver.id);
-                      return (
-                        <div key={driver.id} className="flex items-center space-x-2 py-0.5">
-                          <Checkbox
-                            id={`bulk-driver-${driver.id}`}
-                            checked={selectedDriverIdsForBulkEdit.includes(driver.id)}
-                            onCheckedChange={() => toggleDriverForBulkEdit(driver.id)}
-                            data-testid={`checkbox-bulk-driver-${driver.id}`}
-                          />
-                          <label
-                            htmlFor={`bulk-driver-${driver.id}`}
-                            className={`text-xs sm:text-sm cursor-pointer truncate flex items-center gap-1 ${!hasAssignments ? 'text-muted-foreground' : ''}`}
-                          >
-                            {getDriverDisplayName(driver)}
-                            {!hasAssignments && (
-                              <span className="text-[10px] text-destructive">(no routes)</span>
-                            )}
-                          </label>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-                <p className="text-[10px] sm:text-xs text-muted-foreground">
-                  {selectedDriverIdsForBulkEdit.length} driver{selectedDriverIdsForBulkEdit.length !== 1 ? 's' : ''} selected
-                  <span className="block">Shifts are created from existing route assignments</span>
-                </p>
-              </div>
+              {/* Expandable Content - Always visible on desktop, collapsible on mobile */}
+              <div className={`space-y-3 overflow-hidden transition-all duration-200 sm:!max-h-[400px] sm:!opacity-100 sm:!mt-3 ${
+                bulkPanelExpanded ? 'max-h-[400px] opacity-100 mt-3' : 'max-h-0 opacity-0 mt-0'
+              }`}>
+                <div className="space-y-1.5">
+                  <Label className="text-xs sm:text-sm">Select Drivers</Label>
+                  <ScrollArea className="h-24 sm:h-32 border rounded-md p-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
+                      {drivers.map((driver) => {
+                        const hasAssignments = (driverAssignments || []).some(a => a.driverId === driver.id);
+                        return (
+                          <div key={driver.id} className="flex items-center space-x-2 py-0.5">
+                            <Checkbox
+                              id={`bulk-driver-${driver.id}`}
+                              checked={selectedDriverIdsForBulkEdit.includes(driver.id)}
+                              onCheckedChange={() => toggleDriverForBulkEdit(driver.id)}
+                              data-testid={`checkbox-bulk-driver-${driver.id}`}
+                            />
+                            <label
+                              htmlFor={`bulk-driver-${driver.id}`}
+                              className={`text-xs sm:text-sm cursor-pointer truncate flex items-center gap-1 ${!hasAssignments ? 'text-muted-foreground' : ''}`}
+                            >
+                              {getDriverDisplayName(driver)}
+                              {!hasAssignments && (
+                                <span className="text-[10px] text-destructive">(no routes)</span>
+                              )}
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">
+                    Shifts are created from existing route assignments
+                  </p>
+                </div>
 
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button
-                  onClick={handleBulkAdd}
-                  disabled={selectedDriverIdsForBulkEdit.length === 0 || bulkAddMutation.isPending}
-                  className="flex-1 h-10"
-                  data-testid="button-bulk-add"
-                >
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  <span className="text-xs sm:text-sm">Add Shifts</span>
-                </Button>
-                <Button
-                  onClick={handleBulkDelete}
-                  disabled={selectedDriverIdsForBulkEdit.length === 0 || bulkDeleteMutation.isPending}
-                  variant="destructive"
-                  className="flex-1 h-10"
-                  data-testid="button-bulk-delete"
-                >
-                  <Trash2 className="h-4 w-4 mr-1.5" />
-                  <span className="text-xs sm:text-sm">Remove Shifts</span>
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    onClick={handleBulkAdd}
+                    disabled={selectedDriverIdsForBulkEdit.length === 0 || bulkAddMutation.isPending}
+                    className="flex-1 h-10"
+                    data-testid="button-bulk-add"
+                  >
+                    <Plus className="h-4 w-4 mr-1.5" />
+                    <span className="text-xs sm:text-sm">Add Shifts</span>
+                  </Button>
+                  <Button
+                    onClick={handleBulkDelete}
+                    disabled={selectedDriverIdsForBulkEdit.length === 0 || bulkDeleteMutation.isPending}
+                    variant="destructive"
+                    className="flex-1 h-10"
+                    data-testid="button-bulk-delete"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                    <span className="text-xs sm:text-sm">Remove Shifts</span>
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
