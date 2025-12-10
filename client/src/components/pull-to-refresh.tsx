@@ -1,95 +1,173 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { usePullToRefresh } from "@/hooks/usePullToRefresh";
-import { isNative } from "@/lib/config";
-import { Loader2, ArrowDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useState, useRef, useCallback } from "react";
+import { Loader2 } from "lucide-react";
+import { queryClient } from "@/lib/queryClient";
 
-interface PullToRefreshProps {
+type PullToRefreshProps = {
   children: React.ReactNode;
-  queryKeys?: string[][];
   onRefresh?: () => Promise<void>;
+  queryKeys?: (string | string[])[];
+  disabled?: boolean;
+  threshold?: number;
+  maxPull?: number;
   className?: string;
-}
+};
 
-export function PullToRefresh({ 
-  children, 
-  queryKeys = [],
+export function PullToRefresh({
+  children,
   onRefresh,
-  className 
+  queryKeys,
+  disabled = false,
+  threshold = 80,
+  maxPull = 120,
+  className = "",
 }: PullToRefreshProps) {
-  const queryClient = useQueryClient();
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   
-  const handleRefresh = async () => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const startY = useRef(0);
+  const currentY = useRef(0);
+
+  const handleRefresh = useCallback(async () => {
     if (onRefresh) {
       await onRefresh();
-    } else if (queryKeys.length > 0) {
+    } else if (queryKeys && queryKeys.length > 0) {
       await Promise.all(
-        queryKeys.map(key => queryClient.invalidateQueries({ queryKey: key }))
+        queryKeys.map((key) => 
+          queryClient.invalidateQueries({ queryKey: Array.isArray(key) ? key : [key] })
+        )
       );
-    } else {
-      await queryClient.invalidateQueries();
     }
+  }, [onRefresh, queryKeys]);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (disabled || isRefreshing) return;
+    
+    const container = containerRef.current;
+    if (!container || container.scrollTop !== 0) return;
+    
+    startY.current = e.touches[0].clientY;
+    currentY.current = startY.current;
+  }, [disabled, isRefreshing]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (disabled || isRefreshing) return;
+    
+    const container = containerRef.current;
+    if (!container) return;
+    
+    if (startY.current === 0) return;
+    
+    if (container.scrollTop > 0) {
+      startY.current = 0;
+      setPullDistance(0);
+      setIsPulling(false);
+      return;
+    }
+    
+    currentY.current = e.touches[0].clientY;
+    const distance = currentY.current - startY.current;
+    
+    if (distance <= 0) {
+      setPullDistance(0);
+      setIsPulling(false);
+      return;
+    }
+    
+    const resistedDistance = Math.min(distance * 0.5, maxPull);
+    
+    setIsPulling(true);
+    setPullDistance(resistedDistance);
+    
+    if (resistedDistance > 0) {
+      e.preventDefault();
+    }
+  }, [disabled, isRefreshing, maxPull]);
+
+  const handleTouchEnd = useCallback(async () => {
+    if (disabled || isRefreshing || !isPulling) {
+      startY.current = 0;
+      return;
+    }
+    
+    startY.current = 0;
+    setIsPulling(false);
+    
+    if (pullDistance >= threshold) {
+      setIsRefreshing(true);
+      setPullDistance(threshold);
+      
+      try {
+        await handleRefresh();
+      } catch (error) {
+        console.error("Pull to refresh error:", error);
+      } finally {
+        setIsRefreshing(false);
+        setPullDistance(0);
+      }
+    } else {
+      setPullDistance(0);
+    }
+  }, [disabled, isRefreshing, isPulling, pullDistance, threshold, handleRefresh]);
+
+  const getIndicatorText = () => {
+    if (isRefreshing) return null;
+    if (pullDistance >= threshold) return "Release to refresh";
+    return "Pull to refresh";
   };
 
-  const {
-    isRefreshing,
-    pullProgress,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd,
-  } = usePullToRefresh({
-    onRefresh: handleRefresh,
-    threshold: 80,
-    disabled: !isNative,
-  });
-
-  if (!isNative) {
-    return <>{children}</>;
-  }
-
-  const indicatorOpacity = Math.min(pullProgress, 1);
-  const indicatorScale = 0.5 + (Math.min(pullProgress, 1) * 0.5);
-  const indicatorTranslate = Math.min(pullProgress * 60, 60);
+  const indicatorHeight = isRefreshing ? threshold : pullDistance;
+  const showIndicator = indicatorHeight > 0;
 
   return (
     <div
-      className={cn("relative", className)}
+      ref={containerRef}
+      className={`h-full w-full overflow-y-auto overflow-x-hidden overscroll-none ${className}`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      data-scroll-container
+      style={{ WebkitOverflowScrolling: "touch" }}
     >
-      <div 
-        className="absolute left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center justify-center"
+      <div
+        className="flex items-center justify-center overflow-hidden transition-all duration-200 ease-out"
         style={{
-          top: -40 + indicatorTranslate,
-          opacity: indicatorOpacity,
-          transform: `translateX(-50%) scale(${indicatorScale})`,
-          transition: isRefreshing ? 'none' : 'opacity 0.15s, transform 0.15s',
+          height: showIndicator ? `${indicatorHeight}px` : 0,
+          opacity: showIndicator ? 1 : 0,
         }}
       >
-        <div className="bg-card border border-border rounded-full p-2 shadow-lg">
+        <div className="flex flex-col items-center justify-center gap-1 text-muted-foreground">
           {isRefreshing ? (
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
-            <ArrowDown 
-              className={cn(
-                "h-5 w-5 text-muted-foreground transition-transform",
-                pullProgress >= 1 && "text-primary rotate-180"
-              )}
-            />
+            <>
+              <div
+                className="transition-transform duration-200"
+                style={{
+                  transform: pullDistance >= threshold ? "rotate(180deg)" : "rotate(0deg)",
+                }}
+              >
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                  />
+                </svg>
+              </div>
+              <span className="text-xs font-medium">{getIndicatorText()}</span>
+            </>
           )}
         </div>
       </div>
       
-      <div 
-        style={{
-          transform: isRefreshing ? 'translateY(20px)' : `translateY(${Math.min(pullProgress * 20, 20)}px)`,
-          transition: isRefreshing ? 'transform 0.2s' : 'none',
-        }}
-      >
-        {children}
-      </div>
+      {children}
     </div>
   );
 }
