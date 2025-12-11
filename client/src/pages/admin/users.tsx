@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -29,10 +29,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Shield, Car, Users, Star } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { User, Shield, Car, Users, Star, ChevronUp, ChevronDown, MoreVertical } from "lucide-react";
 import type { User as UserType } from "@shared/schema";
+
+type SortField = "name" | "email" | "role" | "joined";
+type SortDirection = "asc" | "desc";
 
 export default function AdminUsers() {
   const { toast } = useToast();
@@ -43,6 +52,9 @@ export default function AdminUsers() {
     newRole: "admin" | "driver" | "parent";
     userName: string;
   } | null>(null);
+
+  const [sortField, setSortField] = useState<SortField>("role");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const { data: users, isLoading } = useQuery<UserType[]>({
     queryKey: ["/api/admin/users"],
@@ -142,13 +154,81 @@ export default function AdminUsers() {
     }
   };
 
-  // Filter users by active tab
-  const filteredUsers = users?.filter((user) => {
-    if (activeTab === "all") return true;
-    return user.role === activeTab;
-  }) || [];
+  const getRoleSortValue = (user: UserType): number => {
+    if (user.role === "admin") return 1;
+    if (user.role === "driver" && user.isLeadDriver) return 2;
+    if (user.role === "driver") return 3;
+    if (user.role === "parent") return 4;
+    return 5;
+  };
 
-  // Helper function to render user table
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <TableHead 
+      className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+      onClick={() => handleSort(field)}
+      data-testid={`sort-${field}`}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        <span className="ml-1">
+          {sortField === field ? (
+            sortDirection === "asc" ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )
+          ) : (
+            <ChevronDown className="h-4 w-4 opacity-30" />
+          )}
+        </span>
+      </div>
+    </TableHead>
+  );
+
+  const sortUsers = (userList: UserType[]): UserType[] => {
+    return [...userList].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case "name":
+          const nameA = `${a.firstName || ""} ${a.lastName || ""}`.trim().toLowerCase();
+          const nameB = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
+          comparison = nameA.localeCompare(nameB);
+          break;
+        case "email":
+          comparison = (a.email || "").toLowerCase().localeCompare((b.email || "").toLowerCase());
+          break;
+        case "role":
+          comparison = getRoleSortValue(a) - getRoleSortValue(b);
+          break;
+        case "joined":
+          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
+      }
+      
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  };
+
+  const filteredUsers = useMemo(() => {
+    const filtered = users?.filter((user) => {
+      if (activeTab === "all") return true;
+      return user.role === activeTab;
+    }) || [];
+    return sortUsers(filtered);
+  }, [users, activeTab, sortField, sortDirection]);
+
   const renderUserTable = (userList: UserType[]) => {
     if (isLoading) {
       return (
@@ -170,131 +250,129 @@ export default function AdminUsers() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Current Role</TableHead>
-            <TableHead>Lead Driver</TableHead>
-            <TableHead>Joined</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <SortHeader field="name">Name</SortHeader>
+            <SortHeader field="email">Email</SortHeader>
+            <SortHeader field="role">Role</SortHeader>
+            <SortHeader field="joined">Joined</SortHeader>
+            <TableHead className="w-12"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {userList.map((user) => (
             <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
-              <TableCell className="font-medium">
+              <TableCell className="font-medium max-w-[120px] truncate">
                 {user.firstName && user.lastName
                   ? `${user.firstName} ${user.lastName}`
                   : "N/A"}
               </TableCell>
-              <TableCell data-testid={`text-email-${user.id}`}>
+              <TableCell className="max-w-[140px] truncate" data-testid={`text-email-${user.id}`}>
                 {user.email}
               </TableCell>
               <TableCell>
-                <Badge variant={getRoleBadgeVariant(user.role)} className="gap-1" data-testid={`badge-role-${user.id}`}>
-                  {getRoleIcon(user.role)}
-                  {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  <Badge variant={getRoleBadgeVariant(user.role)} className="gap-1" data-testid={`badge-role-${user.id}`}>
+                    {getRoleIcon(user.role)}
+                    <span className="hidden sm:inline">
+                      {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                    </span>
+                  </Badge>
+                  {user.role === "driver" && user.isLeadDriver && (
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                      </TooltipTrigger>
+                      <TooltipContent>Lead Driver</TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
               </TableCell>
-              <TableCell>
-                {user.role === "driver" ? (
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={!!user.isLeadDriver}
-                      onCheckedChange={(checked) =>
-                        toggleLeadDriverMutation.mutate({
-                          userId: user.id,
-                          isLeadDriver: checked,
-                        })
-                      }
-                      disabled={toggleLeadDriverMutation.isPending}
-                      data-testid={`switch-lead-driver-${user.id}`}
-                    />
-                    {user.isLeadDriver && (
-                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-muted-foreground">-</span>
-                )}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
+              <TableCell className="text-muted-foreground text-sm">
                 {user.createdAt
                   ? new Date(user.createdAt).toLocaleDateString()
                   : "N/A"}
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell>
                 {user.id === currentUser?.id ? (
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled
-                          data-testid={`button-self-disabled-${user.id}`}
-                        >
-                          Your Account
-                        </Button>
-                      </div>
+                    <TooltipTrigger>
+                      <span className="text-xs text-muted-foreground">You</span>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>You cannot change your own role</p>
                     </TooltipContent>
                   </Tooltip>
                 ) : (
-                  <div className="flex justify-end gap-2">
-                    {user.role !== "admin" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          handleRoleChange(
-                            user.id,
-                            "admin",
-                            `${user.firstName} ${user.lastName}` || user.email || "this user"
-                          )
-                        }
-                        data-testid={`button-promote-admin-${user.id}`}
-                      >
-                        <Shield className="h-3 w-3 mr-1" />
-                        Make Admin
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" data-testid={`button-actions-${user.id}`}>
+                        <MoreVertical className="h-4 w-4" />
                       </Button>
-                    )}
-                    {user.role !== "driver" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          handleRoleChange(
-                            user.id,
-                            "driver",
-                            `${user.firstName} ${user.lastName}` || user.email || "this user"
-                          )
-                        }
-                        data-testid={`button-promote-driver-${user.id}`}
-                      >
-                        <Car className="h-3 w-3 mr-1" />
-                        Make Driver
-                      </Button>
-                    )}
-                    {user.role !== "parent" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          handleRoleChange(
-                            user.id,
-                            "parent",
-                            `${user.firstName} ${user.lastName}` || user.email || "this user"
-                          )
-                        }
-                        data-testid={`button-demote-parent-${user.id}`}
-                      >
-                        <Users className="h-3 w-3 mr-1" />
-                        Make Parent
-                      </Button>
-                    )}
-                  </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {user.role === "driver" && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              toggleLeadDriverMutation.mutate({
+                                userId: user.id,
+                                isLeadDriver: !user.isLeadDriver,
+                              })
+                            }
+                            data-testid={`menu-toggle-lead-${user.id}`}
+                          >
+                            <Star className={`h-4 w-4 mr-2 ${user.isLeadDriver ? "text-yellow-500 fill-yellow-500" : ""}`} />
+                            {user.isLeadDriver ? "Remove Lead Driver" : "Make Lead Driver"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
+                      {user.role !== "admin" && (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleRoleChange(
+                              user.id,
+                              "admin",
+                              `${user.firstName} ${user.lastName}` || user.email || "this user"
+                            )
+                          }
+                          data-testid={`menu-make-admin-${user.id}`}
+                        >
+                          <Shield className="h-4 w-4 mr-2" />
+                          Make Admin
+                        </DropdownMenuItem>
+                      )}
+                      {user.role !== "driver" && (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleRoleChange(
+                              user.id,
+                              "driver",
+                              `${user.firstName} ${user.lastName}` || user.email || "this user"
+                            )
+                          }
+                          data-testid={`menu-make-driver-${user.id}`}
+                        >
+                          <Car className="h-4 w-4 mr-2" />
+                          Make Driver
+                        </DropdownMenuItem>
+                      )}
+                      {user.role !== "parent" && (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleRoleChange(
+                              user.id,
+                              "parent",
+                              `${user.firstName} ${user.lastName}` || user.email || "this user"
+                            )
+                          }
+                          data-testid={`menu-make-parent-${user.id}`}
+                        >
+                          <Users className="h-4 w-4 mr-2" />
+                          Make Parent
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </TableCell>
             </TableRow>
@@ -304,9 +382,18 @@ export default function AdminUsers() {
     );
   };
 
-  const adminUsers = users?.filter((u) => u.role === "admin") || [];
-  const driverUsers = users?.filter((u) => u.role === "driver") || [];
-  const parentUsers = users?.filter((u) => u.role === "parent") || [];
+  const adminUsers = useMemo(() => 
+    sortUsers(users?.filter((u) => u.role === "admin") || []),
+    [users, sortField, sortDirection]
+  );
+  const driverUsers = useMemo(() => 
+    sortUsers(users?.filter((u) => u.role === "driver") || []),
+    [users, sortField, sortDirection]
+  );
+  const parentUsers = useMemo(() => 
+    sortUsers(users?.filter((u) => u.role === "parent") || []),
+    [users, sortField, sortDirection]
+  );
 
   return (
     <div className="space-y-6">
@@ -338,13 +425,13 @@ export default function AdminUsers() {
 
         <TabsContent value="all" className="mt-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle>All Users</CardTitle>
               <CardDescription>
-                View and manage user roles. Promote users to driver or admin as needed.
+                View and manage user roles. Tap the menu icon to change roles.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0 sm:p-6 sm:pt-0">
               {renderUserTable(filteredUsers)}
             </CardContent>
           </Card>
@@ -352,13 +439,13 @@ export default function AdminUsers() {
 
         <TabsContent value="admin" className="mt-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle>Administrators</CardTitle>
               <CardDescription>
                 Users with full system access and administrative privileges.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0 sm:p-6 sm:pt-0">
               {renderUserTable(adminUsers)}
             </CardContent>
           </Card>
@@ -366,14 +453,13 @@ export default function AdminUsers() {
 
         <TabsContent value="driver" className="mt-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle>Drivers</CardTitle>
               <CardDescription>
-                Users who can manage shifts, report incidents, and clock in/out. 
-                Lead drivers have additional access to Routes, Schedule, and Driver Assignments.
+                Lead drivers (marked with a star) have access to Routes, Schedule, and Driver Assignments.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0 sm:p-6 sm:pt-0">
               {renderUserTable(driverUsers)}
             </CardContent>
           </Card>
@@ -381,13 +467,13 @@ export default function AdminUsers() {
 
         <TabsContent value="parent" className="mt-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle>Parents</CardTitle>
               <CardDescription>
                 Users who can view their children's routes and communicate with drivers.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0 sm:p-6 sm:pt-0">
               {renderUserTable(parentUsers)}
             </CardContent>
           </Card>
@@ -401,7 +487,7 @@ export default function AdminUsers() {
             <AlertDialogDescription>
               Are you sure you want to change {confirmDialog?.userName}'s role to{" "}
               <span className="font-semibold">
-                {confirmDialog?.newRole.charAt(0).toUpperCase() + confirmDialog?.newRole.slice(1)}
+                {confirmDialog?.newRole ? confirmDialog.newRole.charAt(0).toUpperCase() + confirmDialog.newRole.slice(1) : ""}
               </span>
               ? This will change their access permissions immediately.
             </AlertDialogDescription>
