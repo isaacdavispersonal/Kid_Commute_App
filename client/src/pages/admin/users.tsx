@@ -7,14 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -171,27 +163,25 @@ export default function AdminUsers() {
     }
   };
 
-  const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <TableHead 
-      className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+  const SortButton = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 px-2 text-xs font-medium"
       onClick={() => handleSort(field)}
       data-testid={`sort-${field}`}
     >
-      <div className="flex items-center gap-1">
-        {children}
-        <span className="ml-1">
-          {sortField === field ? (
-            sortDirection === "asc" ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )
-          ) : (
-            <ChevronDown className="h-4 w-4 opacity-30" />
-          )}
-        </span>
-      </div>
-    </TableHead>
+      {children}
+      {sortField === field ? (
+        sortDirection === "asc" ? (
+          <ChevronUp className="h-3 w-3 ml-1" />
+        ) : (
+          <ChevronDown className="h-3 w-3 ml-1" />
+        )
+      ) : (
+        <ChevronDown className="h-3 w-3 ml-1 opacity-30" />
+      )}
+    </Button>
   );
 
   const sortUsers = (userList: UserType[]): UserType[] => {
@@ -229,7 +219,96 @@ export default function AdminUsers() {
     return sortUsers(filtered);
   }, [users, activeTab, sortField, sortDirection]);
 
-  const renderUserTable = (userList: UserType[]) => {
+  const renderUserActions = (user: UserType) => {
+    if (user.id === currentUser?.id) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-xs text-muted-foreground px-2">You</span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>You cannot change your own role</p>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-actions-${user.id}`}>
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {user.role === "driver" && (
+            <>
+              <DropdownMenuItem
+                onClick={() =>
+                  toggleLeadDriverMutation.mutate({
+                    userId: user.id,
+                    isLeadDriver: !user.isLeadDriver,
+                  })
+                }
+                data-testid={`menu-toggle-lead-${user.id}`}
+              >
+                <Star className={`h-4 w-4 mr-2 ${user.isLeadDriver ? "text-yellow-500 fill-yellow-500" : ""}`} />
+                {user.isLeadDriver ? "Remove Lead Driver" : "Make Lead Driver"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {user.role !== "admin" && (
+            <DropdownMenuItem
+              onClick={() =>
+                handleRoleChange(
+                  user.id,
+                  "admin",
+                  `${user.firstName} ${user.lastName}` || user.email || "this user"
+                )
+              }
+              data-testid={`menu-make-admin-${user.id}`}
+            >
+              <Shield className="h-4 w-4 mr-2" />
+              Make Admin
+            </DropdownMenuItem>
+          )}
+          {user.role !== "driver" && (
+            <DropdownMenuItem
+              onClick={() =>
+                handleRoleChange(
+                  user.id,
+                  "driver",
+                  `${user.firstName} ${user.lastName}` || user.email || "this user"
+                )
+              }
+              data-testid={`menu-make-driver-${user.id}`}
+            >
+              <Car className="h-4 w-4 mr-2" />
+              Make Driver
+            </DropdownMenuItem>
+          )}
+          {user.role !== "parent" && (
+            <DropdownMenuItem
+              onClick={() =>
+                handleRoleChange(
+                  user.id,
+                  "parent",
+                  `${user.firstName} ${user.lastName}` || user.email || "this user"
+                )
+              }
+              data-testid={`menu-make-parent-${user.id}`}
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Make Parent
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
+  const renderUserList = (userList: UserType[]) => {
     if (isLoading) {
       return (
         <div className="text-center py-8 text-muted-foreground">
@@ -247,138 +326,40 @@ export default function AdminUsers() {
     }
     
     return (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <SortHeader field="name">Name</SortHeader>
-            <SortHeader field="email">Email</SortHeader>
-            <SortHeader field="role">Role</SortHeader>
-            <SortHeader field="joined">Joined</SortHeader>
-            <TableHead className="w-12"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {userList.map((user) => (
-            <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
-              <TableCell className="font-medium max-w-[120px] truncate">
-                {user.firstName && user.lastName
-                  ? `${user.firstName} ${user.lastName}`
-                  : "N/A"}
-              </TableCell>
-              <TableCell className="max-w-[140px] truncate" data-testid={`text-email-${user.id}`}>
-                {user.email}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1.5">
-                  <Badge variant={getRoleBadgeVariant(user.role)} className="gap-1" data-testid={`badge-role-${user.id}`}>
-                    {getRoleIcon(user.role)}
-                    <span className="hidden sm:inline">
-                      {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                    </span>
-                  </Badge>
-                  {user.role === "driver" && user.isLeadDriver && (
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                      </TooltipTrigger>
-                      <TooltipContent>Lead Driver</TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell className="text-muted-foreground text-sm">
-                {user.createdAt
-                  ? new Date(user.createdAt).toLocaleDateString()
-                  : "N/A"}
-              </TableCell>
-              <TableCell>
-                {user.id === currentUser?.id ? (
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <span className="text-xs text-muted-foreground">You</span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>You cannot change your own role</p>
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" data-testid={`button-actions-${user.id}`}>
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {user.role === "driver" && (
-                        <>
-                          <DropdownMenuItem
-                            onClick={() =>
-                              toggleLeadDriverMutation.mutate({
-                                userId: user.id,
-                                isLeadDriver: !user.isLeadDriver,
-                              })
-                            }
-                            data-testid={`menu-toggle-lead-${user.id}`}
-                          >
-                            <Star className={`h-4 w-4 mr-2 ${user.isLeadDriver ? "text-yellow-500 fill-yellow-500" : ""}`} />
-                            {user.isLeadDriver ? "Remove Lead Driver" : "Make Lead Driver"}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                        </>
-                      )}
-                      {user.role !== "admin" && (
-                        <DropdownMenuItem
-                          onClick={() =>
-                            handleRoleChange(
-                              user.id,
-                              "admin",
-                              `${user.firstName} ${user.lastName}` || user.email || "this user"
-                            )
-                          }
-                          data-testid={`menu-make-admin-${user.id}`}
-                        >
-                          <Shield className="h-4 w-4 mr-2" />
-                          Make Admin
-                        </DropdownMenuItem>
-                      )}
-                      {user.role !== "driver" && (
-                        <DropdownMenuItem
-                          onClick={() =>
-                            handleRoleChange(
-                              user.id,
-                              "driver",
-                              `${user.firstName} ${user.lastName}` || user.email || "this user"
-                            )
-                          }
-                          data-testid={`menu-make-driver-${user.id}`}
-                        >
-                          <Car className="h-4 w-4 mr-2" />
-                          Make Driver
-                        </DropdownMenuItem>
-                      )}
-                      {user.role !== "parent" && (
-                        <DropdownMenuItem
-                          onClick={() =>
-                            handleRoleChange(
-                              user.id,
-                              "parent",
-                              `${user.firstName} ${user.lastName}` || user.email || "this user"
-                            )
-                          }
-                          data-testid={`menu-make-parent-${user.id}`}
-                        >
-                          <Users className="h-4 w-4 mr-2" />
-                          Make Parent
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+      <div className="space-y-2">
+        {userList.map((user) => (
+          <div
+            key={user.id}
+            className="flex items-center justify-between py-3 px-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors"
+            data-testid={`row-user-${user.id}`}
+          >
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-sm truncate">
+                  {user.firstName && user.lastName
+                    ? `${user.firstName} ${user.lastName}`
+                    : "N/A"}
+                </span>
+                <Badge variant={getRoleBadgeVariant(user.role)} className="gap-1 shrink-0" data-testid={`badge-role-${user.id}`}>
+                  {getRoleIcon(user.role)}
+                  <span className="text-xs">
+                    {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                  </span>
+                </Badge>
+                {user.role === "driver" && user.isLeadDriver && (
+                  <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 shrink-0" />
                 )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+              </div>
+              <p className="text-xs text-muted-foreground truncate" data-testid={`text-email-${user.id}`}>
+                {user.email}
+              </p>
+            </div>
+            <div className="shrink-0 ml-2">
+              {renderUserActions(user)}
+            </div>
+          </div>
+        ))}
+      </div>
     );
   };
 
@@ -396,85 +377,93 @@ export default function AdminUsers() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h1 className="text-3xl font-bold">User Management</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-2xl font-bold">User Management</h1>
+        <p className="text-muted-foreground text-sm mt-1">
           Manage user roles and permissions
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} data-testid="tabs-users">
-        <TabsList className="grid w-full max-w-2xl grid-cols-4">
-          <TabsTrigger value="all" data-testid="tab-all">
+        <TabsList className="grid w-full grid-cols-4 h-auto">
+          <TabsTrigger value="all" className="text-xs py-2" data-testid="tab-all">
             All ({users?.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="admin" data-testid="tab-admins">
+          <TabsTrigger value="admin" className="text-xs py-2" data-testid="tab-admins">
             <Shield className="h-3 w-3 mr-1" />
-            Admins ({adminUsers.length})
+            <span className="hidden sm:inline">Admins</span> ({adminUsers.length})
           </TabsTrigger>
-          <TabsTrigger value="driver" data-testid="tab-drivers">
+          <TabsTrigger value="driver" className="text-xs py-2" data-testid="tab-drivers">
             <Car className="h-3 w-3 mr-1" />
-            Drivers ({driverUsers.length})
+            <span className="hidden sm:inline">Drivers</span> ({driverUsers.length})
           </TabsTrigger>
-          <TabsTrigger value="parent" data-testid="tab-parents">
+          <TabsTrigger value="parent" className="text-xs py-2" data-testid="tab-parents">
             <Users className="h-3 w-3 mr-1" />
-            Parents ({parentUsers.length})
+            <span className="hidden sm:inline">Parents</span> ({parentUsers.length})
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-6">
+        <div className="flex items-center gap-1 mt-4 mb-2 flex-wrap">
+          <span className="text-xs text-muted-foreground mr-1">Sort:</span>
+          <SortButton field="name">Name</SortButton>
+          <SortButton field="email">Email</SortButton>
+          <SortButton field="role">Role</SortButton>
+          <SortButton field="joined">Joined</SortButton>
+        </div>
+
+        <TabsContent value="all" className="mt-2">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>All Users</CardTitle>
-              <CardDescription>
-                View and manage user roles. Tap the menu icon to change roles.
+            <CardHeader className="pb-2 px-3 pt-3">
+              <CardTitle className="text-base">All Users</CardTitle>
+              <CardDescription className="text-xs">
+                Tap the menu to change roles
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0 sm:p-6 sm:pt-0">
-              {renderUserTable(filteredUsers)}
+            <CardContent className="p-0">
+              {renderUserList(filteredUsers)}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="admin" className="mt-6">
+        <TabsContent value="admin" className="mt-2">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Administrators</CardTitle>
-              <CardDescription>
-                Users with full system access and administrative privileges.
+            <CardHeader className="pb-2 px-3 pt-3">
+              <CardTitle className="text-base">Administrators</CardTitle>
+              <CardDescription className="text-xs">
+                Full system access
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0 sm:p-6 sm:pt-0">
-              {renderUserTable(adminUsers)}
+            <CardContent className="p-0">
+              {renderUserList(adminUsers)}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="driver" className="mt-6">
+        <TabsContent value="driver" className="mt-2">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Drivers</CardTitle>
-              <CardDescription>
-                Lead drivers (marked with a star) have access to Routes, Schedule, and Driver Assignments.
+            <CardHeader className="pb-2 px-3 pt-3">
+              <CardTitle className="text-base">Drivers</CardTitle>
+              <CardDescription className="text-xs">
+                Lead drivers (star) have extra access
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0 sm:p-6 sm:pt-0">
-              {renderUserTable(driverUsers)}
+            <CardContent className="p-0">
+              {renderUserList(driverUsers)}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="parent" className="mt-6">
+        <TabsContent value="parent" className="mt-2">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Parents</CardTitle>
-              <CardDescription>
-                Users who can view their children's routes and communicate with drivers.
+            <CardHeader className="pb-2 px-3 pt-3">
+              <CardTitle className="text-base">Parents</CardTitle>
+              <CardDescription className="text-xs">
+                View routes and communicate with drivers
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0 sm:p-6 sm:pt-0">
-              {renderUserTable(parentUsers)}
+            <CardContent className="p-0">
+              {renderUserList(parentUsers)}
             </CardContent>
           </Card>
         </TabsContent>
