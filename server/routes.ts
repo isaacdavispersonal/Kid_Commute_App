@@ -6,7 +6,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import cookieParser from "cookie-parser";
-import unifiedAuthRouter, { requireAuth, requireRole } from "./routes/unified-auth";
+import unifiedAuthRouter, { requireAuth, requireRole, requireAdminOrLeadDriver } from "./routes/unified-auth";
 import { NotFoundError, ValidationError } from "./errors";
 import express from "express";
 import memoizee from "memoizee";
@@ -1393,11 +1393,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Register bulk import routes for stops and students
   registerAdminImportRoutes(app, storage, requireAuth, requireRole);
 
-  // Get all users
+  // Get all users (admin or lead driver)
   app.get(
     "/api/admin/users",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const users = await storage.getAllUsers();
@@ -1446,6 +1446,45 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
         
         res.status(500).json({ message: "Failed to update user role" });
+      }
+    }
+  );
+
+  // Toggle lead driver status
+  app.patch(
+    "/api/admin/users/:userId/lead-driver",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { userId } = req.params;
+        const { isLeadDriver } = req.body;
+
+        if (typeof isLeadDriver !== "boolean") {
+          return res.status(400).json({ message: "isLeadDriver must be a boolean" });
+        }
+
+        // Get the user and verify they are a driver
+        const user = await storage.getUser(userId);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        if (user.role !== "driver") {
+          return res.status(400).json({ message: "Lead driver status can only be set for drivers" });
+        }
+
+        // Update the lead driver status
+        const updatedUser = await storage.updateLeadDriverStatus(userId, isLeadDriver);
+        res.json(updatedUser);
+      } catch (error: any) {
+        console.error("Error updating lead driver status:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update lead driver status" });
       }
     }
   );
@@ -1800,11 +1839,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
 
   // ============ Route endpoints ============
 
-  // Get all routes
+  // Get all routes (admin or lead driver)
   app.get(
     "/api/admin/routes",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const routes = await storage.getAllRoutes();
@@ -1824,11 +1863,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Get students for a specific route
+  // Get students for a specific route (admin or lead driver)
   app.get(
     "/api/admin/routes/:routeId/students",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { routeId } = req.params;
@@ -1841,11 +1880,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Create a new route
+  // Create a new route (admin or lead driver)
   app.post(
     "/api/admin/routes",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { insertRouteSchema } = await import("@shared/schema");
@@ -1877,11 +1916,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Update a route
+  // Update a route (admin or lead driver)
   app.patch(
     "/api/admin/routes/:id",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -1914,11 +1953,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Delete a route
+  // Delete a route (admin or lead driver)
   app.delete(
     "/api/admin/routes/:id",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -1936,11 +1975,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Get stops for a specific route
+  // Get stops for a specific route (admin or lead driver)
   app.get(
     "/api/admin/routes/:routeId/stops",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { routeId } = req.params;
@@ -1960,11 +1999,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Get all stops (independent of routes)
+  // Get all stops (independent of routes) (admin or lead driver)
   app.get(
     "/api/admin/stops",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const stops = await storage.getAllStops();
@@ -1976,11 +2015,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Create a new stop (not tied to any route)
+  // Create a new stop (not tied to any route) (admin or lead driver)
   app.post(
     "/api/admin/stops",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { insertStopSchema } = await import("@shared/schema");
@@ -2012,11 +2051,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Update a stop
+  // Update a stop (admin or lead driver)
   app.patch(
     "/api/admin/stops/:id",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -2049,11 +2088,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Delete a stop
+  // Delete a stop (admin or lead driver)
   app.delete(
     "/api/admin/stops/:id",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -2071,11 +2110,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Add a stop to a route (create route_stop junction)
+  // Add a stop to a route (create route_stop junction) (admin or lead driver)
   app.post(
     "/api/admin/routes/:routeId/stops",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { routeId } = req.params;
@@ -2108,11 +2147,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Update route stops (for reordering or changing scheduled times)
+  // Update route stops (for reordering or changing scheduled times) (admin or lead driver)
   app.patch(
     "/api/admin/routes/:routeId/stops",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { routeId } = req.params;
@@ -2140,11 +2179,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Remove a stop from a route (delete route_stop junction)
+  // Remove a stop from a route (delete route_stop junction) (admin or lead driver)
   app.delete(
     "/api/admin/routes/:routeId/stops/:routeStopId",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { routeStopId } = req.params;
@@ -2162,11 +2201,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Get all schedules
+  // Get all schedules (admin or lead driver)
   app.get(
     "/api/admin/schedules",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const assignments = await storage.getAllDriverAssignments();
@@ -2605,13 +2644,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // ============ Driver Assignment routes (Admin) ============
+  // ============ Driver Assignment routes (Admin or Lead Driver) ============
 
-  // Get all driver assignments
+  // Get all driver assignments (admin or lead driver)
   app.get(
     "/api/admin/driver-assignments",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const assignments = await storage.getAllDriverAssignments();
@@ -2641,11 +2680,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Create new driver assignment
+  // Create new driver assignment (admin or lead driver)
   app.post(
     "/api/admin/driver-assignments",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req: any, res) => {
       try {
         const { insertDriverAssignmentSchema } = await import("@shared/schema");
@@ -2680,11 +2719,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Update driver assignment
+  // Update driver assignment (admin or lead driver)
   app.patch(
     "/api/admin/driver-assignments/:id",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req: any, res) => {
       try {
         const assignmentId = req.params.id;
@@ -2722,11 +2761,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Delete driver assignment
+  // Delete driver assignment (admin or lead driver)
   app.delete(
     "/api/admin/driver-assignments/:id",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req: any, res) => {
       try {
         const assignmentId = req.params.id;
@@ -2744,13 +2783,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // ============ Shift routes (Admin) ============
+  // ============ Shift routes (Admin or Lead Driver) ============
 
-  // Get shifts by date (optionally filtered by driver)
+  // Get shifts by date (optionally filtered by driver) (admin or lead driver)
   app.get(
     "/api/admin/shifts",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { date, driverId, startDate, endDate } = req.query;
@@ -2786,11 +2825,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Create new shift
+  // Create new shift (admin or lead driver)
   app.post(
     "/api/admin/shifts",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { insertShiftSchema } = await import("@shared/schema");
@@ -2832,11 +2871,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Bulk create shifts from driver assignments
+  // Bulk create shifts from driver assignments (admin or lead driver)
   app.post(
     "/api/admin/shifts/bulk",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { z } = await import("zod");
@@ -2936,11 +2975,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Create shifts from driver assignments
+  // Create shifts from driver assignments (admin or lead driver)
   app.post(
     "/api/admin/shifts/from-assignments",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { z } = await import("zod");
@@ -3039,11 +3078,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Bulk add shifts for selected dates and drivers
+  // Bulk add shifts for selected dates and drivers (admin or lead driver)
   app.post(
     "/api/admin/shifts/bulk-add",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { z } = await import("zod");
@@ -3125,11 +3164,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Bulk delete shifts for selected dates and drivers
+  // Bulk delete shifts for selected dates and drivers (admin or lead driver)
   app.post(
     "/api/admin/shifts/bulk-delete",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const { z } = await import("zod");
@@ -3174,11 +3213,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Update shift
+  // Update shift (admin or lead driver)
   app.patch(
     "/api/admin/shifts/:id",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const shiftId = req.params.id;
@@ -3218,11 +3257,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Delete shift
+  // Delete shift (admin or lead driver)
   app.delete(
     "/api/admin/shifts/:id",
     requireAuth,
-    requireRole("admin"),
+    requireAdminOrLeadDriver,
     async (req, res) => {
       try {
         const shiftId = req.params.id;

@@ -130,6 +130,7 @@ export interface IStorage {
   getUsersByRole(role: "admin" | "driver" | "parent"): Promise<User[]>;
   updateUserRole(userId: string, newRole: "admin" | "driver" | "parent"): Promise<User>;
   updateUserProfile(userId: string, profile: UpdateProfile): Promise<User>;
+  updateLeadDriverStatus(userId: string, isLeadDriver: boolean): Promise<User>;
 
   // Device token operations (for push notifications)
   upsertDeviceToken(token: Omit<InsertDeviceToken, "userId"> & { userId: string }): Promise<DeviceToken>;
@@ -551,6 +552,20 @@ export class DatabaseStorage implements IStorage {
         description: `Updated profile information`,
         changes: profile,
       });
+    }
+    
+    return updatedUser;
+  }
+
+  async updateLeadDriverStatus(userId: string, isLeadDriver: boolean): Promise<User> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ isLeadDriver, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!updatedUser) {
+      throw new NotFoundError(`User with id ${userId} not found`);
     }
     
     return updatedUser;

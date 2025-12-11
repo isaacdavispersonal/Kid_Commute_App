@@ -442,4 +442,53 @@ export function requireRole(...roles: ("admin" | "driver" | "parent")[]): Reques
   };
 }
 
+/**
+ * Middleware: Require admin role OR lead driver status
+ * Allows admins and drivers with isLeadDriver flag to access specific admin features
+ */
+export const requireAdminOrLeadDriver: RequestHandler = async (req: any, res, next) => {
+  try {
+    const token = extractToken(req);
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const payload = verifyToken(token);
+    if (!payload) {
+      res.clearCookie(COOKIE_NAME);
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const user = await storage.getUser(payload.userId);
+    if (!user) {
+      res.clearCookie(COOKIE_NAME);
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Verify account is still active
+    const credentials = await storage.getAuthCredentialsByUserId(payload.userId);
+    if (credentials && !credentials.isActive) {
+      res.clearCookie(COOKIE_NAME);
+      return res.status(401).json({ message: "Account is disabled" });
+    }
+
+    // Allow if admin OR lead driver
+    const isAdmin = user.role === "admin";
+    const isLeadDriver = user.role === "driver" && user.isLeadDriver === true;
+    
+    if (!isAdmin && !isLeadDriver) {
+      return res.status(403).json({ message: "Forbidden: Requires admin or lead driver permissions" });
+    }
+
+    // Attach user to request
+    req.user = user;
+    req.userId = user.id;
+    
+    next();
+  } catch (error) {
+    console.error("[Auth] AdminOrLeadDriver middleware error:", error);
+    res.status(401).json({ message: "Unauthorized" });
+  }
+};
+
 export default router;

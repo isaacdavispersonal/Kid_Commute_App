@@ -239,11 +239,31 @@ const parentMenuItems = [
   },
 ];
 
+// Lead driver menu items (subset of admin features)
+const leadDriverMenuItems = [
+  {
+    title: "Driver Assignments",
+    url: "/admin/driver-assignments",
+    icon: Users,
+  },
+  {
+    title: "Routes",
+    url: "/admin/routes",
+    icon: RouteIcon,
+  },
+  {
+    title: "Schedule",
+    url: "/admin/schedule",
+    icon: Calendar,
+  },
+];
+
 interface AppSidebarProps {
   userRole?: "admin" | "driver" | "parent";
+  isLeadDriver?: boolean;
 }
 
-export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
+export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSidebarProps) {
   const [location] = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -348,6 +368,18 @@ export function AppSidebar({ userRole = "admin" }: AppSidebarProps) {
                     )}
                   </div>
                 ))}
+                {/* Lead Driver Section - only show if user is a lead driver */}
+                {isLeadDriver && (
+                  <>
+                    <SidebarSeparator className="my-3" />
+                    <SidebarGroupLabel className="mt-2 mb-2 text-sm font-medium text-muted-foreground px-3">
+                      Lead Driver
+                    </SidebarGroupLabel>
+                    <SidebarMenu className="gap-1.5">
+                      {leadDriverMenuItems.map(renderMenuItem)}
+                    </SidebarMenu>
+                  </>
+                )}
               </>
             )}
             {userRole === "parent" && (

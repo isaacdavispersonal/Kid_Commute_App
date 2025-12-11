@@ -91,6 +91,7 @@ function Router() {
   }
 
   const userRole = user.role || "parent";
+  const isLeadDriver = userRole === "driver" && user.isLeadDriver === true;
   
   // Unified logout handler for both web and mobile
   const handleLogout = async () => {
@@ -113,7 +114,7 @@ function Router() {
   return (
     <SidebarProvider style={sidebarStyle}>
       <div className="flex h-screen w-full">
-        <AppSidebar userRole={userRole} />
+        <AppSidebar userRole={userRole} isLeadDriver={isLeadDriver} />
         <div className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between gap-4 p-4 border-b bg-card pt-[max(1rem,env(safe-area-inset-top))]">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
@@ -237,6 +238,15 @@ function Router() {
                   <Route path="/driver/supplies" component={DriverSupplies} />
                   <Route path="/driver/checklist" component={DriverChecklist} />
                   <Route path="/driver/students" component={DriverStudents} />
+                  {/* Lead Driver routes - access to specific admin pages */}
+                  {isLeadDriver && (
+                    <>
+                      <Route path="/admin/driver-assignments" component={AdminDriverAssignments} />
+                      <Route path="/admin/routes" component={AdminRoutes} />
+                      <Route path="/admin/schedule" component={AdminSchedule} />
+                      <Route path="/admin/stops" component={AdminStops} />
+                    </>
+                  )}
                 </>
               )}
               {userRole === "parent" && (

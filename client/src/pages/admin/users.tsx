@@ -30,7 +30,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Shield, Car, Users } from "lucide-react";
+import { User, Shield, Car, Users, Star } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import type { User as UserType } from "@shared/schema";
 
 export default function AdminUsers() {
@@ -66,6 +67,34 @@ export default function AdminUsers() {
     },
     onError: (error: any) => {
       const errorMessage = error.message || "Failed to update user role. Please try again.";
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleLeadDriverMutation = useMutation({
+    mutationFn: async ({ userId, isLeadDriver }: { userId: string; isLeadDriver: boolean }) => {
+      const response = await apiRequest(
+        "PATCH",
+        `/api/admin/users/${userId}/lead-driver`,
+        { isLeadDriver }
+      );
+      return response.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: variables.isLeadDriver ? "Lead Driver Enabled" : "Lead Driver Disabled",
+        description: variables.isLeadDriver 
+          ? "Driver now has access to Routes, Schedule, and Driver Assignments."
+          : "Lead driver access has been removed.",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error.message || "Failed to update lead driver status.";
       toast({
         title: "Error",
         description: errorMessage,
@@ -144,6 +173,7 @@ export default function AdminUsers() {
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Current Role</TableHead>
+            <TableHead>Lead Driver</TableHead>
             <TableHead>Joined</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
@@ -164,6 +194,28 @@ export default function AdminUsers() {
                   {getRoleIcon(user.role)}
                   {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                 </Badge>
+              </TableCell>
+              <TableCell>
+                {user.role === "driver" ? (
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={!!user.isLeadDriver}
+                      onCheckedChange={(checked) =>
+                        toggleLeadDriverMutation.mutate({
+                          userId: user.id,
+                          isLeadDriver: checked,
+                        })
+                      }
+                      disabled={toggleLeadDriverMutation.isPending}
+                      data-testid={`switch-lead-driver-${user.id}`}
+                    />
+                    {user.isLeadDriver && (
+                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )}
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {user.createdAt
@@ -317,7 +369,8 @@ export default function AdminUsers() {
             <CardHeader>
               <CardTitle>Drivers</CardTitle>
               <CardDescription>
-                Users who can manage shifts, report incidents, and clock in/out.
+                Users who can manage shifts, report incidents, and clock in/out. 
+                Lead drivers have additional access to Routes, Schedule, and Driver Assignments.
               </CardDescription>
             </CardHeader>
             <CardContent>
