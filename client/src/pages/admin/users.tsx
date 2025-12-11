@@ -98,7 +98,14 @@ export default function AdminUsers() {
       });
     },
     onError: (error: any) => {
-      const errorMessage = error.message || "Failed to update lead driver status.";
+      // Filter out Safari WebSocket errors that sometimes get caught here
+      const rawMessage = error.message || "";
+      const isSafariWebSocketError = rawMessage.includes("did not match the expected pattern");
+      
+      const errorMessage = isSafariWebSocketError 
+        ? "Failed to update lead driver status. Please try again."
+        : (rawMessage || "Failed to update lead driver status.");
+      
       toast({
         title: "Error",
         description: errorMessage,
