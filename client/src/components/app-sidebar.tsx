@@ -1,4 +1,5 @@
 // Admin sidebar navigation component
+import { useEffect, useRef, useCallback } from "react";
 import { 
   LayoutDashboard, 
   Route as RouteIcon, 
@@ -11,16 +12,14 @@ import {
   Clock,
   ClipboardCheck,
   Shield,
-  User,
-  FileText,
-  Megaphone,
   Package,
   Activity,
   Navigation,
   Link2,
   Map,
   DollarSign,
-  Upload
+  Megaphone,
+  Star
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -125,6 +124,25 @@ const adminMenuSections = [
         icon: Link2,
       },
     ],
+  },
+];
+
+// Lead driver menu items (subset of admin features)
+const leadDriverMenuItems = [
+  {
+    title: "Driver Assignments",
+    url: "/admin/driver-assignments",
+    icon: Users,
+  },
+  {
+    title: "Routes",
+    url: "/admin/routes",
+    icon: RouteIcon,
+  },
+  {
+    title: "Schedule",
+    url: "/admin/schedule",
+    icon: Calendar,
   },
 ];
 
@@ -239,33 +257,18 @@ const parentMenuItems = [
   },
 ];
 
-// Lead driver menu items (subset of admin features)
-const leadDriverMenuItems = [
-  {
-    title: "Driver Assignments",
-    url: "/admin/driver-assignments",
-    icon: Users,
-  },
-  {
-    title: "Routes",
-    url: "/admin/routes",
-    icon: RouteIcon,
-  },
-  {
-    title: "Schedule",
-    url: "/admin/schedule",
-    icon: Calendar,
-  },
-];
-
 interface AppSidebarProps {
   userRole?: "admin" | "driver" | "parent";
   isLeadDriver?: boolean;
 }
 
+const SIDEBAR_SCROLL_KEY = "sidebar-scroll-position";
+
 export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSidebarProps) {
   const [location] = useLocation();
-  const { isMobile, setOpenMobile } = useSidebar();
+  const { isMobile, setOpenMobile, open, openMobile } = useSidebar();
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
+  const scrollHandlerRef = useRef<(() => void) | null>(null);
 
   // Fetch unread counts
   const { data: unreadCounts } = useQuery<{
@@ -274,10 +277,72 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
     notifications: number;
   }>({
     queryKey: ["/api/user/unread-counts"],
-    refetchInterval: 15000, // Refresh every 15 seconds (reduced from 10s for better performance)
+    refetchInterval: 15000,
   });
 
   const totalUnread = (unreadCounts?.messages || 0) + (unreadCounts?.announcements || 0) + (unreadCounts?.notifications || 0);
+
+  // Determine if sidebar is currently open
+  const isOpen = isMobile ? openMobile : open;
+
+  // Stable scroll handler
+  const handleScroll = useCallback(() => {
+    if (scrollContainerRef.current) {
+      const scrollTop = scrollContainerRef.current.scrollTop;
+      if (scrollTop > 0) {
+        sessionStorage.setItem(SIDEBAR_SCROLL_KEY, scrollTop.toString());
+      } else {
+        sessionStorage.removeItem(SIDEBAR_SCROLL_KEY);
+      }
+    }
+  }, []);
+
+  // Set up scroll container reference and handlers
+  useEffect(() => {
+    // Find the scrollable SidebarContent element
+    const findScrollContainer = () => {
+      const container = document.querySelector('[data-sidebar="content"]') as HTMLElement | null;
+      if (container && container !== scrollContainerRef.current) {
+        // Remove old listener if exists
+        if (scrollContainerRef.current && scrollHandlerRef.current) {
+          scrollContainerRef.current.removeEventListener('scroll', scrollHandlerRef.current);
+        }
+        
+        scrollContainerRef.current = container;
+        scrollHandlerRef.current = handleScroll;
+        container.addEventListener('scroll', handleScroll, { passive: true });
+      }
+      return container;
+    };
+
+    const container = findScrollContainer();
+    
+    // Restore scroll position when sidebar opens
+    if (isOpen && container) {
+      const savedPosition = sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
+      if (savedPosition) {
+        requestAnimationFrame(() => {
+          if (container) {
+            container.scrollTop = parseInt(savedPosition, 10);
+          }
+        });
+      } else {
+        // Scroll active item into view if no saved position
+        const activeItem = container.querySelector('[data-active="true"]') as HTMLElement | null;
+        if (activeItem) {
+          requestAnimationFrame(() => {
+            activeItem.scrollIntoView({ block: "center", behavior: "instant" });
+          });
+        }
+      }
+    }
+
+    return () => {
+      if (scrollContainerRef.current && scrollHandlerRef.current) {
+        scrollContainerRef.current.removeEventListener('scroll', scrollHandlerRef.current);
+      }
+    };
+  }, [isOpen, handleScroll]);
 
   const handleNavigation = () => {
     // Close sidebar on mobile after navigation
@@ -292,14 +357,17 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
     const showBadge = isMessages && totalUnread > 0;
 
     return (
-      <SidebarMenuItem key={item.title}>
+      <SidebarMenuItem key={item.title} data-active={isActive ? "true" : undefined}>
         <SidebarMenuButton
           asChild
           size="lg"
           className={isActive ? "bg-sidebar-accent" : ""}
           data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
         >
-          <Link href={item.url} onClick={handleNavigation}>
+          <Link 
+            href={item.url} 
+            onClick={handleNavigation}
+          >
             <item.icon className="h-5 w-5" />
             <span className="text-base">{item.title}</span>
             {showBadge && (
@@ -353,33 +421,41 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
             )}
             {userRole === "driver" && (
               <>
-                {driverMenuSections.map((section, sectionIndex) => (
+                {/* Dashboard section */}
+                <SidebarMenu className="gap-1.5">
+                  {driverMenuSections[0].items.map(renderMenuItem)}
+                </SidebarMenu>
+                
+                {/* Lead Driver Section - prominently placed after Dashboard */}
+                {isLeadDriver && (
+                  <SidebarGroup className="mt-3">
+                    <SidebarSeparator className="mb-3" />
+                    <SidebarGroupLabel className="mb-2 text-sm font-medium px-3 flex items-center gap-2">
+                      <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
+                      Lead Driver
+                    </SidebarGroupLabel>
+                    <SidebarGroupContent>
+                      <SidebarMenu className="gap-1.5">
+                        {leadDriverMenuItems.map(renderMenuItem)}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                )}
+                
+                {/* Remaining driver sections */}
+                {driverMenuSections.slice(1).map((section, sectionIndex) => (
                   <div key={sectionIndex}>
-                    {section.label && sectionIndex > 0 && (
-                      <SidebarGroupLabel className="mt-6 mb-2 text-sm font-medium text-muted-foreground px-3">
+                    <SidebarSeparator className="my-3" />
+                    {section.label && (
+                      <SidebarGroupLabel className="mb-2 text-sm font-medium text-muted-foreground px-3">
                         {section.label}
                       </SidebarGroupLabel>
                     )}
                     <SidebarMenu className="gap-1.5">
                       {section.items.map(renderMenuItem)}
                     </SidebarMenu>
-                    {sectionIndex < driverMenuSections.length - 1 && sectionIndex === 0 && (
-                      <SidebarSeparator className="my-3" />
-                    )}
                   </div>
                 ))}
-                {/* Lead Driver Section - only show if user is a lead driver */}
-                {isLeadDriver && (
-                  <>
-                    <SidebarSeparator className="my-3" />
-                    <SidebarGroupLabel className="mt-2 mb-2 text-sm font-medium text-muted-foreground px-3">
-                      Lead Driver
-                    </SidebarGroupLabel>
-                    <SidebarMenu className="gap-1.5">
-                      {leadDriverMenuItems.map(renderMenuItem)}
-                    </SidebarMenu>
-                  </>
-                )}
               </>
             )}
             {userRole === "parent" && (

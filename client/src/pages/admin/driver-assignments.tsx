@@ -37,14 +37,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -59,12 +51,17 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Pencil, Trash2, User, Route, ChevronRight, Car, Clock } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Plus, Pencil, Trash2, User, Route, ChevronDown, Car, MoreVertical } from "lucide-react";
 
 interface EnrichedDriverAssignment {
   id: string;
@@ -103,7 +100,6 @@ interface Driver {
   role: string;
 }
 
-// Helper function to safely display driver names
 function getDriverDisplayName(driver: { firstName: string | null; lastName: string | null; email: string } | null | undefined): string {
   if (!driver) return "Unknown Driver";
   
@@ -194,7 +190,6 @@ export default function AdminDriverAssignments() {
     },
   });
 
-  // Bulk create mutation for multiple route selection
   const bulkCreateMutation = useMutation({
     mutationFn: async (assignments: FormData[]) => {
       const results = await Promise.allSettled(
@@ -235,7 +230,6 @@ export default function AdminDriverAssignments() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
-      // Invalidate shifts cache because assignment updates cascade to future shifts
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
       handleCloseDialog();
       toast({
@@ -258,7 +252,6 @@ export default function AdminDriverAssignments() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
-      // Invalidate shifts cache as shifts may have referenced this assignment
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
       setDeleteDialog(null);
       toast({
@@ -309,7 +302,6 @@ export default function AdminDriverAssignments() {
     if (editingAssignment) {
       updateMutation.mutate({ id: editingAssignment.id, data });
     } else {
-      // For new assignments, use selected routes
       if (selectedRouteIds.length > 0) {
         const assignments = selectedRouteIds.map(routeId => ({
           ...data,
@@ -317,7 +309,6 @@ export default function AdminDriverAssignments() {
         }));
         bulkCreateMutation.mutate(assignments);
       } else if (data.routeId) {
-        // Fallback to single route if somehow selected
         createMutation.mutate(data);
       } else {
         toast({
@@ -339,8 +330,6 @@ export default function AdminDriverAssignments() {
     }
   };
 
-
-  // Group assignments by driver
   const groupedAssignments = assignments?.reduce((acc, assignment) => {
     const key = assignment.driverId;
     if (!acc[key]) {
@@ -357,124 +346,118 @@ export default function AdminDriverAssignments() {
 
   const driverGroups = groupedAssignments ? Object.values(groupedAssignments) : [];
 
+  const getRouteTypeBadge = (routeType: string | null) => {
+    if (!routeType) return null;
+    const label = routeType === 'MORNING' ? 'AM' : routeType === 'AFTERNOON' ? 'PM' : 'Extra';
+    return (
+      <Badge variant="outline" className="text-xs px-1.5 py-0">
+        {label}
+      </Badge>
+    );
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Driver Assignments</h1>
-          <p className="text-muted-foreground mt-1">
-            Assign drivers to routes for scheduling
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold">Driver Assignments</h1>
+          <p className="text-muted-foreground text-sm">
+            Assign drivers to routes
           </p>
         </div>
-        <Button onClick={() => handleOpenDialog()} data-testid="button-create-assignment">
-          <Plus className="h-4 w-4 mr-2" />
-          New Assignment
+        <Button size="sm" onClick={() => handleOpenDialog()} data-testid="button-create-assignment">
+          <Plus className="h-4 w-4 mr-1" />
+          <span className="hidden sm:inline">New</span>
         </Button>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>All Assignments</CardTitle>
-          <CardDescription>
-            Grouped by driver - expand to view and manage assignments
+        <CardHeader className="pb-2 px-3 pt-3">
+          <CardTitle className="text-base">All Assignments</CardTitle>
+          <CardDescription className="text-xs">
+            Tap driver to expand routes
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {assignmentsLoading ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Loading assignments...
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              Loading...
             </div>
           ) : !assignments || assignments.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No driver assignments found. Create one to get started.
+            <div className="text-center py-8 text-muted-foreground text-sm px-4">
+              No assignments yet. Tap the button above to create one.
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y">
               {driverGroups.map((group) => (
-                <Collapsible key={group.driverId} defaultOpen={driverGroups.length <= 5} data-testid={`driver-group-${group.driverId}`}>
-                  <Card>
-                    <CollapsibleTrigger asChild>
-                      <div className="flex items-center justify-between p-4 cursor-pointer hover-elevate" data-testid={`button-toggle-driver-${group.driverId}`}>
-                        <div className="flex items-center gap-3">
-                          <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]:rotate-90" />
-                          <User className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <div className="font-semibold">{group.driverName}</div>
-                            <div className="text-sm text-muted-foreground">{group.driverEmail}</div>
-                          </div>
+                <Collapsible key={group.driverId} defaultOpen={driverGroups.length <= 3} data-testid={`driver-group-${group.driverId}`}>
+                  <CollapsibleTrigger asChild>
+                    <div className="flex items-center justify-between gap-2 flex-wrap px-3 py-3 cursor-pointer hover:bg-muted/50 transition-colors" data-testid={`button-toggle-driver-${group.driverId}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm truncate">{group.driverName}</div>
+                          <div className="text-xs text-muted-foreground truncate">{group.driverEmail}</div>
                         </div>
-                        <Badge variant="secondary" data-testid={`badge-count-${group.driverId}`}>
-                          {group.assignments.length} {group.assignments.length === 1 ? 'assignment' : 'assignments'}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="secondary" className="text-xs" data-testid={`badge-count-${group.driverId}`}>
+                          {group.assignments.length}
                         </Badge>
+                        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180" />
                       </div>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="border-t">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Route</TableHead>
-                              <TableHead>Vehicle</TableHead>
-                              <TableHead>Notes</TableHead>
-                              <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {group.assignments.map((assignment) => (
-                              <TableRow key={assignment.id} data-testid={`row-assignment-${assignment.id}`}>
-                                <TableCell>
-                                  <div className="flex flex-col gap-1">
-                                    <div className="flex items-center gap-2">
-                                      <Route className="h-4 w-4 text-muted-foreground" />
-                                      <span className="font-medium">{assignment.route?.name || "Unknown Route"}</span>
-                                    </div>
-                                    {assignment.route?.routeType && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-medium w-fit ml-6">
-                                        {assignment.route.routeType === 'MORNING' ? 'Morning' : assignment.route.routeType === 'AFTERNOON' ? 'Afternoon' : 'Extra'}
-                                      </span>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-1.5 text-sm">
-                                    <Car className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span className={assignment.vehicleId ? "text-foreground" : "text-muted-foreground italic"}>
-                                      {assignment.vehicle?.name || "Not set"}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <span className="text-sm text-muted-foreground">
-                                    {assignment.notes || '—'}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleOpenDialog(assignment)}
-                                      data-testid={`button-edit-${assignment.id}`}
-                                    >
-                                      <Pencil className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleDelete(assignment)}
-                                      data-testid={`button-delete-${assignment.id}`}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </CollapsibleContent>
-                  </Card>
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="border-t bg-muted/30">
+                      {group.assignments.map((assignment) => (
+                        <div
+                          key={assignment.id}
+                          className="flex items-center justify-between gap-2 flex-wrap px-3 py-2.5 border-b last:border-b-0"
+                          data-testid={`row-assignment-${assignment.id}`}
+                        >
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Route className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="text-sm font-medium truncate">
+                                {assignment.route?.name || "Unknown"}
+                              </span>
+                              {getRouteTypeBadge(assignment.route?.routeType || null)}
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
+                              <Car className="h-3 w-3 shrink-0" />
+                              <span className="truncate">
+                                {assignment.vehicle?.name || "No vehicle"}
+                              </span>
+                              {assignment.notes && (
+                                <>
+                                  <span className="text-muted-foreground/50">•</span>
+                                  <span className="truncate italic">{assignment.notes}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" data-testid={`button-actions-${assignment.id}`}>
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleOpenDialog(assignment)} data-testid={`button-edit-${assignment.id}`}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDelete(assignment)} className="text-destructive" data-testid={`button-delete-${assignment.id}`}>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
                 </Collapsible>
               ))}
             </div>
@@ -483,15 +466,15 @@ export default function AdminDriverAssignments() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-lg mx-4">
           <DialogHeader>
-            <DialogTitle>
-              {editingAssignment ? "Edit Driver Assignment" : "New Driver Assignment"}
+            <DialogTitle className="text-lg">
+              {editingAssignment ? "Edit Assignment" : "New Assignment"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-sm">
               {editingAssignment
-                ? "Update the driver assignment details"
-                : "Assign a driver to a route"}
+                ? "Update the assignment details"
+                : "Assign a driver to routes"}
             </DialogDescription>
           </DialogHeader>
 
@@ -502,20 +485,20 @@ export default function AdminDriverAssignments() {
                 name="driverId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Driver</FormLabel>
+                    <FormLabel className="text-sm">Driver</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger data-testid="select-driver">
-                          <SelectValue placeholder="Select a driver" />
+                          <SelectValue placeholder="Select driver" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {drivers?.map((driver) => (
                           <SelectItem key={driver.id} value={driver.id}>
-                            {getDriverDisplayName(driver)} ({driver.email})
+                            {getDriverDisplayName(driver)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -526,17 +509,16 @@ export default function AdminDriverAssignments() {
               />
 
               {editingAssignment ? (
-                /* Single route select when editing */
                 <FormField
                   control={form.control}
                   name="routeId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Route</FormLabel>
+                      <FormLabel className="text-sm">Route</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-route">
-                            <SelectValue placeholder="Select a route" />
+                            <SelectValue placeholder="Select route" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -552,13 +534,12 @@ export default function AdminDriverAssignments() {
                   )}
                 />
               ) : (
-                /* Multi-route checkboxes when creating */
                 <div className="space-y-2">
-                  <FormLabel>Routes (select one or more)</FormLabel>
-                  <ScrollArea className="h-48 border rounded-md p-3">
-                    <div className="space-y-2">
+                  <FormLabel className="text-sm">Routes</FormLabel>
+                  <ScrollArea className="h-36 border rounded-md p-2">
+                    <div className="space-y-1">
                       {routes?.map((route) => (
-                        <div key={route.id} className="flex items-center space-x-3 py-1">
+                        <div key={route.id} className="flex items-center space-x-2 py-1">
                           <Checkbox
                             id={`route-${route.id}`}
                             checked={selectedRouteIds.includes(route.id)}
@@ -567,7 +548,7 @@ export default function AdminDriverAssignments() {
                           />
                           <label
                             htmlFor={`route-${route.id}`}
-                            className="text-sm cursor-pointer flex-1"
+                            className="text-sm cursor-pointer flex-1 truncate"
                           >
                             {route.name}
                           </label>
@@ -576,7 +557,7 @@ export default function AdminDriverAssignments() {
                     </div>
                   </ScrollArea>
                   <p className="text-xs text-muted-foreground">
-                    {selectedRouteIds.length} route{selectedRouteIds.length !== 1 ? 's' : ''} selected
+                    {selectedRouteIds.length} selected
                   </p>
                 </div>
               )}
@@ -586,17 +567,17 @@ export default function AdminDriverAssignments() {
                 name="vehicleId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Vehicle (Optional)</FormLabel>
+                    <FormLabel className="text-sm">Vehicle (Optional)</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || undefined}>
                       <FormControl>
                         <SelectTrigger data-testid="select-vehicle">
-                          <SelectValue placeholder="Select a vehicle" />
+                          <SelectValue placeholder="Select vehicle" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {vehicles?.map((vehicle) => (
                           <SelectItem key={vehicle.id} value={vehicle.id}>
-                            {vehicle.name} ({vehicle.plateNumber})
+                            {vehicle.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -611,10 +592,11 @@ export default function AdminDriverAssignments() {
                 name="notes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Notes (Optional)</FormLabel>
+                    <FormLabel className="text-sm">Notes (Optional)</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Add any notes about this assignment"
+                        placeholder="Add notes..."
+                        className="h-16"
                         {...field}
                         value={field.value || ""}
                         data-testid="input-notes"
@@ -625,7 +607,7 @@ export default function AdminDriverAssignments() {
                 )}
               />
 
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex justify-end gap-2 pt-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -639,11 +621,7 @@ export default function AdminDriverAssignments() {
                   disabled={createMutation.isPending || updateMutation.isPending || bulkCreateMutation.isPending}
                   data-testid="button-submit"
                 >
-                  {editingAssignment 
-                    ? "Update Assignment" 
-                    : selectedRouteIds.length > 1 
-                      ? `Create ${selectedRouteIds.length} Assignments`
-                      : "Create Assignment"}
+                  {editingAssignment ? "Update" : "Create"}
                 </Button>
               </div>
             </form>
@@ -654,20 +632,18 @@ export default function AdminDriverAssignments() {
       <AlertDialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Driver Assignment</AlertDialogTitle>
+            <AlertDialogTitle>Delete Assignment?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the assignment for{" "}
-              <span className="font-semibold">{getDriverDisplayName(deleteDialog?.driver)}</span> to{" "}
-              <span className="font-semibold">{deleteDialog?.route?.name || "this route"}</span>?
-              This action cannot be undone.
+              This will remove the assignment for{" "}
+              <span className="font-semibold">{deleteDialog?.route?.name}</span>.
+              This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-delete"
             >
               Delete
