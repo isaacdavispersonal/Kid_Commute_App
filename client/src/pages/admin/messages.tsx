@@ -1,7 +1,7 @@
 // Admin messaging - view conversations and send direct messages
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageSquare, Users, AlertCircle, Megaphone, User, Send, Search } from "lucide-react";
+import { MessageSquare, Users, AlertCircle, Megaphone, User, Send, Search, MoreVertical } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, useRef } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function AdminMessagesPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -388,15 +394,18 @@ export default function AdminMessagesPage() {
   const readConversations = activeConversations.filter(c => c.unreadCount === 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1">Messages</h1>
-          <p className="text-sm text-muted-foreground">
+    <div className="space-y-3 sm:space-y-6 px-4 sm:px-0">
+      {/* Compact mobile header */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-2xl font-semibold">Messages</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">
             View conversations and message drivers or parents
           </p>
         </div>
-        <div className="flex gap-2">
+        
+        {/* Desktop: Show both buttons */}
+        <div className="hidden sm:flex gap-2">
           <Button 
             variant="outline" 
             onClick={() => window.location.href = "/admin/announcements?to=drivers"}
@@ -414,36 +423,60 @@ export default function AdminMessagesPage() {
             Announce to Parents
           </Button>
         </div>
+        
+        {/* Mobile: Collapse into dropdown */}
+        <div className="sm:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" data-testid="button-announce-menu">
+                <Megaphone className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => window.location.href = "/admin/announcements?to=drivers"}>
+                Announce to Drivers
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.location.href = "/admin/announcements?to=parents"}>
+                Announce to Parents
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <Tabs defaultValue="recent" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="recent" data-testid="tab-recent">
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Recent
-            {unreadConversations.length > 0 && (
-              <Badge variant="destructive" className="ml-2 h-5 min-w-5 px-1 text-xs">
-                {unreadConversations.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="conversations" data-testid="tab-conversations">
-            <Users className="h-4 w-4 mr-2" />
-            View All
-          </TabsTrigger>
-          <TabsTrigger value="message-drivers" data-testid="tab-message-drivers">
-            <User className="h-4 w-4 mr-2" />
-            Drivers
-          </TabsTrigger>
-          <TabsTrigger value="message-parents" data-testid="tab-message-parents">
-            <User className="h-4 w-4 mr-2" />
-            Parents
-          </TabsTrigger>
-          <TabsTrigger value="message-admins" data-testid="tab-message-admins">
-            <User className="h-4 w-4 mr-2" />
-            Admins
-          </TabsTrigger>
-        </TabsList>
+        {/* Scrollable tabs for mobile */}
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <TabsList className="inline-flex w-auto sm:grid sm:w-full sm:grid-cols-5 min-w-max sm:min-w-0">
+            <TabsTrigger value="recent" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-recent">
+              <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Recent</span>
+              <span className="sm:hidden">New</span>
+              {unreadConversations.length > 0 && (
+                <Badge variant="destructive" className="ml-1 h-4 sm:h-5 min-w-4 sm:min-w-5 px-1 text-[10px] sm:text-xs">
+                  {unreadConversations.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="conversations" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-conversations">
+              <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">View All</span>
+              <span className="sm:hidden">All</span>
+            </TabsTrigger>
+            <TabsTrigger value="message-drivers" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-message-drivers">
+              <span className="hidden sm:inline">Drivers</span>
+              <span className="sm:hidden">Drv</span>
+            </TabsTrigger>
+            <TabsTrigger value="message-parents" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-message-parents">
+              <span className="hidden sm:inline">Parents</span>
+              <span className="sm:hidden">Par</span>
+            </TabsTrigger>
+            <TabsTrigger value="message-admins" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-message-admins">
+              <span className="hidden sm:inline">Admins</span>
+              <span className="sm:hidden">Adm</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Recent Tab - Shows all active conversations sorted by activity */}
         <TabsContent value="recent">

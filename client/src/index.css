@@ -387,17 +387,17 @@ html, body, #root {
   background-color: hsl(var(--background));
 }
 
-/* Prevent iOS rubber-banding on the main document, 
-   but allow it within scrollable containers for pull-to-refresh */
-html {
+/* Prevent iOS rubber-banding/overscroll bounce to avoid black bar during pull.
+   This approach preserves normal scrolling while preventing the overscroll effect */
+html, body {
   overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
-  /* Allow overscroll within body for pull-to-refresh containers */
-  overscroll-behavior-y: auto;
+  /* Ensure body takes full height for proper background coverage */
   min-height: 100vh;
-  min-height: 100dvh; /* Dynamic viewport height for iOS */
+  min-height: 100dvh;
 }
 
 #root {

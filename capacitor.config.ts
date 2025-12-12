@@ -11,18 +11,26 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: '#000000',
+      backgroundColor: '#F8F9FA',
       showSpinner: false,
     },
     StatusBar: {
       style: 'DARK',
-      backgroundColor: '#000000',
+      backgroundColor: '#F8F9FA',
       overlaysWebView: true,
+    },
+    Keyboard: {
+      resize: 'body',
+      style: 'LIGHT',
+      resizeOnFullScreen: true,
     },
   },
   ios: {
-    backgroundColor: '#000000',
+    backgroundColor: '#F8F9FA',
     contentInset: 'automatic',
+  },
+  android: {
+    backgroundColor: '#F8F9FA',
   },
 };
 

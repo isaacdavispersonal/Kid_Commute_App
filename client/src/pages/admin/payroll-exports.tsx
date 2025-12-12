@@ -322,37 +322,43 @@ export default function AdminPayrollExports() {
   const hasUnmappedDrivers = calculatedData?.some(d => !d.bambooEmployeeId) || false;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
       <div>
-        <h1 className="text-3xl font-bold mb-2">Payroll Exports</h1>
-        <p className="text-muted-foreground">Export driver hours to BambooHR for payroll processing</p>
+        <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2">Payroll Exports</h1>
+        <p className="text-xs sm:text-base text-muted-foreground">Export driver hours to BambooHR</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="mapping" data-testid="tab-employee-mapping">
-            <Users className="h-4 w-4 mr-2" />
-            Employee Mapping
-            {unmappedCount > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {unmappedCount}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="export" data-testid="tab-export-payroll">
-            <Download className="h-4 w-4 mr-2" />
-            Export Payroll
-          </TabsTrigger>
-          <TabsTrigger value="history" data-testid="tab-export-history">
-            <Clock className="h-4 w-4 mr-2" />
-            Export History
-          </TabsTrigger>
-        </TabsList>
+        {/* Scrollable tabs for mobile */}
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <TabsList className="inline-flex w-auto sm:w-auto min-w-max">
+            <TabsTrigger value="mapping" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-employee-mapping">
+              <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Employee Mapping</span>
+              <span className="sm:hidden">Map</span>
+              {unmappedCount > 0 && (
+                <Badge variant="destructive" className="ml-1 h-4 sm:h-5 min-w-4 px-1 text-[10px] sm:text-xs">
+                  {unmappedCount}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="export" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-export-payroll">
+              <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Export Payroll</span>
+              <span className="sm:hidden">Export</span>
+            </TabsTrigger>
+            <TabsTrigger value="history" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-export-history">
+              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Export History</span>
+              <span className="sm:hidden">History</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="mapping" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Driver to BambooHR Employee Mapping</CardTitle>
+            <CardHeader className="pb-2 sm:pb-4">
+              <CardTitle className="text-base sm:text-lg">Driver to BambooHR Mapping</CardTitle>
             </CardHeader>
             <CardContent>
               {driversLoading ? (
@@ -362,46 +368,38 @@ export default function AdminPayrollExports() {
                   <Skeleton className="h-12 w-full" />
                 </div>
               ) : drivers && drivers.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Driver Name</TableHead>
-                      <TableHead>BambooHR Employee ID</TableHead>
-                      <TableHead>Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  {/* Mobile: Card layout */}
+                  <div className="sm:hidden space-y-3">
                     {drivers.map((driver) => (
-                      <TableRow key={driver.id} data-testid={`row-driver-${driver.id}`}>
-                        <TableCell className="font-medium">
-                          {driver.name}
+                      <div 
+                        key={driver.id} 
+                        className="p-3 border rounded-md space-y-2"
+                        data-testid={`card-driver-${driver.id}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-sm truncate">{driver.name}</span>
                           {!driver.bambooEmployeeId && (
-                            <Badge variant="destructive" className="ml-2">
+                            <Badge variant="destructive" className="flex-shrink-0 text-[10px] h-5">
                               <AlertTriangle className="h-3 w-3 mr-1" />
                               Unmapped
                             </Badge>
                           )}
-                        </TableCell>
-                        <TableCell>
-                          {editingDriverId === driver.id ? (
+                        </div>
+                        
+                        {editingDriverId === driver.id ? (
+                          <div className="space-y-2">
                             <Input
                               value={bambooIdInput}
                               onChange={(e) => setBambooIdInput(e.target.value)}
                               placeholder="Enter BambooHR ID"
                               data-testid={`input-bamboo-id-${driver.id}`}
-                              className="max-w-xs"
+                              className="h-9"
                             />
-                          ) : (
-                            <span className="text-muted-foreground">
-                              {driver.bambooEmployeeId || "Not mapped"}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {editingDriverId === driver.id ? (
-                            <div className="flex items-center gap-2">
+                            <div className="flex gap-2">
                               <Button
                                 size="sm"
+                                className="flex-1"
                                 onClick={() => handleSaveBambooId(driver.id)}
                                 disabled={updateBambooIdMutation.isPending}
                                 data-testid={`button-save-bamboo-id-${driver.id}`}
@@ -411,13 +409,19 @@ export default function AdminPayrollExports() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="flex-1"
                                 onClick={handleCancelEdit}
                                 data-testid={`button-cancel-bamboo-id-${driver.id}`}
                               >
                                 Cancel
                               </Button>
                             </div>
-                          ) : (
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              ID: {driver.bambooEmployeeId || "Not mapped"}
+                            </span>
                             <Button
                               size="sm"
                               variant="outline"
@@ -426,12 +430,86 @@ export default function AdminPayrollExports() {
                             >
                               {driver.bambooEmployeeId ? "Update" : "Map"}
                             </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                          </div>
+                        )}
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+
+                  {/* Desktop: Table layout */}
+                  <div className="hidden sm:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Driver Name</TableHead>
+                          <TableHead>BambooHR Employee ID</TableHead>
+                          <TableHead>Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {drivers.map((driver) => (
+                          <TableRow key={driver.id} data-testid={`row-driver-${driver.id}`}>
+                            <TableCell className="font-medium">
+                              {driver.name}
+                              {!driver.bambooEmployeeId && (
+                                <Badge variant="destructive" className="ml-2">
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  Unmapped
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {editingDriverId === driver.id ? (
+                                <Input
+                                  value={bambooIdInput}
+                                  onChange={(e) => setBambooIdInput(e.target.value)}
+                                  placeholder="Enter BambooHR ID"
+                                  data-testid={`input-bamboo-id-${driver.id}`}
+                                  className="max-w-xs"
+                                />
+                              ) : (
+                                <span className="text-muted-foreground">
+                                  {driver.bambooEmployeeId || "Not mapped"}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {editingDriverId === driver.id ? (
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleSaveBambooId(driver.id)}
+                                    disabled={updateBambooIdMutation.isPending}
+                                    data-testid={`button-save-bamboo-id-${driver.id}`}
+                                  >
+                                    {updateBambooIdMutation.isPending ? "Saving..." : "Save"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleCancelEdit}
+                                    data-testid={`button-cancel-bamboo-id-${driver.id}`}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleEditBambooId(driver)}
+                                  data-testid={`button-edit-bamboo-id-${driver.id}`}
+                                >
+                                  {driver.bambooEmployeeId ? "Update" : "Map"}
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   No drivers found

@@ -19,7 +19,8 @@ import {
   Map,
   DollarSign,
   Megaphone,
-  Star
+  Star,
+  Settings2
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -122,6 +123,16 @@ const adminMenuSections = [
         title: "Samsara Integration",
         url: "/admin/samsara-integration",
         icon: Link2,
+      },
+    ],
+  },
+  {
+    label: "Administration",
+    items: [
+      {
+        title: "Settings",
+        url: "/admin/settings",
+        icon: Settings2,
       },
     ],
   },

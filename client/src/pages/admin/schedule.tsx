@@ -140,6 +140,14 @@ const bulkScheduleSchema = z.object({
 
 type BulkScheduleData = z.infer<typeof bulkScheduleSchema>;
 
+// Format date as YYYY-MM-DD in local timezone (avoids UTC offset issues)
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function getDaysInMonth(year: number, month: number): Date[] {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
@@ -231,9 +239,7 @@ export default function AdminSchedule() {
   const { data: allShifts, isLoading } = useQuery<Shift[]>({
     queryKey: ["/api/admin/shifts", monthStart, monthEnd],
     queryFn: async () => {
-      const url = `/api/admin/shifts?startDate=${monthStart}&endDate=${monthEnd}`;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch shifts");
+      const res = await apiRequest("GET", `/api/admin/shifts?startDate=${monthStart}&endDate=${monthEnd}`);
       return res.json();
     },
   });
@@ -601,7 +607,7 @@ export default function AdminSchedule() {
 
   const getShiftSummaryForDate = (date: Date): ShiftTypeSummary => {
     if (date.getTime() === 0) return { MORNING: 0, AFTERNOON: 0, EXTRA: 0, total: 0 };
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = formatLocalDate(date);
     const dayShifts = allShifts?.filter(s => s.date === dateStr) || [];
     
     return {
@@ -738,9 +744,9 @@ export default function AdminSchedule() {
             <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {daysInMonth.map((date, index) => {
                 const isPlaceholder = date.getTime() === 0;
-                const dateStr = isPlaceholder ? "" : date.toISOString().split('T')[0];
+                const dateStr = isPlaceholder ? "" : formatLocalDate(date);
                 const summary = isPlaceholder ? null : getShiftSummaryForDate(date);
-                const isToday = !isPlaceholder && dateStr === new Date().toISOString().split('T')[0];
+                const isToday = !isPlaceholder && dateStr === formatLocalDate(new Date());
                 const isSelected = !isPlaceholder && selectedDates.includes(dateStr);
 
                 return (

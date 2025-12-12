@@ -1,0 +1,121 @@
+Got it — here is a single, clean, copy-paste-ready block you can drop directly into the Replit Copilot AI chat.
+It’s written in a way the AI/devs can immediately act on (clear issue separation, expected behavior, and priorities).
+
+⸻
+
+🚨 Kid Commute – iOS Bug & UX Issues (v1.1.2 build 4)
+
+Please address the following issues found during TestFlight external testing on iOS (iPhone 17 Pro Max, iOS 26.1). Each item includes expected vs actual behavior.
+
+⸻
+
+1. Scheduler: shifts created but not visible
+
+Issue:
+When creating shifts (bulk or manual), the app confirms shifts were created successfully, but nothing appears on the scheduler calendar.
+
+Steps:
+	1.	Log in as Admin
+	2.	Go to Schedule / Shift Schedule
+	3.	Create shifts (bulk or standard flow)
+	4.	Return to the month calendar view
+
+Expected:
+Created shifts should appear on the calendar day cells and/or when tapping a specific date.
+
+Actual:
+No shifts appear at all despite success confirmation.
+
+Notes:
+Likely missing data refetch after creation, incorrect date filtering, timezone mismatch, or scheduler query not matching created records.
+
+Priority: P0 – core scheduling functionality is broken.
+
+⸻
+
+2. Messaging page layout is too expanded on iOS
+
+Issue:
+Messaging screen uses excessive vertical space and feels uncondensed on mobile.
+
+Steps:
+	1.	Log in
+	2.	Navigate to Messages
+
+Expected:
+Compact, mobile-friendly layout where the conversation list is the main focus.
+
+Actual:
+Large header area (announce buttons + tabs) pushes content down and wastes screen space.
+
+Notes:
+Consider collapsing announce buttons into a menu and reducing padding/margins for mobile.
+
+Priority: P2 – UX improvement.
+
+⸻
+
+3. Payroll Exports page not mobile-friendly
+
+Issue:
+Payroll Exports and Driver → BambooHR mapping UI is too wide and cluttered for mobile.
+
+Steps:
+	1.	Log in as Admin
+	2.	Navigate to Payroll Exports
+	3.	View Driver to BambooHR Employee Mapping
+
+Expected:
+Mobile-optimized layout (stacked cards per driver, clear primary actions).
+
+Actual:
+Desktop-style table forced onto mobile; cramped and hard to use.
+
+Notes:
+Also need to revisit clocking export flow clarity and export state feedback.
+
+Priority: P2 – important admin workflow but not blocking.
+
+⸻
+
+4. Admin settings organization (Samsara + Emergency contacts)
+
+Issue:
+Samsara integration settings are not centralized, and admins cannot configure emergency contact phone numbers.
+
+Expected:
+	•	A general Admin Settings page.
+	•	Move Samsara Integration into Admin Settings.
+	•	Add configurable Emergency Contact Numbers (used by Driver Emergency Button).
+
+Notes:
+Emergency contacts should support multiple numbers and priority order.
+
+Priority: P2 – enables upcoming emergency features and cleaner IA.
+
+⸻
+
+5. iOS top bar overscroll / black bar bug
+
+Issue:
+Dragging near the top of the app causes the entire view to pull down and shows a black bar.
+
+Steps:
+	1.	Open the app on iOS
+	2.	Drag/pull down from the top area (near status bar)
+	3.	Observe behavior on multiple screens
+
+Expected:
+Content should stay anchored; only internal scroll areas should move.
+
+Actual:
+Whole app view rubber-bands downward with a black bar.
+
+Notes:
+Likely WebView overscroll/bounce behavior or conflict with pull-to-refresh implementation.
+
+Priority: P1 – global UX bug that makes the app feel broken.
+
+⸻
+
+Please investigate each issue independently and confirm fixes with iOS testing on a real device (not simulator).
