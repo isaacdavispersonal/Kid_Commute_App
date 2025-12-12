@@ -1,5 +1,5 @@
 // Mobile authentication hook for Capacitor apps
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { isNative, getApiUrl } from "@/lib/config";
 import { 
   getAuthToken, 
@@ -9,6 +9,7 @@ import {
   clearAuthData,
   type MobileUser 
 } from "@/lib/mobile-auth";
+import { usePushNotifications } from "./usePushNotifications";
 
 interface UseMobileAuthResult {
   user: MobileUser | null;
@@ -22,6 +23,25 @@ interface UseMobileAuthResult {
 export function useMobileAuth(): UseMobileAuthResult {
   const [user, setUser] = useState<MobileUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const pushNotificationsRegisteredRef = useRef(false);
+  
+  const { register: registerPush, unregister: unregisterPush } = usePushNotifications({
+    onNotificationReceived: (notification) => {
+      console.log("[MobileAuth] Push notification received:", notification.title);
+    },
+    onNotificationAction: (action) => {
+      console.log("[MobileAuth] Push notification action:", action.actionId);
+    },
+  });
+
+  // Register for push notifications when user is authenticated
+  useEffect(() => {
+    if (user && isNative && !pushNotificationsRegisteredRef.current) {
+      console.log("[MobileAuth] User authenticated, registering for push notifications");
+      registerPush();
+      pushNotificationsRegisteredRef.current = true;
+    }
+  }, [user, registerPush]);
 
   // Check for existing auth on mount
   useEffect(() => {
@@ -82,9 +102,14 @@ export function useMobileAuth(): UseMobileAuthResult {
   }, []);
 
   const logout = useCallback(async () => {
+    // Unregister from push notifications before clearing auth
+    if (isNative) {
+      await unregisterPush();
+      pushNotificationsRegisteredRef.current = false;
+    }
     await clearAuthData();
     setUser(null);
-  }, []);
+  }, [unregisterPush]);
 
   const refreshUser = useCallback(async () => {
     const token = await getAuthToken();
