@@ -380,3 +380,37 @@
     background-color: hsl(var(--background));
   }
 }
+
+/* iOS WebView Overscroll Prevention - Prevents black borders during pull */
+html, body {
+  /* Prevent overscroll bounce showing black background */
+  overscroll-behavior: none;
+  overscroll-behavior-y: contain;
+  
+  /* Ensure background extends through any overscroll area */
+  background-color: hsl(var(--background));
+}
+
+/* For iOS WebView specifically - extends background behind scroll bounds */
+@supports (-webkit-touch-callout: none) {
+  html {
+    /* iOS specific - fill the entire viewport including overscroll */
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  body {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  #root {
+    min-height: 100%;
+    background-color: hsl(var(--background));
+  }
+}

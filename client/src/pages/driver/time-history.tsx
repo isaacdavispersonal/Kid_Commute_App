@@ -96,18 +96,15 @@ export default function DriverTimeHistory() {
 
   const range = getDateRange();
 
-  // Fetch shifts with calculated hours
-  const { data: shifts, isLoading, error } = useQuery<EnrichedShift[]>({
+  // Fetch shifts with calculated hours - use apiRequest for proper auth on mobile
+  const { data: shifts, isLoading, error, refetch } = useQuery<EnrichedShift[]>({
     queryKey: ["/api/driver/shifts", range.startDate, range.endDate],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (range.startDate) params.append("startDate", range.startDate);
       if (range.endDate) params.append("endDate", range.endDate);
       
-      const response = await fetch(`/api/driver/shifts?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch shifts");
-      }
+      const response = await apiRequest("GET", `/api/driver/shifts?${params.toString()}`);
       return response.json();
     },
   });
