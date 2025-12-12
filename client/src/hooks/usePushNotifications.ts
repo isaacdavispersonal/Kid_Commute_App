@@ -9,16 +9,19 @@ interface UsePushNotificationsOptions {
   onNotificationAction?: (action: ActionPerformed) => void;
 }
 
+// Store pending token globally so it survives hook re-renders
+let pendingDeviceToken: string | null = null;
+
 export function usePushNotifications(options: UsePushNotificationsOptions = {}) {
-  const registeredRef = useRef(false);
   const listenersSetupRef = useRef(false);
 
-  const registerToken = useCallback(async (token: string) => {
+  const registerTokenWithServer = useCallback(async (token: string): Promise<boolean> => {
     try {
       const authToken = await getAuthToken();
       if (!authToken) {
-        console.log("[PushNotifications] No auth token, skipping registration");
-        return;
+        console.log("[PushNotifications] No auth token yet, queuing device token");
+        pendingDeviceToken = token;
+        return false;
       }
 
       const platform = Capacitor.getPlatform();
@@ -41,12 +44,16 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
 
       if (response.ok) {
         console.log("[PushNotifications] Device token registered successfully");
+        pendingDeviceToken = null;
+        return true;
       } else {
         const error = await response.text();
         console.error("[PushNotifications] Failed to register token:", error);
+        return false;
       }
     } catch (error) {
       console.error("[PushNotifications] Error registering token:", error);
+      return false;
     }
   }, []);
 
@@ -71,12 +78,44 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
     }
   }, []);
 
+  const setupListeners = useCallback(async () => {
+    if (!isNative || listenersSetupRef.current) {
+      return;
+    }
+
+    console.log("[PushNotifications] Setting up listeners");
+
+    await PushNotifications.addListener("registration", (token: Token) => {
+      console.log("[PushNotifications] Token received:", token.value.substring(0, 20) + "...");
+      registerTokenWithServer(token.value);
+    });
+
+    await PushNotifications.addListener("registrationError", (error) => {
+      console.error("[PushNotifications] Registration error:", error);
+    });
+
+    await PushNotifications.addListener("pushNotificationReceived", (notification: PushNotificationSchema) => {
+      console.log("[PushNotifications] Notification received:", notification.title);
+      options.onNotificationReceived?.(notification);
+    });
+
+    await PushNotifications.addListener("pushNotificationActionPerformed", (action: ActionPerformed) => {
+      console.log("[PushNotifications] Notification action:", action.actionId);
+      options.onNotificationAction?.(action);
+    });
+
+    listenersSetupRef.current = true;
+  }, [registerTokenWithServer, options.onNotificationReceived, options.onNotificationAction]);
+
   const register = useCallback(async () => {
-    if (!isNative || registeredRef.current) {
+    if (!isNative) {
       return;
     }
 
     try {
+      // Always setup listeners first
+      await setupListeners();
+
       const hasPermission = await requestPermission();
       
       if (!hasPermission) {
@@ -84,13 +123,23 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
         return;
       }
 
+      // If we have a pending token from before auth was ready, register it now
+      if (pendingDeviceToken) {
+        console.log("[PushNotifications] Registering pending device token");
+        const success = await registerTokenWithServer(pendingDeviceToken);
+        if (success) {
+          console.log("[PushNotifications] Pending token registered successfully");
+          return;
+        }
+      }
+
+      // Request new registration (triggers "registration" event with new token)
       await PushNotifications.register();
-      registeredRef.current = true;
       console.log("[PushNotifications] Registration initiated");
     } catch (error) {
       console.error("[PushNotifications] Error registering:", error);
     }
-  }, [requestPermission]);
+  }, [setupListeners, requestPermission, registerTokenWithServer]);
 
   const unregister = useCallback(async () => {
     if (!isNative) return;
@@ -99,60 +148,38 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
       const authToken = await getAuthToken();
       
       if (authToken) {
+        // Delete current token from server
         await fetch(getApiUrl("/api/push-tokens/current"), {
           method: "DELETE",
           headers: {
             Authorization: `Bearer ${authToken}`,
           },
+        }).catch(() => {
+          // Ignore errors during logout
         });
       }
 
+      // Remove listeners and reset state for next login
       await PushNotifications.removeAllListeners();
-      registeredRef.current = false;
       listenersSetupRef.current = false;
-      console.log("[PushNotifications] Unregistered");
+      pendingDeviceToken = null;
+      
+      console.log("[PushNotifications] Unregistered and cleaned up");
     } catch (error) {
       console.error("[PushNotifications] Error unregistering:", error);
     }
   }, []);
 
+  // Setup listeners on mount for native platforms
   useEffect(() => {
-    if (!isNative || listenersSetupRef.current) {
-      return;
+    if (isNative && !listenersSetupRef.current) {
+      setupListeners();
     }
 
-    const setupListeners = async () => {
-      await PushNotifications.addListener("registration", (token: Token) => {
-        console.log("[PushNotifications] Token received:", token.value.substring(0, 20) + "...");
-        registerToken(token.value);
-      });
-
-      await PushNotifications.addListener("registrationError", (error) => {
-        console.error("[PushNotifications] Registration error:", error);
-      });
-
-      await PushNotifications.addListener("pushNotificationReceived", (notification: PushNotificationSchema) => {
-        console.log("[PushNotifications] Notification received:", notification.title);
-        options.onNotificationReceived?.(notification);
-      });
-
-      await PushNotifications.addListener("pushNotificationActionPerformed", (action: ActionPerformed) => {
-        console.log("[PushNotifications] Notification action:", action.actionId);
-        options.onNotificationAction?.(action);
-      });
-
-      listenersSetupRef.current = true;
-    };
-
-    setupListeners();
-
     return () => {
-      if (isNative) {
-        PushNotifications.removeAllListeners();
-        listenersSetupRef.current = false;
-      }
+      // Don't cleanup on unmount - let unregister handle it
     };
-  }, [registerToken, options.onNotificationReceived, options.onNotificationAction]);
+  }, [setupListeners]);
 
   return {
     register,
