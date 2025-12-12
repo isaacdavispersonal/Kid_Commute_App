@@ -184,7 +184,7 @@ export default function DriverTimeHistory() {
   }
 
   return (
-    <PullToRefresh queryKeys={[["/api/driver/time-history"]]}>
+    <PullToRefresh onRefresh={async () => { await refetch(); }}>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
