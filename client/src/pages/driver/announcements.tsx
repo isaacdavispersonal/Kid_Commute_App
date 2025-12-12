@@ -115,8 +115,8 @@ export default function DriverAnnouncements() {
                           <CardTitle className="text-base">{announcement.title}</CardTitle>
                         </div>
                         <Button
+                          size="touch"
                           variant="ghost"
-                          size="sm"
                           onClick={() => handleDismiss(announcement.id)}
                           data-testid={`button-dismiss-${announcement.id}`}
                         >
@@ -148,8 +148,8 @@ export default function DriverAnnouncements() {
                           <CardTitle className="text-base">{announcement.title}</CardTitle>
                         </div>
                         <Button
+                          size="touch"
                           variant="ghost"
-                          size="sm"
                           onClick={() => handleDismissRoute(announcement.id)}
                           data-testid={`button-dismiss-route-${announcement.id}`}
                         >

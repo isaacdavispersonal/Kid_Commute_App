@@ -419,7 +419,7 @@ export default function DriverRoutePage() {
                         {!hasAttendance && !routeCompleted && (
                           <>
                             <Button
-                              size="sm"
+                              size="touch"
                               variant="default"
                               onClick={() =>
                                 attendanceMutation.mutate({
@@ -434,7 +434,7 @@ export default function DriverRoutePage() {
                               Riding
                             </Button>
                             <Button
-                              size="sm"
+                              size="touch"
                               variant="secondary"
                               onClick={() =>
                                 attendanceMutation.mutate({
@@ -452,7 +452,7 @@ export default function DriverRoutePage() {
                         )}
                         {isRiding && !hasBoarded && !routeCompleted && (
                           <Button
-                            size="sm"
+                            size="touch"
                             variant="default"
                             onClick={() =>
                               openRideEventDialog(
@@ -471,7 +471,7 @@ export default function DriverRoutePage() {
                         )}
                         {hasBoarded && !hasDisembarked && !routeCompleted && (
                           <Button
-                            size="sm"
+                            size="touch"
                             variant="outline"
                             onClick={() =>
                               openRideEventDialog(

@@ -292,9 +292,9 @@ export default function ParentMessagesPage() {
                   data-testid={`announcement-${announcement.id}`}
                 >
                   <Button
-                    size="icon"
+                    size="icon-touch"
                     variant="ghost"
-                    className="absolute top-2 right-2 h-6 w-6"
+                    className="absolute top-1 right-1"
                     onClick={(e) => handleDismissAnnouncement(e, announcement.id)}
                     data-testid={`button-dismiss-announcement-${announcement.id}`}
                   >
@@ -346,7 +346,7 @@ export default function ParentMessagesPage() {
                 </Badge>
               </CardTitle>
               <Button
-                size="sm"
+                size="touch"
                 variant="ghost"
                 onClick={() => setShowDismissedAnnouncements(!showDismissedAnnouncements)}
                 data-testid="button-toggle-dismissed-announcements"

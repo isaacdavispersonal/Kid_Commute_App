@@ -404,3 +404,19 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
 }
+
+/* iOS-specific input fixes */
+/* Prevent iOS from zooming on input focus (requires 16px+ font size) */
+input, select, textarea {
+  font-size: 16px;
+}
+
+/* iOS touch callout and selection fixes */
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS scrolling smoothness for scrollable containers */
+.overflow-y-auto, .overflow-auto, .overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}

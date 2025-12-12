@@ -402,17 +402,17 @@ export default function DriverMessagesPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Button
-                    size="sm"
+                    size="touch"
                     onClick={() => handleViewConversation(notification.parentId)}
                     data-testid={`button-view-conversation-${notification.id}`}
                   >
                     <MessageSquare className="h-4 w-4 mr-1" />
-                    View Conversation
+                    View
                   </Button>
                   <Button
-                    size="sm"
+                    size="touch"
                     variant="outline"
                     onClick={() => handleDismissNotification(notification.id)}
                     data-testid={`button-dismiss-notification-${notification.id}`}

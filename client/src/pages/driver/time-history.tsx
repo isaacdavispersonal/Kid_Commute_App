@@ -198,30 +198,30 @@ export default function DriverTimeHistory() {
         </div>
 
         {/* Date Range Selector */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
+            size="touch"
             variant={dateRange === "week" ? "default" : "outline"}
-            size="sm"
             onClick={() => setDateRange("week")}
             data-testid="button-range-week"
           >
-            Last 7 Days
+            7 Days
           </Button>
           <Button
+            size="touch"
             variant={dateRange === "month" ? "default" : "outline"}
-            size="sm"
             onClick={() => setDateRange("month")}
             data-testid="button-range-month"
           >
-            Last 30 Days
+            30 Days
           </Button>
           <Button
+            size="touch"
             variant={dateRange === "all" ? "default" : "outline"}
-            size="sm"
             onClick={() => setDateRange("all")}
             data-testid="button-range-all"
           >
-            All Time
+            All
           </Button>
         </div>
       </div>

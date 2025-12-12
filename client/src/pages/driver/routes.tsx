@@ -209,7 +209,7 @@ export default function DriverRoutes() {
                               {status === "PENDING" && (
                                 <>
                                   <Button
-                                    size="sm"
+                                    size="touch"
                                     onClick={() => updateStopMutation.mutate({ 
                                       routeStopId: progress.routeStopId, 
                                       status: "COMPLETED" 
@@ -221,7 +221,7 @@ export default function DriverRoutes() {
                                     Complete
                                   </Button>
                                   <Button
-                                    size="sm"
+                                    size="touch"
                                     variant="outline"
                                     onClick={() => updateStopMutation.mutate({ 
                                       routeStopId: progress.routeStopId, 
@@ -237,7 +237,7 @@ export default function DriverRoutes() {
                               )}
                               {status !== "PENDING" && (
                                 <Button
-                                  size="sm"
+                                  size="touch"
                                   variant="ghost"
                                   onClick={() => updateStopMutation.mutate({ 
                                     routeStopId: progress.routeStopId, 

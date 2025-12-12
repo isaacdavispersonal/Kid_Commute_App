@@ -41,14 +41,10 @@ export default function DriverAttendance() {
 
   const setAttendanceMutation = useMutation({
     mutationFn: async (data: { studentId: string; status: "riding" | "absent" }) => {
-      return await apiRequest(`/api/attendance`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId: data.studentId,
-          date: today,
-          status: data.status,
-        }),
+      return await apiRequest("POST", "/api/attendance", {
+        studentId: data.studentId,
+        date: today,
+        status: data.status,
       });
     },
     onSuccess: () => {
@@ -208,8 +204,8 @@ export default function DriverAttendance() {
                           {student.attendance.status === "riding" ? "Riding" : "Absent"}
                         </Badge>
                         <Button
+                          size="touch"
                           variant="outline"
-                          size="sm"
                           onClick={() =>
                             handleAttendance(
                               student.id,
@@ -225,7 +221,7 @@ export default function DriverAttendance() {
                     ) : (
                       <>
                         <Button
-                          size="sm"
+                          size="touch"
                           onClick={() => handleAttendance(student.id, "riding")}
                           disabled={setAttendanceMutation.isPending}
                           data-testid={`button-riding-${student.id}`}
@@ -234,8 +230,8 @@ export default function DriverAttendance() {
                           Riding
                         </Button>
                         <Button
+                          size="touch"
                           variant="destructive"
-                          size="sm"
                           onClick={() => handleAttendance(student.id, "absent")}
                           disabled={setAttendanceMutation.isPending}
                           data-testid={`button-absent-${student.id}`}

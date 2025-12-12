@@ -112,12 +112,12 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" data-testid={`button-edit-student-${student.id}`}>
+        <Button size="touch" variant="outline" data-testid={`button-edit-student-${student.id}`}>
           <Edit className="h-4 w-4 mr-1" />
           Edit
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Student Information</DialogTitle>
           <DialogDescription>
@@ -156,7 +156,7 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
                     <Button
                       type="button"
                       variant="outline"
-                      size="icon"
+                      size="icon-touch"
                       onClick={() => {
                         const phones = form.getValues("guardianPhones");
                         form.setValue("guardianPhones", phones.filter((_, i) => i !== index));
@@ -170,8 +170,8 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
               ))}
               <Button
                 type="button"
+                size="touch"
                 variant="outline"
-                size="sm"
                 onClick={() => {
                   const phones = form.getValues("guardianPhones");
                   form.setValue("guardianPhones", [...phones, ""]);
@@ -179,7 +179,7 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
                 data-testid="button-add-phone"
               >
                 <Plus className="h-4 w-4 mr-1" />
-                Add Phone Number
+                Add Phone
               </Button>
             </div>
 
