@@ -421,11 +421,21 @@ button, a, [role="button"] {
   -webkit-overflow-scrolling: touch;
 }
 
-/* iOS fixed header - prevent dragging/pulling from header area */
+/* iOS fixed header - prevent dragging/pulling from header area but allow taps/clicks */
 .ios-fixed-header {
-  touch-action: none;
+  /* Use pan-x to block vertical pull-to-refresh while allowing horizontal gestures */
+  touch-action: pan-x;
   -webkit-touch-callout: none;
   user-select: none;
   -webkit-user-select: none;
-  overscroll-behavior: none;
+  overscroll-behavior: contain;
+}
+
+/* Ensure interactive elements inside the header can still receive all touch events */
+.ios-fixed-header button,
+.ios-fixed-header [role="button"],
+.ios-fixed-header [data-state],
+.ios-fixed-header a {
+  touch-action: auto;
+  pointer-events: auto;
 }

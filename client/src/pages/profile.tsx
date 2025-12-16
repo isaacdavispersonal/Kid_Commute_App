@@ -147,6 +147,7 @@ export default function Profile() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Send all form data - backend will normalize phone and only reject if digits actually changed
     updateProfileMutation.mutate(formData);
   };
 

@@ -412,10 +412,15 @@ export default function AdminStudentsPage() {
         description: "Route unassigned from student",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
+      // Refetch to sync UI state in case of stale data
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/students"] });
+      if (selectedStudent) {
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/students", selectedStudent.id, "routes"] });
+      }
       toast({
         title: "Error",
-        description: "Failed to unassign route",
+        description: error.message || "Failed to unassign route. Please try again.",
         variant: "destructive",
       });
     },
@@ -738,7 +743,7 @@ export default function AdminStudentsPage() {
                       onClick={() => handleOpenDialog(student)}
                       data-testid={`button-edit-${student.id}`}
                     >
-                      Edit Assignment
+                      Manage Routes
                     </Button>
                     <Button
                       variant="outline"
@@ -1144,7 +1149,14 @@ export default function AdminStudentsPage() {
                   <SelectTrigger id="new-route" data-testid="select-new-route" className="flex-1">
                     <SelectValue placeholder="Select a route" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent 
+                    position="popper" 
+                    side="bottom" 
+                    align="start" 
+                    sideOffset={4}
+                    collisionPadding={8}
+                    className="max-h-48 overflow-y-auto z-50"
+                  >
                     {routes?.map((route) => (
                       <SelectItem key={route.id} value={route.id}>
                         <div className="flex items-center gap-2">

@@ -189,14 +189,16 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         });
       }
       
-      // Prevent phone number changes through this endpoint for parents
+      // Prevent phone number changes through this endpoint for parents (but allow initial setting)
       // Parents must use the dedicated /api/parent/update-phone endpoint to ensure guardian phone sync
       const user = await storage.getUser(userId);
       if (user?.role === "parent" && result.data.phoneNumber) {
         const normalizedNewPhone = result.data.phoneNumber.replace(/\D/g, '');
         const currentPhone = user.phoneNumber;
         
-        if (normalizedNewPhone !== currentPhone) {
+        // Only reject if they have a phone already AND are trying to change it
+        // Allow setting phone for the first time if currentPhone is null/empty
+        if (currentPhone && normalizedNewPhone !== currentPhone) {
           return res.status(400).json({
             message: "Please use the 'Change Phone' button to update your phone number. This ensures your children's records stay synchronized."
           });
