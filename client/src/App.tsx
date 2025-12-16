@@ -162,8 +162,8 @@ function Router() {
             </DropdownMenu>
           </header>
           {/* Spacer for fixed header - matches header height including safe area */}
-          <div className="shrink-0 h-[calc(4rem+env(safe-area-inset-top,0px))]" />
-          <main className="flex-1 overflow-y-auto p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <div className="shrink-0 h-[calc(4.5rem+env(safe-area-inset-top,0px))]" />
+          <main className="flex-1 overflow-y-auto p-6 pt-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             <Switch>
               {/* Common routes for all roles */}
               <Route path="/profile" component={Profile} />
