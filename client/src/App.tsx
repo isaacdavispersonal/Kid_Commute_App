@@ -117,7 +117,7 @@ function Router() {
       <div className="flex h-screen w-full">
         <AppSidebar userRole={userRole} isLeadDriver={isLeadDriver} />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b bg-card pt-[max(1rem,env(safe-area-inset-top))] ios-fixed-header">
+          <header className="flex items-center justify-between gap-4 p-4 border-b bg-card pt-[max(1rem,env(safe-area-inset-top))] ios-fixed-header shrink-0">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -161,6 +161,8 @@ function Router() {
               </DropdownMenuContent>
             </DropdownMenu>
           </header>
+          {/* Spacer for fixed header - matches header height including safe area */}
+          <div className="shrink-0 h-[calc(4rem+env(safe-area-inset-top,0px))]" />
           <main className="flex-1 overflow-y-auto p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             <Switch>
               {/* Common routes for all roles */}

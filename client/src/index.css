@@ -404,6 +404,15 @@ body {
   /* Ensure body takes full height for proper background coverage */
   min-height: 100vh;
   min-height: 100dvh;
+  /* Prevent iOS overscroll/rubber-banding on the whole page */
+  overscroll-behavior: none;
+  overflow: hidden;
+}
+
+html {
+  /* Prevent overscroll on iOS */
+  overscroll-behavior: none;
+  overflow: hidden;
 }
 
 #root {
@@ -429,16 +438,19 @@ button, a, [role="button"] {
 
 /* iOS fixed header - prevent dragging/pulling from header area but allow taps/clicks */
 .ios-fixed-header {
-  /* Manipulation limits touch to panning and pinch-zoom, prevents scroll chaining */
-  touch-action: manipulation;
+  /* Use fixed positioning so header never moves with overscroll */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  /* Prevent touch gestures from moving the header */
+  touch-action: none;
   -webkit-touch-callout: none;
   user-select: none;
   -webkit-user-select: none;
-  overscroll-behavior: contain;
-  /* Prevent the header from being dragged */
-  position: sticky;
-  top: 0;
-  z-index: 50;
+  /* Prevent overscroll chaining */
+  overscroll-behavior: none;
 }
 
 /* Ensure interactive elements inside the header can still receive all touch events */
