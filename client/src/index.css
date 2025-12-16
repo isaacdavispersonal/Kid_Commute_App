@@ -420,3 +420,12 @@ button, a, [role="button"] {
 .overflow-y-auto, .overflow-auto, .overflow-x-auto {
   -webkit-overflow-scrolling: touch;
 }
+
+/* iOS fixed header - prevent dragging/pulling from header area */
+.ios-fixed-header {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: none;
+}

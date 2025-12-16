@@ -117,7 +117,7 @@ function Router() {
       <div className="flex h-screen w-full">
         <AppSidebar userRole={userRole} isLeadDriver={isLeadDriver} />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-4 border-b bg-card pt-[max(1rem,env(safe-area-inset-top))]">
+          <header className="flex items-center justify-between gap-4 p-4 border-b bg-card pt-[max(1rem,env(safe-area-inset-top))] ios-fixed-header">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

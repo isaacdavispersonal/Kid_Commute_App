@@ -173,8 +173,11 @@ export default function AdminDriverAssignments() {
     mutationFn: async (data: FormData) => {
       return await apiRequest("POST", "/api/admin/driver-assignments", data);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ 
+        queryKey: ["/api/admin/driver-assignments"],
+        refetchType: 'all'
+      });
       handleCloseDialog();
       toast({
         title: "Success",
@@ -199,8 +202,11 @@ export default function AdminDriverAssignments() {
       const failed = results.filter(r => r.status === "rejected").length;
       return { successful, failed };
     },
-    onSuccess: ({ successful, failed }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
+    onSuccess: async ({ successful, failed }) => {
+      await queryClient.invalidateQueries({ 
+        queryKey: ["/api/admin/driver-assignments"],
+        refetchType: 'all'
+      });
       handleCloseDialog();
       if (failed > 0) {
         toast({
@@ -228,9 +234,12 @@ export default function AdminDriverAssignments() {
     mutationFn: async ({ id, data }: { id: string; data: Partial<FormData> }) => {
       return await apiRequest("PATCH", `/api/admin/driver-assignments/${id}`, data);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ 
+        queryKey: ["/api/admin/driver-assignments"],
+        refetchType: 'all'
+      });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
       handleCloseDialog();
       toast({
         title: "Success",
@@ -250,9 +259,12 @@ export default function AdminDriverAssignments() {
     mutationFn: async (id: string) => {
       return await apiRequest("DELETE", `/api/admin/driver-assignments/${id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-assignments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ 
+        queryKey: ["/api/admin/driver-assignments"],
+        refetchType: 'all'
+      });
+      await queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
       setDeleteDialog(null);
       toast({
         title: "Success",
