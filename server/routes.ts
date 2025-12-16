@@ -1911,6 +1911,39 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Remove a student from a route (admin or lead driver)
+  app.delete(
+    "/api/admin/routes/:routeId/students/:studentId",
+    requireAuth,
+    requireAdminOrLeadDriver,
+    async (req: any, res) => {
+      try {
+        const { routeId, studentId } = req.params;
+        
+        await storage.deleteStudentRouteAssignmentByRouteAndStudent(routeId, studentId);
+        
+        // Log the action
+        await storage.createAuditLog({
+          action: "STUDENT_REMOVED_FROM_ROUTE",
+          performedByUserId: req.user.id,
+          targetEntityType: "student",
+          targetEntityId: studentId,
+          details: { routeId, studentId },
+        });
+        
+        res.json({ message: "Student removed from route successfully" });
+      } catch (error: any) {
+        console.error("Error removing student from route:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to remove student from route" });
+      }
+    }
+  );
+
   // Create a new route (admin or lead driver)
   app.post(
     "/api/admin/routes",

@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/select";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
-import { Plus, MapPin, Pencil, Trash2, List, Clock, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Tag, Users, Palette, LayoutGrid } from "lucide-react";
+import { Plus, MapPin, Pencil, Trash2, List, Clock, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Tag, Users, Palette, LayoutGrid, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -70,10 +70,33 @@ interface Student {
 // Expandable student list component for route cards
 function RouteStudentList({ routeId, studentCount }: { routeId: string; studentCount: number }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { toast } = useToast();
   
   const { data: students, isLoading } = useQuery<Student[]>({
     queryKey: ["/api/admin/routes", routeId, "students"],
     enabled: isExpanded && studentCount > 0,
+  });
+
+  const removeStudentMutation = useMutation({
+    mutationFn: async (studentId: string) => {
+      const res = await apiRequest("DELETE", `/api/admin/routes/${routeId}/students/${studentId}`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/routes", routeId, "students"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/routes"] });
+      toast({
+        title: "Student Removed",
+        description: "Student has been removed from this route.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove student from route",
+        variant: "destructive",
+      });
+    },
   });
 
   if (studentCount === 0) {
@@ -99,14 +122,29 @@ function RouteStudentList({ routeId, studentCount }: { routeId: string; studentC
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="mt-2 pl-4 border-l-2 border-muted space-y-0.5">
+        <div className="mt-2 pl-4 border-l-2 border-muted space-y-1">
           {isLoading ? (
             <p className="text-xs text-muted-foreground">Loading...</p>
           ) : students && students.length > 0 ? (
             students.map((student) => (
-              <p key={student.id} className="text-xs text-muted-foreground" data-testid={`text-student-${student.id}`}>
-                {student.firstName} {student.lastName}
-              </p>
+              <div key={student.id} className="flex items-center justify-between gap-2 group" data-testid={`row-student-${student.id}`}>
+                <span className="text-xs text-muted-foreground">
+                  {student.firstName} {student.lastName}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeStudentMutation.mutate(student.id);
+                  }}
+                  disabled={removeStudentMutation.isPending}
+                  data-testid={`button-remove-student-${student.id}`}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
             ))
           ) : (
             <p className="text-xs text-muted-foreground">No students assigned</p>

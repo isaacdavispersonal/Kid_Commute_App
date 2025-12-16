@@ -190,6 +190,7 @@ export interface IStorage {
   // Student-Route assignment operations
   createStudentRouteAssignment(assignment: InsertStudentRoute): Promise<StudentRoute>;
   deleteStudentRouteAssignment(id: string): Promise<void>;
+  deleteStudentRouteAssignmentByRouteAndStudent(routeId: string, studentId: string): Promise<void>;
   getStudentRouteAssignments(studentId: string): Promise<StudentRoute[]>;
   updateStudentRouteStops(id: string, pickupStopId: string | null, dropoffStopId: string | null): Promise<StudentRoute>;
   deleteAllStudentRouteAssignments(studentId: string): Promise<void>;
@@ -1054,11 +1055,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async findHouseholdByAnyGuardianPhone(phone: string): Promise<Household | undefined> {
+    // Normalize phone to digits only for comparison
+    const normalizedPhone = phone.replace(/\D/g, '');
+    
     // Find any student that has this phone in their guardianPhones array
+    // Use EXISTS with unnest to normalize stored phone numbers for comparison
     const studentsWithPhone = await db
       .select()
       .from(students)
-      .where(sql`${phone} = ANY(${students.guardianPhones})`)
+      .where(sql`EXISTS (SELECT 1 FROM unnest(${students.guardianPhones}) AS gp WHERE regexp_replace(gp, '[^0-9]', '', 'g') = ${normalizedPhone})`)
       .limit(1);
     
     if (studentsWithPhone.length === 0 || !studentsWithPhone[0].householdId) {
@@ -1125,11 +1130,15 @@ export class DatabaseStorage implements IStorage {
     // Remove all existing household links for this user
     await this.unlinkUserFromHousehold(userId);
     
+    // Normalize phone to digits only for comparison
+    const normalizedPhone = phoneNumber.replace(/\D/g, '');
+    
     // Find all households that have students with this guardian phone
+    // Use EXISTS with unnest to normalize stored phone numbers for comparison
     const studentsWithPhone = await db
       .select()
       .from(students)
-      .where(sql`${phoneNumber} = ANY(${students.guardianPhones})`);
+      .where(sql`EXISTS (SELECT 1 FROM unnest(${students.guardianPhones}) AS gp WHERE regexp_replace(gp, '[^0-9]', '', 'g') = ${normalizedPhone})`);
     
     // Get unique household IDs
     const uniqueHouseholdIds = new Set<string>();
@@ -1174,11 +1183,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async findStudentsByGuardianPhone(phone: string): Promise<Student[]> {
+    // Normalize phone to digits only for comparison
+    const normalizedPhone = phone.replace(/\D/g, '');
+    
     // Query students where guardianPhones array contains the phone number
+    // Use EXISTS with unnest to normalize stored phone numbers for comparison
     return await db
       .select()
       .from(students)
-      .where(sql`${phone} = ANY(${students.guardianPhones})`)
+      .where(sql`EXISTS (SELECT 1 FROM unnest(${students.guardianPhones}) AS gp WHERE regexp_replace(gp, '[^0-9]', '', 'g') = ${normalizedPhone})`)
       .orderBy(desc(students.createdAt));
   }
 
@@ -1260,6 +1273,25 @@ export class DatabaseStorage implements IStorage {
     }
 
     await db.delete(studentRoutes).where(eq(studentRoutes.id, id));
+  }
+
+  async deleteStudentRouteAssignmentByRouteAndStudent(routeId: string, studentId: string): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(studentRoutes)
+      .where(
+        and(
+          eq(studentRoutes.routeId, routeId),
+          eq(studentRoutes.studentId, studentId)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError("Student route assignment not found");
+    }
+
+    await db.delete(studentRoutes).where(eq(studentRoutes.id, existing.id));
   }
 
   async getStudentRouteAssignments(studentId: string): Promise<StudentRoute[]> {
