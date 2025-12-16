@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -21,8 +21,58 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, CheckCircle, XCircle, Users, AlertTriangle, Calendar, Clock } from "lucide-react";
-import { format } from "date-fns";
+import { Download, CheckCircle, XCircle, Users, AlertTriangle, Calendar, Clock, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { format, startOfWeek, endOfWeek, subWeeks, addWeeks } from "date-fns";
+
+type PayPeriodPreset = "current" | "previous" | "custom";
+
+function getPayPeriodDates(preset: PayPeriodPreset, today: Date = new Date()): { start: string; end: string } {
+  const currentWeekStart = startOfWeek(today, { weekStartsOn: 0 });
+  const isSecondWeek = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)) % 2 === 1;
+  
+  let periodStart: Date;
+  let periodEnd: Date;
+  
+  if (preset === "current") {
+    if (isSecondWeek) {
+      periodStart = subWeeks(currentWeekStart, 1);
+      periodEnd = addWeeks(currentWeekStart, 1);
+    } else {
+      periodStart = currentWeekStart;
+      periodEnd = addWeeks(currentWeekStart, 2);
+    }
+    periodEnd = new Date(periodEnd.getTime() - 1);
+  } else if (preset === "previous") {
+    if (isSecondWeek) {
+      periodStart = subWeeks(currentWeekStart, 3);
+      periodEnd = subWeeks(currentWeekStart, 1);
+    } else {
+      periodStart = subWeeks(currentWeekStart, 2);
+      periodEnd = currentWeekStart;
+    }
+    periodEnd = new Date(periodEnd.getTime() - 1);
+  } else {
+    return { start: "", end: "" };
+  }
+  
+  return {
+    start: format(periodStart, "yyyy-MM-dd"),
+    end: format(periodEnd, "yyyy-MM-dd"),
+  };
+}
+
+function validatePayrollResponse(data: unknown): data is PayrollCalculation[] {
+  if (!Array.isArray(data)) return false;
+  return data.every(item => 
+    typeof item === "object" &&
+    item !== null &&
+    "driverId" in item &&
+    "driverName" in item &&
+    typeof item.regularHours === "number" &&
+    typeof item.overtimeHours === "number" &&
+    typeof item.totalHours === "number"
+  );
+}
 
 const formatDate = (dateString: string | undefined | null, formatStr: string): string => {
   if (!dateString) return "N/A";
@@ -102,6 +152,8 @@ export default function AdminPayrollExports() {
   const [endDate, setEndDate] = useState("");
   const [includeOvertime, setIncludeOvertime] = useState(true);
   const [calculatedData, setCalculatedData] = useState<PayrollCalculation[] | null>(null);
+  const [payPeriodPreset, setPayPeriodPreset] = useState<PayPeriodPreset>("current");
+  const [calculationError, setCalculationError] = useState<string | null>(null);
   
   const [editingDriverId, setEditingDriverId] = useState<string | null>(null);
   const [bambooIdInput, setBambooIdInput] = useState("");
@@ -115,6 +167,12 @@ export default function AdminPayrollExports() {
   
   const [isDuplicateConfirmed, setIsDuplicateConfirmed] = useState(false);
   const [duplicateExport, setDuplicateExport] = useState<PayrollExport | null>(null);
+
+  useEffect(() => {
+    const { start, end } = getPayPeriodDates("current");
+    setStartDate(start);
+    setEndDate(end);
+  }, []);
 
   const { data: drivers, isLoading: driversLoading } = useQuery<Driver[]>({
     queryKey: ["/api/admin/payroll/drivers"],
@@ -155,19 +213,34 @@ export default function AdminPayrollExports() {
 
   const calculatePayrollMutation = useMutation({
     mutationFn: async (data: { startDate: string; endDate: string; includeOvertime: boolean }) => {
-      return await apiRequest("POST", "/api/admin/payroll/calculate", data) as unknown as PayrollCalculation[];
+      const response = await apiRequest("POST", "/api/admin/payroll/calculate", data);
+      if (!validatePayrollResponse(response)) {
+        throw new Error("Invalid response format from server");
+      }
+      return response;
     },
     onSuccess: (data: PayrollCalculation[]) => {
       setCalculatedData(data);
-      toast({
-        title: "Success",
-        description: "Payroll calculated successfully",
-      });
+      setCalculationError(null);
+      if (data.length === 0) {
+        toast({
+          title: "No Data",
+          description: "No clock events found for this pay period. Make sure drivers have clocked in/out during this time.",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `Payroll calculated for ${data.length} driver(s)`,
+        });
+      }
     },
     onError: (error: any) => {
+      setCalculatedData(null);
+      const errorMessage = error?.message || "Failed to calculate payroll. Please try again.";
+      setCalculationError(errorMessage);
       toast({
-        title: "Error",
-        description: error.message || "Failed to calculate payroll",
+        title: "Calculation Error",
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -320,6 +393,31 @@ export default function AdminPayrollExports() {
 
   const unmappedCount = drivers?.filter(d => !d.bambooEmployeeId).length || 0;
   const hasUnmappedDrivers = calculatedData?.some(d => !d.bambooEmployeeId) || false;
+
+  const handlePresetChange = (preset: PayPeriodPreset) => {
+    setPayPeriodPreset(preset);
+    setCalculatedData(null);
+    setCalculationError(null);
+    if (preset !== "custom") {
+      const { start, end } = getPayPeriodDates(preset);
+      setStartDate(start);
+      setEndDate(end);
+    }
+  };
+
+  const lastExportForPeriod = useMemo(() => {
+    if (!startDate || !endDate || !exportHistory) return null;
+    return exportHistory.find(exp => {
+      const expStart = exp.startDate.split('T')[0];
+      const expEnd = exp.endDate.split('T')[0];
+      return expStart === startDate && expEnd === endDate;
+    });
+  }, [startDate, endDate, exportHistory]);
+
+  const selectedPeriodLabel = useMemo(() => {
+    if (!startDate || !endDate) return "No period selected";
+    return `${formatDate(startDate, "MMM dd")} - ${formatDate(endDate, "MMM dd, yyyy")}`;
+  }, [startDate, endDate]);
 
   return (
     <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
@@ -520,37 +618,110 @@ export default function AdminPayrollExports() {
         </TabsContent>
 
         <TabsContent value="export" className="space-y-4">
+          {lastExportForPeriod && (
+            <Card className="border-primary/50 bg-primary/5">
+              <CardContent className="py-4">
+                <div className="flex items-start gap-3">
+                  <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-medium text-sm" data-testid="text-last-export-info">
+                      This period was already exported on {formatDate(lastExportForPeriod.exportDate, "MMM dd, yyyy 'at' h:mm a")}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {lastExportForPeriod.status === "success" ? (
+                        <span className="text-green-600 dark:text-green-400">
+                          Successfully exported {lastExportForPeriod.driverCount} drivers ({lastExportForPeriod.totalHours.toFixed(1)} total hours)
+                        </span>
+                      ) : lastExportForPeriod.status === "partial" ? (
+                        <span className="text-amber-600 dark:text-amber-400">
+                          Partial export: {lastExportForPeriod.successfulEntries} of {lastExportForPeriod.driverCount} drivers succeeded
+                        </span>
+                      ) : (
+                        <span className="text-destructive">
+                          Export failed - you may want to retry
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Pay Period Selection</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="start-date" className="text-sm font-medium">
-                    Start Date
-                  </label>
-                  <Input
-                    id="start-date"
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    data-testid="input-start-date"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="end-date" className="text-sm font-medium">
-                    End Date
-                  </label>
-                  <Input
-                    id="end-date"
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    data-testid="input-end-date"
-                  />
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Quick Select</label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant={payPeriodPreset === "previous" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePresetChange("previous")}
+                    data-testid="button-previous-period"
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous Period
+                  </Button>
+                  <Button
+                    variant={payPeriodPreset === "current" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePresetChange("current")}
+                    data-testid="button-current-period"
+                  >
+                    <Calendar className="h-4 w-4 mr-1" />
+                    Current Period
+                  </Button>
+                  <Button
+                    variant={payPeriodPreset === "custom" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePresetChange("custom")}
+                    data-testid="button-custom-period"
+                  >
+                    Custom Range
+                  </Button>
                 </div>
               </div>
+
+              {startDate && endDate && payPeriodPreset !== "custom" && (
+                <div className="p-3 bg-muted rounded-md">
+                  <p className="text-sm">
+                    <span className="font-medium">Selected Period:</span>{" "}
+                    <span data-testid="text-selected-period">{selectedPeriodLabel}</span>
+                  </p>
+                </div>
+              )}
+
+              {payPeriodPreset === "custom" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="start-date" className="text-sm font-medium">
+                      Start Date
+                    </label>
+                    <Input
+                      id="start-date"
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      data-testid="input-start-date"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="end-date" className="text-sm font-medium">
+                      End Date
+                    </label>
+                    <Input
+                      id="end-date"
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      data-testid="input-end-date"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -566,6 +737,18 @@ export default function AdminPayrollExports() {
                   Include Overtime
                 </label>
               </div>
+
+              {calculationError && (
+                <div className="p-4 bg-destructive/10 border border-destructive rounded-md">
+                  <div className="flex items-start gap-2 text-destructive">
+                    <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Calculation Error</p>
+                      <p className="text-sm">{calculationError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <Button
                 onClick={handleCalculatePreview}
