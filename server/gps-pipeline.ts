@@ -210,6 +210,14 @@ class GPSIngestionPipeline {
       updatedAt: new Date(),
     };
 
+    // Store speed and heading if available
+    if (update.speed !== undefined) {
+      updateData.currentSpeedMph = update.speed.toString();
+    }
+    if (update.heading !== undefined) {
+      updateData.currentHeadingDeg = update.heading.toString();
+    }
+
     if (update.source === "samsara" && update.vehicleIdentifier.samsaraId) {
       updateData.samsaraVehicleId = update.vehicleIdentifier.samsaraId;
       updateData.samsaraLastSync = new Date();

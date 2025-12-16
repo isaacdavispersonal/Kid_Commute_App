@@ -219,6 +219,8 @@ export const vehicles = pgTable("vehicles", {
   driverId: varchar("driver_id").references(() => users.id, { onDelete: "set null" }), // Optional driver assignment
   currentLat: decimal("current_lat", { precision: 10, scale: 7 }),
   currentLng: decimal("current_lng", { precision: 10, scale: 7 }),
+  currentSpeedMph: decimal("current_speed_mph", { precision: 5, scale: 1 }),
+  currentHeadingDeg: decimal("current_heading_deg", { precision: 5, scale: 1 }),
   lastLocationUpdate: timestamp("last_location_update"),
   samsaraVehicleId: varchar("samsara_vehicle_id").unique(),
   samsaraLastSync: timestamp("samsara_last_sync"),
