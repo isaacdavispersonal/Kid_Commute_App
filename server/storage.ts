@@ -128,6 +128,7 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
   getUsersByRole(role: "admin" | "driver" | "parent"): Promise<User[]>;
+  getUsersByPhones(phones: string[]): Promise<User[]>;
   updateUserRole(userId: string, newRole: "admin" | "driver" | "parent"): Promise<User>;
   updateUserProfile(userId: string, profile: UpdateProfile): Promise<User>;
   updateLeadDriverStatus(userId: string, isLeadDriver: boolean): Promise<User>;
@@ -478,6 +479,29 @@ export class DatabaseStorage implements IStorage {
 
   async getUsersByRole(role: "admin" | "driver" | "parent"): Promise<User[]> {
     return await db.select().from(users).where(eq(users.role, role)).orderBy(desc(users.createdAt));
+  }
+
+  async getUsersByPhones(phones: string[]): Promise<User[]> {
+    if (phones.length === 0) return [];
+    
+    // Normalize phone to last 10 digits (handles +1, 1, or no country code)
+    const normalizeTo10 = (phone: string): string => {
+      const digits = phone.replace(/\D/g, '');
+      // If 11+ digits and starts with 1 (US country code), take last 10
+      if (digits.length >= 11 && digits.startsWith('1')) {
+        return digits.slice(-10);
+      }
+      // Otherwise take last 10 digits (or all if less than 10)
+      return digits.slice(-10);
+    };
+    
+    const normalizedPhones = new Set(phones.map(normalizeTo10));
+    const allUsers = await db.select().from(users);
+    return allUsers.filter(user => {
+      if (!user.phone) return false;
+      const userPhoneNormalized = normalizeTo10(user.phone);
+      return normalizedPhones.has(userPhoneNormalized);
+    });
   }
 
   async updateUserRole(userId: string, newRole: "admin" | "driver" | "parent"): Promise<User> {

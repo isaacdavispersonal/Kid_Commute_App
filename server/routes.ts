@@ -12,6 +12,7 @@ import express from "express";
 import memoizee from "memoizee";
 import { registerAdminImportRoutes } from "./routes/admin-import";
 import { verifyToken } from "./utils/jwt-auth";
+import { pushNotificationService } from "./push-notification-service";
 
 // Webhook authentication middleware
 const verifyWebhookToken = (req: any, res: any, next: any) => {
@@ -4130,6 +4131,32 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         // Automatically initialize route progress for all stops
         if (shift.routeId) {
           await storage.initializeRouteProgress(shiftId);
+          
+          // Send push notification to parents on this route
+          try {
+            const route = await storage.getRoute(shift.routeId);
+            const routeName = route?.name || "Your child's route";
+            const studentsOnRoute = await storage.getStudentsByRoute(shift.routeId);
+            const parentPhones = new Set<string>();
+            for (const student of studentsOnRoute) {
+              for (const phone of student.guardianPhones || []) {
+                if (phone) parentPhones.add(phone);
+              }
+            }
+            if (parentPhones.size > 0) {
+              const parentUsers = await storage.getUsersByPhones(Array.from(parentPhones));
+              const parentIds = parentUsers.map(p => p.id);
+              if (parentIds.length > 0) {
+                await pushNotificationService.sendToUsers(parentIds, {
+                  title: "Route Started",
+                  body: `${routeName} has begun. Live tracking is now available.`,
+                  data: { type: "route_started", routeId: shift.routeId, shiftId }
+                });
+              }
+            }
+          } catch (pushError) {
+            console.error("[push] Error sending route started notification:", pushError);
+          }
         }
         
         const updatedShift = await storage.getShift(shiftId);
@@ -4225,6 +4252,28 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           eventType,
           notes,
         });
+
+        // Send push notification to parents when student is picked up (BOARD event)
+        if (eventType === "BOARD") {
+          try {
+            const stop = actualStopId ? await storage.getStop(actualStopId) : null;
+            const stopName = stop?.name || "the stop";
+            const studentName = `${student.firstName} ${student.lastName}`;
+            
+            // Get parent users from student's guardian phones
+            const parentPhones = (student.guardianPhones || []).filter(Boolean);
+            
+            if (parentPhones.length > 0) {
+              const parentUsers = await storage.getUsersByPhones(parentPhones);
+              const parentIds = parentUsers.map(p => p.id);
+              if (parentIds.length > 0) {
+                await pushNotificationService.notifyStudentPickup(parentIds, studentName, stopName);
+              }
+            }
+          } catch (pushError) {
+            console.error("[push] Error sending pickup notification:", pushError);
+          }
+        }
 
         res.json(event);
       } catch (error) {
@@ -6133,6 +6182,22 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               );
             }
           });
+        }
+
+        // Send push notification to parent recipient
+        try {
+          const recipient = await storage.getUser(recipientId);
+          if (recipient?.role === "parent") {
+            const sender = await storage.getUser(senderId);
+            const senderName = sender ? `${sender.firstName} ${sender.lastName}` : "Driver";
+            await pushNotificationService.sendToUsers([recipientId], {
+              title: `Message from ${senderName}`,
+              body: content.length > 100 ? content.substring(0, 100) + "..." : content,
+              data: { type: "new_message", senderId, messageId: message.id }
+            });
+          }
+        } catch (pushError) {
+          console.error("[push] Error sending message notification:", pushError);
         }
 
         res.json(message);

@@ -1,11 +1,13 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { db } from "./db";
-import { students, users, shifts } from "@shared/schema";
-import { eq, inArray } from "drizzle-orm";
+import { students, shifts, routes } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { log } from "./vite";
 import type { GeofenceEvent } from "./geofence-service";
 import type { StopCompletionEvent } from "./dwell-detection-service";
 import type { DataUpdateMessage, DataUpdateResource, DataUpdateAction } from "@shared/notifications";
+import { pushNotificationService } from "./push-notification-service";
+import { storage } from "./storage";
 
 interface WebSocketNotification {
   type: "notification";
@@ -65,14 +67,8 @@ class NotificationService {
       return new Set();
     }
 
-    // Lookup parent user IDs by phone numbers
-    const parentUsers = await db
-      .select()
-      .from(users)
-      .where(
-        inArray(users.phone, Array.from(guardianPhones))
-      );
-
+    // Lookup parent user IDs by phone numbers using normalized lookup
+    const parentUsers = await storage.getUsersByPhones(Array.from(guardianPhones));
     const parentIds = new Set(parentUsers.map((u) => u.id));
 
     // Cache for 5 minutes
@@ -173,6 +169,18 @@ class NotificationService {
 
       this.broadcastToUsers(notification, parentIds);
       log(`[notifications] Stop approaching: ${event.geofenceName} (route: ${shift.routeId})`, "info");
+      
+      // Send push notification for bus approaching
+      try {
+        const parentIdArray = Array.from(parentIds);
+        if (parentIdArray.length > 0) {
+          const [route] = await db.select().from(routes).where(eq(routes.id, shift.routeId)).limit(1);
+          const routeName = route?.name || "Your child's route";
+          await pushNotificationService.notifyBusApproaching(parentIdArray, routeName, event.geofenceName, 120);
+        }
+      } catch (pushError) {
+        log(`[notifications] Error sending push notification: ${pushError}`, "error");
+      }
     } catch (error) {
       log(`[notifications] Error handling geofence entry: ${error}`, "error");
     }
