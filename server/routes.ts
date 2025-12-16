@@ -190,31 +190,59 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         });
       }
       
-      // Prevent phone number changes through this endpoint for parents (but allow initial setting)
-      // Parents must use the dedicated /api/parent/update-phone endpoint to ensure guardian phone sync
-      const user = await storage.getUser(userId);
-      if (user?.role === "parent" && result.data.phoneNumber) {
-        const normalizedNewPhone = result.data.phoneNumber.replace(/\D/g, '');
-        const currentPhone = user.phoneNumber;
-        
-        // Only reject if they have a phone already AND are trying to change it
-        // Allow setting phone for the first time if currentPhone is null/empty
-        if (currentPhone && normalizedNewPhone !== currentPhone) {
-          return res.status(400).json({
-            message: "Please use the 'Change Phone' button to update your phone number. This ensures your children's records stay synchronized."
-          });
+      // Normalize phone to digits only if provided, preserve empty/undefined as-is
+      let normalizedNewPhone: string | undefined = undefined;
+      if (result.data.phoneNumber && result.data.phoneNumber.trim() !== '') {
+        normalizedNewPhone = result.data.phoneNumber.replace(/\D/g, '');
+        // If after normalization it's empty (e.g. only had special chars), treat as undefined
+        if (normalizedNewPhone === '') {
+          normalizedNewPhone = undefined;
         }
       }
       
-      // Strip phone formatting to store only digits
+      // For parents changing their phone number, automatically sync children's guardian phones
+      const user = await storage.getUser(userId);
+      if (user?.role === "parent" && normalizedNewPhone) {
+        const currentPhone = user.phoneNumber;
+        
+        // If parent is changing their phone (not just setting it for the first time), sync to children
+        if (currentPhone && normalizedNewPhone !== currentPhone) {
+          console.log(`[PATCH /api/profile] Parent phone change detected: ${currentPhone} -> ${normalizedNewPhone}`);
+          
+          // Find students by OLD guardian phone and update them
+          const students = await storage.findStudentsByGuardianPhone(currentPhone);
+          console.log(`[PATCH /api/profile] Found ${students.length} students with guardian phone ${currentPhone}`);
+          
+          for (const student of students) {
+            const updatedGuardianPhones = student.guardianPhones.map((phone: string) => 
+              phone === currentPhone ? normalizedNewPhone : phone
+            );
+            
+            if (JSON.stringify(updatedGuardianPhones) !== JSON.stringify(student.guardianPhones)) {
+              console.log(`[PATCH /api/profile] Updating student ${student.id} guardian phones`);
+              await storage.updateStudent(student.id, { guardianPhones: updatedGuardianPhones } as any);
+            }
+          }
+        }
+      }
+      
+      // Update profile with normalized data
+      // Destructure phoneNumber out, then only add it back if normalizedNewPhone is defined
+      const { phoneNumber: _rawPhone, ...dataWithoutPhone } = result.data;
       const normalizedData = {
-        ...result.data,
-        phoneNumber: result.data.phoneNumber ? result.data.phoneNumber.replace(/\D/g, '') : result.data.phoneNumber
+        ...dataWithoutPhone,
+        ...(normalizedNewPhone !== undefined ? { phoneNumber: normalizedNewPhone } : {})
       };
       
       console.log(`[PATCH /api/profile] Normalized data:`, normalizedData);
       
       const updatedUser = await storage.updateUserProfile(userId, normalizedData);
+      
+      // For parents, re-link to households with new phone if changed
+      if (user?.role === "parent" && normalizedNewPhone && user.phoneNumber !== normalizedNewPhone) {
+        await storage.relinkParentHouseholds(userId, normalizedNewPhone);
+        console.log(`[PATCH /api/profile] Parent re-linked to households`);
+      }
       
       console.log(`[PATCH /api/profile] Updated user:`, {
         id: updatedUser.id,

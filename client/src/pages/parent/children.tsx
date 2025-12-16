@@ -814,10 +814,12 @@ export default function ConnectChildrenPage() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/parent/students"] });
       setHasAttemptedConnection(true);
-      toast({
-        title: "Success",
-        description: data.message || "Children connected successfully",
-      });
+      if (data.linkedCount > 0) {
+        toast({
+          title: "Success",
+          description: data.message || "Children connected successfully",
+        });
+      }
     },
     onError: (error: any) => {
       if (error.requiresPhoneNumber) {

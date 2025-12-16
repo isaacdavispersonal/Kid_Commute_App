@@ -21,10 +21,8 @@ export default function Profile() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [isEditing, setIsEditing] = useState(false);
-  const [showPhoneDialog, setShowPhoneDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [newPhone, setNewPhone] = useState("");
   
   const { data: profile, isLoading } = useQuery<UserType>({
     queryKey: ["/api/auth/user"],
@@ -58,6 +56,7 @@ export default function Profile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/students"] });
       toast({
         title: "Profile Updated",
         description: "Your profile has been updated successfully.",
@@ -72,43 +71,6 @@ export default function Profile() {
       });
     },
   });
-
-  const updatePhoneMutation = useMutation({
-    mutationFn: async (data: { newPhoneNumber: string; syncToChildren: boolean }) => {
-      const res = await apiRequest("POST", "/api/parent/update-phone", data);
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/parent/students"] });
-      toast({
-        title: "Phone Number Updated",
-        description: "Your phone number and children's records have been updated successfully.",
-      });
-      setShowPhoneDialog(false);
-      setNewPhone("");
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update phone number",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handlePhoneUpdate = () => {
-    if (!newPhone.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a phone number",
-        variant: "destructive",
-      });
-      return;
-    }
-    // Always sync to children to maintain household links
-    updatePhoneMutation.mutate({ newPhoneNumber: newPhone, syncToChildren: true });
-  };
 
   const deleteAccountMutation = useMutation({
     mutationFn: async () => {
@@ -297,23 +259,7 @@ export default function Profile() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="phoneNumber">Phone Number *</Label>
-                {profile?.role === "parent" && !isEditing && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setNewPhone(formData.phoneNumber || "");
-                      setShowPhoneDialog(true);
-                    }}
-                    data-testid="button-change-phone"
-                  >
-                    Change Phone
-                  </Button>
-                )}
-              </div>
+              <Label htmlFor="phoneNumber">Phone Number *</Label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -463,54 +409,6 @@ export default function Profile() {
           </Button>
         </CardContent>
       </Card>
-
-      {/* Phone Update Dialog for Parents */}
-      <Dialog open={showPhoneDialog} onOpenChange={setShowPhoneDialog}>
-        <DialogContent data-testid="dialog-change-phone">
-          <DialogHeader>
-            <DialogTitle>Update Phone Number</DialogTitle>
-            <DialogDescription>
-              Change your phone number. Your children's records will be updated automatically to keep you connected.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="newPhone">New Phone Number</Label>
-              <Input
-                id="newPhone"
-                type="tel"
-                value={newPhone}
-                onChange={(e) => setNewPhone(formatPhoneNumber(e.target.value))}
-                placeholder="(123) 456-7890"
-                maxLength={14}
-                data-testid="input-new-phone"
-              />
-              <p className="text-sm text-muted-foreground mt-2">
-                Your children's guardian phone records will be automatically updated to maintain access to their profiles.
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowPhoneDialog(false)}
-              disabled={updatePhoneMutation.isPending}
-              data-testid="button-cancel-phone"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handlePhoneUpdate}
-              disabled={updatePhoneMutation.isPending}
-              data-testid="button-confirm-phone"
-            >
-              {updatePhoneMutation.isPending ? "Updating..." : "Update Phone"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Account Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

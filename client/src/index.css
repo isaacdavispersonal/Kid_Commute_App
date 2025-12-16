@@ -429,12 +429,16 @@ button, a, [role="button"] {
 
 /* iOS fixed header - prevent dragging/pulling from header area but allow taps/clicks */
 .ios-fixed-header {
-  /* Use pan-x to block vertical pull-to-refresh while allowing horizontal gestures */
-  touch-action: pan-x;
+  /* Manipulation limits touch to panning and pinch-zoom, prevents scroll chaining */
+  touch-action: manipulation;
   -webkit-touch-callout: none;
   user-select: none;
   -webkit-user-select: none;
   overscroll-behavior: contain;
+  /* Prevent the header from being dragged */
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 /* Ensure interactive elements inside the header can still receive all touch events */
