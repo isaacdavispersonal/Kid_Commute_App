@@ -5763,6 +5763,103 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Get route assignments for a parent's student
+  app.get(
+    "/api/parent/students/:id/routes",
+    requireAuth,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.id;
+        const studentId = req.params.id;
+        
+        // Verify the student belongs to this parent's household
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        const parentHousehold = await storage.getUserHousehold(parentId);
+        if (!parentHousehold || student.householdId !== parentHousehold.id) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+
+        // Get all route assignments from junction table
+        const routeAssignments = await storage.getStudentRouteAssignments(studentId);
+        
+        // Enrich with route details
+        const enrichedAssignments = await Promise.all(
+          routeAssignments.map(async (assignment) => {
+            const route = await storage.getRoute(assignment.routeId);
+            return {
+              id: assignment.id,
+              routeId: assignment.routeId,
+              routeName: route?.name || "Unknown Route",
+              routeType: route?.routeType || null,
+              pickupStopId: assignment.pickupStopId,
+              dropoffStopId: assignment.dropoffStopId,
+            };
+          })
+        );
+
+        res.json(enrichedAssignments);
+      } catch (error: any) {
+        console.error("Error fetching student route assignments:", error);
+        res.status(500).json({ message: "Failed to fetch route assignments" });
+      }
+    }
+  );
+
+  // Remove a route assignment from a parent's student
+  app.delete(
+    "/api/parent/students/:id/routes/:assignmentId",
+    requireAuth,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.id;
+        const studentId = req.params.id;
+        const assignmentId = req.params.assignmentId;
+        
+        // Verify the student belongs to this parent's household
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        const parentHousehold = await storage.getUserHousehold(parentId);
+        if (!parentHousehold || student.householdId !== parentHousehold.id) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+
+        // Verify the assignment belongs to this student
+        const assignments = await storage.getStudentRouteAssignments(studentId);
+        const assignment = assignments.find(a => a.id === assignmentId);
+        if (!assignment) {
+          return res.status(404).json({ message: "Route assignment not found" });
+        }
+
+        // Delete the assignment
+        await storage.deleteStudentRouteAssignment(assignmentId);
+        
+        // Audit log
+        await storage.createAuditLog({
+          userId: parentId,
+          userRole: "parent",
+          action: "deleted",
+          entityType: "student_route_assignment",
+          entityId: assignmentId,
+          description: `Parent removed route assignment for student ${student.firstName} ${student.lastName}`,
+        });
+
+        res.json({ success: true });
+      } catch (error: any) {
+        console.error("Error removing route assignment:", error);
+        res.status(500).json({ message: "Failed to remove route assignment" });
+      }
+    }
+  );
+
   // Get ETA to student's pickup stop
   app.get(
     "/api/parent/eta/:studentId",

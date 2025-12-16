@@ -389,6 +389,138 @@ function EditStudentDialog({ student }: { student: EnrichedStudent }) {
   );
 }
 
+interface RouteAssignment {
+  id: string;
+  routeId: string;
+  routeName: string;
+  routeType: string | null;
+  pickupStopId: string | null;
+  dropoffStopId: string | null;
+}
+
+function ManageRoutesSection({ student }: { student: EnrichedStudent }) {
+  const { toast } = useToast();
+
+  // Fetch route assignments for this student
+  const { data: routeAssignments, isLoading, isError, refetch } = useQuery<RouteAssignment[]>({
+    queryKey: ["/api/parent/students", student.id, "routes"],
+    queryFn: async () => {
+      const response = await fetch(`/api/parent/students/${student.id}/routes`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch routes");
+      return response.json();
+    },
+  });
+
+  // Mutation to remove a route assignment
+  const removeRouteMutation = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      return await apiRequest("DELETE", `/api/parent/students/${student.id}/routes/${assignmentId}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/students"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/students", student.id, "routes"] });
+      toast({
+        title: "Route Removed",
+        description: "The route assignment has been removed.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove route assignment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const getRouteTypeBadge = (routeType: string | null) => {
+    if (!routeType) return null;
+    switch (routeType) {
+      case "MORNING":
+        return <Badge variant="outline" className="text-xs">AM</Badge>;
+      case "AFTERNOON":
+        return <Badge variant="outline" className="text-xs">PM</Badge>;
+      case "EXTRA":
+        return <Badge variant="outline" className="text-xs">Extra</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Assigned Routes</p>
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-start gap-3 p-3 rounded-md bg-destructive/10 border border-destructive/20">
+        <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+        <div className="flex-1">
+          <p className="text-sm text-destructive font-medium">Failed to load routes</p>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => refetch()}
+            className="h-auto p-0 text-xs text-destructive"
+          >
+            Try again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!routeAssignments || routeAssignments.length === 0) {
+    return (
+      <div className="flex items-start gap-3 p-3 rounded-md bg-muted/50">
+        <RouteIcon className="h-5 w-5 text-muted-foreground mt-0.5" />
+        <div className="flex-1">
+          <p className="text-sm text-muted-foreground">
+            Not assigned to any routes yet
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">Assigned Routes</p>
+      <div className="space-y-2">
+        {routeAssignments.map((assignment) => (
+          <div
+            key={assignment.id}
+            className="flex items-center justify-between p-3 rounded-md bg-accent/50 gap-2"
+          >
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <RouteIcon className="h-4 w-4 text-primary flex-shrink-0" />
+              <span className="text-sm truncate">{assignment.routeName}</span>
+              {getRouteTypeBadge(assignment.routeType)}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => removeRouteMutation.mutate(assignment.id)}
+              disabled={removeRouteMutation.isPending}
+              data-testid={`button-remove-route-${assignment.id}`}
+              className="flex-shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <XCircle className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RouteProgressSection({ studentId, pickupStopId }: { studentId: string; pickupStopId: string | null }) {
   const today = new Date().toISOString().split("T")[0];
   
@@ -970,33 +1102,15 @@ export default function ConnectChildrenPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {student.assignedRouteId ? (
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3 p-3 rounded-md bg-accent/50">
-                        <RouteIcon className="h-5 w-5 text-primary mt-0.5" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">Route</p>
-                          <p className="text-sm text-muted-foreground">
-                            {student.routeName}
-                          </p>
-                        </div>
-                      </div>
+                  <div className="space-y-3">
+                    <ManageRoutesSection student={student} />
 
+                    {student.assignedRouteId && (
                       <PickupStopSelector student={student} />
+                    )}
 
-                      <AttendanceSection student={student} />
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="text-center py-4">
-                        <UserCircle className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground">
-                          Not assigned to a route yet
-                        </p>
-                      </div>
-                      <AttendanceSection student={student} />
-                    </div>
-                  )}
+                    <AttendanceSection student={student} />
+                  </div>
                   
                   <div className="pt-2">
                     <EditStudentDialog student={student} />
