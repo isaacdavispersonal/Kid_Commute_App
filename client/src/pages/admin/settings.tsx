@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, Phone, Plus, Trash2, Save, ExternalLink, Activity, GripVertical } from "lucide-react";
+import { Settings, Phone, Plus, Trash2, Save, ExternalLink, Activity, GripVertical, Navigation } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -233,6 +233,25 @@ export default function AdminSettings() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
+              <Link href="/admin/gps-settings">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-between h-auto py-3"
+                  data-testid="link-gps-settings"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center">
+                      <Navigation className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium text-sm">GPS Integration</p>
+                      <p className="text-xs text-muted-foreground">Configure webhook for any GPS provider</p>
+                    </div>
+                  </div>
+                  <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </Link>
+
               <Link href="/admin/samsara-integration">
                 <Button 
                   variant="outline" 
@@ -244,8 +263,8 @@ export default function AdminSettings() {
                       <Activity className="h-5 w-5 text-primary" />
                     </div>
                     <div className="text-left">
-                      <p className="font-medium text-sm">Samsara GPS Integration</p>
-                      <p className="text-xs text-muted-foreground">Configure vehicle tracking and sync</p>
+                      <p className="font-medium text-sm">Samsara Fleet Integration</p>
+                      <p className="text-xs text-muted-foreground">Samsara-specific GPS and vehicle sync</p>
                     </div>
                   </div>
                   <ExternalLink className="h-4 w-4 text-muted-foreground" />

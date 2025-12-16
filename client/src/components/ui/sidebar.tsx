@@ -118,6 +118,20 @@ function SidebarProvider({
     isTracking: false,
   })
 
+  // Helper to check if any dialog/modal/sheet is open
+  const isDialogOpen = React.useCallback(() => {
+    // Check for Radix UI dialogs, sheets, and other overlays
+    const openOverlays = document.querySelectorAll(
+      '[data-state="open"][role="dialog"], ' +
+      '[data-state="open"][role="alertdialog"], ' +
+      '[data-radix-dialog-overlay], ' +
+      '[data-radix-alert-dialog-overlay], ' +
+      '.fixed.inset-0[role="dialog"], ' +
+      '[data-slot="sheet-overlay"]'
+    );
+    return openOverlays.length > 0;
+  }, []);
+
   React.useEffect(() => {
     if (!isMobile) return
 
@@ -129,6 +143,11 @@ function SidebarProvider({
     const HORIZONTAL_RATIO = 2.5 // horizontal movement must be this many times greater than vertical
 
     const handleTouchStart = (e: TouchEvent) => {
+      // Don't track swipes when dialogs/modals are open
+      if (isDialogOpen()) {
+        swipeRef.current.isTracking = false;
+        return;
+      }
       const touch = e.touches[0]
       swipeRef.current.startX = touch.clientX
       swipeRef.current.startY = touch.clientY
@@ -195,7 +214,7 @@ function SidebarProvider({
       document.removeEventListener("touchmove", handleTouchMove)
       document.removeEventListener("touchend", handleTouchEnd)
     }
-  }, [isMobile, openMobile, setOpenMobile])
+  }, [isMobile, openMobile, setOpenMobile, isDialogOpen])
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
