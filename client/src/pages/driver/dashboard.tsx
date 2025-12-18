@@ -93,6 +93,29 @@ const SHIFT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   EXTRA: { label: "Extra", color: "bg-purple-500/10 text-purple-700 dark:text-purple-400" },
 };
 
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+const PRE_TRIP_INSPECTION_ITEMS = [
+  { key: 'headTailBrakeLightsOk', label: 'Head, Tail, Brake & Clearance Lights', category: 'Lights' },
+  { key: 'turnSignalHazardOk', label: 'Turn Signals & Hazard Lights', category: 'Lights' },
+  { key: 'interiorLightsOk', label: 'Interior Lights', category: 'Lights' },
+  { key: 'tiresOk', label: 'Tires (inflation, tread, damage, lug nuts)', category: 'Exterior' },
+  { key: 'undercarriageLeaksOk', label: 'No Undercarriage Leaks', category: 'Exterior' },
+  { key: 'windshieldWipersFluidOk', label: 'Windshield Wipers & Fluid', category: 'Exterior' },
+  { key: 'windshieldConditionOk', label: 'Windshield Condition (no cracks/pits)', category: 'Exterior' },
+  { key: 'mirrorsOk', label: 'Mirrors (secure, not cracked)', category: 'Exterior' },
+  { key: 'newBodyDamage', label: 'No New Body Damage', category: 'Exterior', inverted: true },
+  { key: 'doorsConditionOk', label: 'Doors Open/Close Properly', category: 'Exterior' },
+  { key: 'driverPassengerAreaOk', label: 'Driver & Passenger Area Clean', category: 'Interior' },
+  { key: 'gaugesSwitchesControlsOk', label: 'Gauges, Switches & Controls Working', category: 'Interior' },
+  { key: 'acPerformanceOk', label: 'AC Performance', category: 'Interior' },
+  { key: 'heatPerformanceOk', label: 'Heat Performance', category: 'Interior' },
+  { key: 'backSeatConditionOk', label: 'Back Seats (secured, no damage)', category: 'Interior' },
+  { key: 'seatbeltsOk', label: 'Seatbelts (working, no damage)', category: 'Interior' },
+  { key: 'emergencyEquipmentOk', label: 'Safety Equipment (fire extinguisher, triangles, first aid, seatbelt cutter)', category: 'Safety' },
+];
+
 function VehicleInspectionDialog({ 
   open, 
   onOpenChange, 
@@ -105,40 +128,31 @@ function VehicleInspectionDialog({
   onComplete: () => void;
 }) {
   const { toast } = useToast();
-  const [checks, setChecks] = useState({
-    tiresOk: false,
-    lightsOk: false,
-    brakesOk: false,
-    fluidLevelsOk: false,
-    cleanlinessOk: false,
-  });
+  const [checks, setChecks] = useState<Record<string, boolean>>({});
+  const [beginningMileage, setBeginningMileage] = useState("");
   const [notes, setNotes] = useState("");
 
-  const allChecksComplete = Object.values(checks).every(v => v);
+  const allChecksComplete = PRE_TRIP_INSPECTION_ITEMS.every(item => checks[item.key] === true) && beginningMileage.trim() !== "";
 
   const completeInspectionMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest("POST", `/api/driver/shift/${shift.id}/complete-inspection`, {
         ...checks,
+        beginningMileage: parseInt(beginningMileage, 10),
         notes,
+        checklistType: "PRE_TRIP",
       });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/driver/today-shifts"] });
       toast({
-        title: "Inspection Complete",
+        title: "Pre-Trip Inspection Complete",
         description: "Vehicle inspection completed successfully",
       });
       onComplete();
       onOpenChange(false);
-      // Reset form
-      setChecks({
-        tiresOk: false,
-        lightsOk: false,
-        brakesOk: false,
-        fluidLevelsOk: false,
-        cleanlinessOk: false,
-      });
+      setChecks({});
+      setBeginningMileage("");
       setNotes("");
     },
     onError: (error: Error) => {
@@ -150,59 +164,75 @@ function VehicleInspectionDialog({
     },
   });
 
+  const categories = Array.from(new Set(PRE_TRIP_INSPECTION_ITEMS.map(item => item.category)));
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" data-testid="dialog-vehicle-inspection">
+      <DialogContent className="sm:max-w-lg max-h-[90vh]" data-testid="dialog-vehicle-inspection">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClipboardCheck className="h-5 w-5" />
-            Vehicle Inspection
+            Pre-Trip Inspection
           </DialogTitle>
           <DialogDescription>
-            Complete pre-trip inspection for {shift.vehicleName} ({shift.vehiclePlate})
+            Complete inspection for {shift.vehicleName} ({shift.vehiclePlate})
           </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
-          <div className="space-y-3">
-            {[
-              { key: 'tiresOk', label: 'Tires (pressure, tread, wear)' },
-              { key: 'lightsOk', label: 'Lights (headlights, brake lights, signals)' },
-              { key: 'brakesOk', label: 'Brakes (responsiveness, no unusual sounds)' },
-              { key: 'fluidLevelsOk', label: 'Fluid Levels (oil, coolant, windshield washer)' },
-              { key: 'cleanlinessOk', label: 'Interior Cleanliness (windows, mirrors, seats)' },
-            ].map(({ key, label }) => (
-              <div key={key} className="flex items-center space-x-2">
-                <Checkbox
-                  id={key}
-                  checked={checks[key as keyof typeof checks]}
-                  onCheckedChange={(checked) => 
-                    setChecks(prev => ({ ...prev, [key]: checked === true }))
-                  }
-                  data-testid={`checkbox-${key}`}
-                />
-                <label
-                  htmlFor={key}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  {label}
-                </label>
+        <ScrollArea className="max-h-[60vh] pr-4">
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="beginning-mileage" className="text-sm font-semibold">
+                Beginning Mileage <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="beginning-mileage"
+                type="number"
+                placeholder="Enter current odometer reading"
+                value={beginningMileage}
+                onChange={(e) => setBeginningMileage(e.target.value)}
+                data-testid="input-beginning-mileage"
+              />
+            </div>
+
+            {categories.map(category => (
+              <div key={category} className="space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1">{category}</h4>
+                {PRE_TRIP_INSPECTION_ITEMS.filter(item => item.category === category).map(({ key, label }) => (
+                  <div key={key} className="flex items-start space-x-2">
+                    <Checkbox
+                      id={key}
+                      checked={checks[key] || false}
+                      onCheckedChange={(checked) => 
+                        setChecks(prev => ({ ...prev, [key]: checked === true }))
+                      }
+                      data-testid={`checkbox-${key}`}
+                      className="mt-0.5"
+                    />
+                    <label
+                      htmlFor={key}
+                      className="text-sm leading-tight peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {label}
+                    </label>
+                  </div>
+                ))}
               </div>
             ))}
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="inspection-notes">Notes (Optional)</Label>
-            <Textarea
-              id="inspection-notes"
-              placeholder="Add any concerns or observations..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              data-testid="textarea-inspection-notes"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="inspection-notes">Notes (Optional)</Label>
+              <Textarea
+                id="inspection-notes"
+                placeholder="Add any concerns or observations..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                data-testid="textarea-inspection-notes"
+              />
+            </div>
           </div>
-        </div>
+        </ScrollArea>
 
         <DialogFooter>
           <Button

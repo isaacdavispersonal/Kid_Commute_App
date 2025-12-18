@@ -45,6 +45,7 @@ interface VehicleChecklist {
   vehicleId: string;
   shiftId: string | null;
   checklistType: "PRE_TRIP" | "POST_TRIP";
+  // Legacy fields
   tiresOk: boolean;
   lightsOk: boolean;
   brakesOk: boolean;
@@ -55,8 +56,37 @@ interface VehicleChecklist {
   seatsOk: boolean;
   odometerReading: number | null;
   fuelLevel: number | null;
+  // New pre-trip fields
+  headTailBrakeLightsOk?: boolean;
+  turnSignalHazardOk?: boolean;
+  interiorLightsOk?: boolean;
+  undercarriageLeaksOk?: boolean;
+  windshieldWipersFluidOk?: boolean;
+  windshieldConditionOk?: boolean;
+  newBodyDamage?: boolean;
+  doorsConditionOk?: boolean;
+  driverPassengerAreaOk?: boolean;
+  gaugesSwitchesControlsOk?: boolean;
+  acPerformanceOk?: boolean;
+  heatPerformanceOk?: boolean;
+  backSeatConditionOk?: boolean;
+  seatbeltsOk?: boolean;
+  // Post-trip fields
+  cameraUnplugged?: boolean;
+  trashRemoved?: boolean;
+  newDamageFound?: boolean;
+  headlightsPoweredOff?: boolean;
+  doorsLocked?: boolean;
+  // Mileage
+  beginningMileage?: number | null;
+  endingMileage?: number | null;
+  // Flags
+  hasIssues?: boolean;
   issues: string | null;
   createdAt: string;
+  // Joined fields
+  driverName?: string;
+  vehicleName?: string;
 }
 
 interface DriverFeedback {
@@ -361,68 +391,125 @@ export default function AdminDriverUtilities() {
               <Skeleton className="h-32 w-full" />
             </>
           ) : checklists && checklists.length > 0 ? (
-            checklists.map((checklist) => (
-              <Card key={checklist.id} data-testid={`checklist-${checklist.id}`}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <FileCheck className="h-5 w-5 text-primary" />
-                      <div>
-                        <CardTitle className="text-base">
-                          {checklist.checklistType === "PRE_TRIP" ? "Pre-Trip" : "Post-Trip"} Inspection
-                        </CardTitle>
-                        <p className="text-sm text-muted-foreground">Vehicle ID: {checklist.vehicleId}</p>
+            checklists.map((checklist) => {
+              const hasFlaggedIssues = checklist.hasIssues || checklist.newDamageFound || checklist.newBodyDamage || checklist.issues;
+              return (
+                <Card 
+                  key={checklist.id} 
+                  className={hasFlaggedIssues ? "border-destructive border-2" : ""}
+                  data-testid={`checklist-${checklist.id}`}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-3">
+                        <FileCheck className={`h-5 w-5 ${hasFlaggedIssues ? 'text-destructive' : 'text-primary'}`} />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-base">
+                              {checklist.checklistType === "PRE_TRIP" ? "Pre-Trip" : "Post-Trip"} Inspection
+                            </CardTitle>
+                            {hasFlaggedIssues && (
+                              <Badge variant="destructive" className="text-xs" data-testid={`badge-flagged-${checklist.id}`}>
+                                Action Required
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {checklist.vehicleName || `Vehicle ID: ${checklist.vehicleId}`}
+                            {checklist.driverName && ` • ${checklist.driverName}`}
+                          </p>
+                        </div>
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDistance(new Date(checklist.createdAt), new Date(), { addSuffix: true })}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDistance(new Date(checklist.createdAt), new Date(), { addSuffix: true })}
-                    </p>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${checklist.tiresOk ? 'bg-green-500' : 'bg-red-500'}`} />
-                      <span className="text-sm">Tires</span>
+                  </CardHeader>
+                  <CardContent>
+                    {checklist.checklistType === "PRE_TRIP" ? (
+                      <div className="space-y-3 mb-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${checklist.headTailBrakeLightsOk || checklist.lightsOk ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-sm">Lights</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${checklist.tiresOk ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-sm">Tires</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${checklist.mirrorsOk ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-sm">Mirrors</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${checklist.emergencyEquipmentOk ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-sm">Safety Equipment</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${!checklist.newBodyDamage ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-sm">Body Condition</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${checklist.seatbeltsOk ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-sm">Seatbelts</span>
+                          </div>
+                        </div>
+                        {checklist.beginningMileage && (
+                          <p className="text-sm text-muted-foreground">
+                            Beginning Mileage: {checklist.beginningMileage.toLocaleString()} miles
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-3 mb-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${checklist.cameraUnplugged ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-sm">Camera Unplugged</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${checklist.trashRemoved ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-sm">Trash Removed</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${checklist.doorsLocked ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-sm">Doors Locked</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${!checklist.newDamageFound ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-sm">No New Damage</span>
+                          </div>
+                        </div>
+                        {checklist.endingMileage && (
+                          <p className="text-sm text-muted-foreground">
+                            Ending Mileage: {checklist.endingMileage.toLocaleString()} miles
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {(checklist.issues || checklist.newDamageFound || checklist.newBodyDamage) && (
+                      <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md mb-3">
+                        <p className="text-sm font-medium mb-1">Issues Reported:</p>
+                        {checklist.newDamageFound && <p className="text-sm text-destructive font-medium">New damage found on vehicle!</p>}
+                        {checklist.newBodyDamage && <p className="text-sm text-destructive font-medium">Body damage reported!</p>}
+                        {checklist.issues && <p className="text-sm mt-1">{checklist.issues}</p>}
+                      </div>
+                    )}
+                    <div className="flex justify-end mt-3">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteChecklistMutation.mutate(checklist.id)}
+                        disabled={deleteChecklistMutation.isPending}
+                        data-testid={`button-delete-checklist-${checklist.id}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${checklist.lightsOk ? 'bg-green-500' : 'bg-red-500'}`} />
-                      <span className="text-sm">Lights</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${checklist.brakesOk ? 'bg-green-500' : 'bg-red-500'}`} />
-                      <span className="text-sm">Brakes</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${checklist.fluidLevelsOk ? 'bg-green-500' : 'bg-red-500'}`} />
-                      <span className="text-sm">Fluids</span>
-                    </div>
-                  </div>
-                  {checklist.issues && (
-                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
-                      <p className="text-sm font-medium mb-1">Issues Reported:</p>
-                      <p className="text-sm">{checklist.issues}</p>
-                    </div>
-                  )}
-                  {checklist.odometerReading && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Odometer: {checklist.odometerReading.toLocaleString()} miles
-                    </p>
-                  )}
-                  <div className="flex justify-end mt-3">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteChecklistMutation.mutate(checklist.id)}
-                      disabled={deleteChecklistMutation.isPending}
-                      data-testid={`button-delete-checklist-${checklist.id}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+                  </CardContent>
+                </Card>
+              );
+            })
           ) : (
             <Card>
               <CardContent className="py-12 text-center">

@@ -274,12 +274,14 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
     messages: number;
     announcements: number;
     notifications: number;
+    flaggedChecklists?: number;
   }>({
     queryKey: ["/api/user/unread-counts"],
     refetchInterval: 15000,
   });
 
   const totalUnread = (unreadCounts?.messages || 0) + (unreadCounts?.announcements || 0) + (unreadCounts?.notifications || 0);
+  const flaggedChecklistsCount = unreadCounts?.flaggedChecklists || 0;
 
   // Determine if sidebar is currently open
   const isOpen = isMobile ? openMobile : open;
@@ -353,7 +355,11 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
   const renderMenuItem = (item: { title: string; url: string; icon: any }) => {
     const isActive = location === item.url;
     const isMessages = item.title === "Messages";
-    const showBadge = isMessages && totalUnread > 0;
+    const isActivityOperations = item.title === "Activity & Operations";
+    const showMessagesBadge = isMessages && totalUnread > 0;
+    const showFlaggedBadge = isActivityOperations && flaggedChecklistsCount > 0 && userRole === "admin";
+    const showBadge = showMessagesBadge || showFlaggedBadge;
+    const badgeCount = showMessagesBadge ? totalUnread : flaggedChecklistsCount;
 
     return (
       <SidebarMenuItem key={item.title} data-active={isActive ? "true" : undefined}>
@@ -373,9 +379,9 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
               <Badge 
                 variant="destructive" 
                 className="ml-auto h-5 min-w-5 px-1 text-xs"
-                data-testid="badge-unread-count"
+                data-testid={showFlaggedBadge ? "badge-flagged-checklists" : "badge-unread-count"}
               >
-                {totalUnread}
+                {badgeCount}
               </Badge>
             )}
           </Link>

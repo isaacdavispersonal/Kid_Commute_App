@@ -45,6 +45,18 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ShiftRouteContext } from "@shared/schema";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+const POST_TRIP_INSPECTION_ITEMS = [
+  { key: 'cameraUnplugged', label: 'Camera Unplugged' },
+  { key: 'trashRemoved', label: 'All Trash Removed' },
+  { key: 'headlightsPoweredOff', label: 'Headlights Powered Off (if not auto-off)' },
+  { key: 'doorsLocked', label: 'Vehicle Doors Locked' },
+];
 
 type RideEventDialog = {
   studentId: string;
@@ -68,6 +80,12 @@ export default function DriverRoutePage() {
   const [expandedStops, setExpandedStops] = useState<Set<string>>(new Set());
   const [rideEventDialog, setRideEventDialog] = useState<RideEventDialog>(null);
   const [selectedStopId, setSelectedStopId] = useState<string>("");
+  const [showPostTripDialog, setShowPostTripDialog] = useState(false);
+  const [postTripChecks, setPostTripChecks] = useState<Record<string, boolean>>({});
+  const [endingMileage, setEndingMileage] = useState("");
+  const [newDamageFound, setNewDamageFound] = useState(false);
+  const [damageNotes, setDamageNotes] = useState("");
+  const [postTripNotes, setPostTripNotes] = useState("");
 
   const toggleStop = (stopId: string) => {
     const newExpanded = new Set(expandedStops);
@@ -174,19 +192,29 @@ export default function DriverRoutePage() {
     },
   });
 
-  // Mutation to finish route
+  // Mutation to finish route with post-trip inspection
   const finishRouteMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (postTripData: {
+      endingMileage: number;
+      cameraUnplugged: boolean;
+      trashRemoved: boolean;
+      newDamageFound: boolean;
+      headlightsPoweredOff: boolean;
+      doorsLocked: boolean;
+      notes?: string;
+    }) => {
       if (!shiftId) throw new Error("No shift ID");
-      return apiRequest("POST", `/api/driver/shift/${shiftId}/finish-route`, {});
+      return apiRequest("POST", `/api/driver/shift/${shiftId}/finish-route`, {
+        postTripInspection: postTripData,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/driver/route", shiftId] });
       toast({
         title: "Route completed!",
-        description: "Great job! The route has been completed.",
+        description: "Great job! Post-trip inspection saved.",
       });
-      // Navigate back to dashboard
+      setShowPostTripDialog(false);
       setTimeout(() => setLocation("/driver"), 2000);
     },
     onError: (error: any) => {
@@ -197,6 +225,47 @@ export default function DriverRoutePage() {
       });
     },
   });
+
+  // Handler for finishing route with post-trip inspection
+  const handleFinishRoute = () => {
+    setShowPostTripDialog(true);
+  };
+
+  const handlePostTripSubmit = () => {
+    if (!endingMileage.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter the ending mileage",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const allItemsChecked = POST_TRIP_INSPECTION_ITEMS.every(item => postTripChecks[item.key] === true);
+    if (!allItemsChecked) {
+      toast({
+        title: "Incomplete Checklist",
+        description: "Please complete all post-trip inspection items",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    let notes = postTripNotes;
+    if (newDamageFound && damageNotes.trim()) {
+      notes = `NEW DAMAGE REPORTED: ${damageNotes}${postTripNotes ? `\n\nAdditional notes: ${postTripNotes}` : ''}`;
+    }
+
+    finishRouteMutation.mutate({
+      endingMileage: parseInt(endingMileage, 10),
+      cameraUnplugged: postTripChecks.cameraUnplugged || false,
+      trashRemoved: postTripChecks.trashRemoved || false,
+      newDamageFound,
+      headlightsPoweredOff: postTripChecks.headlightsPoweredOff || false,
+      doorsLocked: postTripChecks.doorsLocked || false,
+      notes: notes || undefined,
+    });
+  };
 
   // Open ride event dialog
   const openRideEventDialog = (
@@ -627,7 +696,7 @@ export default function DriverRoutePage() {
               </div>
               <Button
                 size="lg"
-                onClick={() => finishRouteMutation.mutate()}
+                onClick={handleFinishRoute}
                 disabled={finishRouteMutation.isPending}
                 data-testid="button-finish-route"
               >
@@ -690,6 +759,136 @@ export default function DriverRoutePage() {
               data-testid="button-confirm-ride-event"
             >
               {rideEventDialog?.eventType === "BOARD" ? "Board" : "Deboard"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Post-Trip Inspection Dialog */}
+      <Dialog open={showPostTripDialog} onOpenChange={setShowPostTripDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh]" data-testid="dialog-post-trip-inspection">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5" />
+              Post-Trip Inspection
+            </DialogTitle>
+            <DialogDescription>
+              Complete post-trip inspection before finishing the route
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <div className="space-y-6 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="ending-mileage" className="text-sm font-semibold">
+                  Ending Mileage <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="ending-mileage"
+                  type="number"
+                  placeholder="Enter current odometer reading"
+                  value={endingMileage}
+                  onChange={(e) => setEndingMileage(e.target.value)}
+                  data-testid="input-ending-mileage"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1">Checklist</h4>
+                {POST_TRIP_INSPECTION_ITEMS.map(({ key, label }) => (
+                  <div key={key} className="flex items-start space-x-2">
+                    <Checkbox
+                      id={key}
+                      checked={postTripChecks[key] || false}
+                      onCheckedChange={(checked) => 
+                        setPostTripChecks(prev => ({ ...prev, [key]: checked === true }))
+                      }
+                      data-testid={`checkbox-post-${key}`}
+                      className="mt-0.5"
+                    />
+                    <label
+                      htmlFor={key}
+                      className="text-sm leading-tight peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {label}
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground border-b pb-1">Damage Check</h4>
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="newDamageFound"
+                    checked={newDamageFound}
+                    onCheckedChange={(checked) => setNewDamageFound(checked === true)}
+                    data-testid="checkbox-new-damage"
+                    className="mt-0.5"
+                  />
+                  <label
+                    htmlFor="newDamageFound"
+                    className="text-sm leading-tight text-destructive font-medium"
+                  >
+                    New Damage Found (Interior or Exterior)
+                  </label>
+                </div>
+                
+                {newDamageFound && (
+                  <div className="space-y-2 pl-6">
+                    <Label htmlFor="damage-notes" className="text-sm">
+                      Describe the damage <span className="text-destructive">*</span>
+                    </Label>
+                    <Textarea
+                      id="damage-notes"
+                      placeholder="Describe the new damage in detail..."
+                      value={damageNotes}
+                      onChange={(e) => setDamageNotes(e.target.value)}
+                      rows={3}
+                      data-testid="textarea-damage-notes"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="post-trip-notes">Additional Notes (Optional)</Label>
+                <Textarea
+                  id="post-trip-notes"
+                  placeholder="Any other observations..."
+                  value={postTripNotes}
+                  onChange={(e) => setPostTripNotes(e.target.value)}
+                  rows={2}
+                  data-testid="textarea-post-trip-notes"
+                />
+              </div>
+            </div>
+          </ScrollArea>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowPostTripDialog(false)}
+              data-testid="button-cancel-post-trip"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePostTripSubmit}
+              disabled={finishRouteMutation.isPending || (!endingMileage.trim()) || (newDamageFound && !damageNotes.trim())}
+              data-testid="button-complete-post-trip"
+            >
+              {finishRouteMutation.isPending ? (
+                <>
+                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  Completing...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Complete & Finish Route
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

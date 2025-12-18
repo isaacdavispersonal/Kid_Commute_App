@@ -349,6 +349,7 @@ export interface IStorage {
   getAllVehicleChecklists(): Promise<VehicleChecklist[]>;
   getTodayVehicleChecklist(driverId: string, vehicleId: string, type: "PRE_TRIP" | "POST_TRIP"): Promise<VehicleChecklist | undefined>;
   deleteVehicleChecklist(id: string): Promise<void>;
+  getFlaggedChecklistsCount(): Promise<number>;
 
   // Driver feedback operations
   createDriverFeedback(feedback: InsertDriverFeedback): Promise<DriverFeedback>;
@@ -3963,6 +3964,14 @@ export class DatabaseStorage implements IStorage {
     }
 
     await db.delete(vehicleChecklists).where(eq(vehicleChecklists.id, id));
+  }
+
+  async getFlaggedChecklistsCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(vehicleChecklists)
+      .where(eq(vehicleChecklists.hasIssues, true));
+    return Number(result[0]?.count || 0);
   }
 
   // ============ Driver Feedback operations ============

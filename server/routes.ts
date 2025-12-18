@@ -347,6 +347,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       const messageCounts = await storage.getUnreadCountsBySender(userId);
       let announcementCount = 0;
       let notificationCount = 0;
+      let flaggedChecklistsCount = 0;
 
       if (userRole === "driver" || userRole === "parent") {
         announcementCount = await storage.getUnreadAnnouncementCount(userId, userRole);
@@ -356,11 +357,16 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         notificationCount = await storage.getUnreadDriverNotificationCount(userId);
       }
 
+      if (userRole === "admin") {
+        flaggedChecklistsCount = await storage.getFlaggedChecklistsCount();
+      }
+
       return {
         messages: messageCount,
         announcements: announcementCount,
         notifications: notificationCount,
         messageBySender: messageCounts,
+        flaggedChecklists: flaggedChecklistsCount,
       };
     },
     {
@@ -4080,7 +4086,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Complete vehicle inspection for a shift
+  // Complete vehicle inspection for a shift (pre-trip)
   app.post(
     "/api/driver/shift/:shiftId/complete-inspection",
     requireAuth,
@@ -4089,7 +4095,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       try {
         const driverId = req.user.id;
         const { shiftId } = req.params;
-        const { tiresOk, lightsOk, brakesOk, fluidLevelsOk, cleanlinessOk, notes } = req.body;
+        const inspectionData = req.body;
         
         // Verify shift belongs to this driver
         const shift = await storage.getShift(shiftId);
@@ -4100,37 +4106,51 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(403).json({ message: "Not authorized for this shift" });
         }
         
-        // Validate all checks are completed
-        if (!tiresOk || !lightsOk || !brakesOk || !fluidLevelsOk || !cleanlinessOk) {
+        // Validate beginning mileage is provided
+        if (!inspectionData.beginningMileage && inspectionData.beginningMileage !== 0) {
           return res.status(400).json({ 
-            message: "All inspection items must be marked OK before completing inspection" 
+            message: "Beginning mileage is required" 
           });
         }
         
         // Update shift with inspection completion timestamp
         await storage.updateShift(shiftId, {
           inspectionCompletedAt: new Date(),
-        });
+        } as any);
         
-        // Also create a vehicle checklist record if vehicleId exists
+        // Create a vehicle checklist record if vehicleId exists
         if (shift.vehicleId) {
+          const hasIssues = inspectionData.newBodyDamage || 
+            !inspectionData.emergencyEquipmentOk || 
+            inspectionData.notes;
+
           await storage.createVehicleChecklist({
             driverId,
             vehicleId: shift.vehicleId,
             shiftId,
             checklistType: "PRE_TRIP",
-            tiresOk,
-            lightsOk,
-            brakesOk,
-            fluidLevelsOk,
-            interiorCleanOk: cleanlinessOk,
-            emergencyEquipmentOk: true,
-            mirrorsOk: true,
-            seatsOk: true,
-            odometerReading: null,
-            fuelLevel: null,
-            issues: notes || null,
-          });
+            // New pre-trip fields
+            headTailBrakeLightsOk: inspectionData.headTailBrakeLightsOk,
+            turnSignalHazardOk: inspectionData.turnSignalHazardOk,
+            interiorLightsOk: inspectionData.interiorLightsOk,
+            tiresOk: inspectionData.tiresOk,
+            undercarriageLeaksOk: inspectionData.undercarriageLeaksOk,
+            windshieldWipersFluidOk: inspectionData.windshieldWipersFluidOk,
+            windshieldConditionOk: inspectionData.windshieldConditionOk,
+            mirrorsOk: inspectionData.mirrorsOk,
+            newBodyDamage: inspectionData.newBodyDamage,
+            doorsConditionOk: inspectionData.doorsConditionOk,
+            driverPassengerAreaOk: inspectionData.driverPassengerAreaOk,
+            gaugesSwitchesControlsOk: inspectionData.gaugesSwitchesControlsOk,
+            acPerformanceOk: inspectionData.acPerformanceOk,
+            heatPerformanceOk: inspectionData.heatPerformanceOk,
+            backSeatConditionOk: inspectionData.backSeatConditionOk,
+            seatbeltsOk: inspectionData.seatbeltsOk,
+            emergencyEquipmentOk: inspectionData.emergencyEquipmentOk,
+            beginningMileage: inspectionData.beginningMileage,
+            issues: inspectionData.notes || null,
+            hasIssues,
+          } as any);
         }
         
         const updatedShift = await storage.getShift(shiftId);
@@ -4353,6 +4373,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       try {
         const driverId = req.user.id;
         const { shiftId } = req.params;
+        const { postTripInspection } = req.body;
 
         // Verify shift belongs to this driver
         const shift = await storage.getShift(shiftId);
@@ -4399,6 +4420,29 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               });
             }
           }
+        }
+
+        // Save post-trip inspection if provided
+        if (postTripInspection && shift.vehicleId) {
+          const hasIssues = postTripInspection.newDamageFound || 
+            !postTripInspection.cameraUnplugged || 
+            !postTripInspection.trashRemoved ||
+            !postTripInspection.doorsLocked;
+
+          await storage.createVehicleChecklist({
+            driverId,
+            vehicleId: shift.vehicleId,
+            shiftId,
+            checklistType: "POST_TRIP",
+            cameraUnplugged: postTripInspection.cameraUnplugged,
+            trashRemoved: postTripInspection.trashRemoved,
+            newDamageFound: postTripInspection.newDamageFound,
+            headlightsPoweredOff: postTripInspection.headlightsPoweredOff,
+            doorsLocked: postTripInspection.doorsLocked,
+            endingMileage: postTripInspection.endingMileage,
+            issues: postTripInspection.notes,
+            hasIssues,
+          });
         }
 
         // Complete the route
