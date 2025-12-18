@@ -9,7 +9,7 @@ import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -59,6 +59,7 @@ interface Incident {
 export default function AdminDashboard() {
   const today = new Date().toISOString().split('T')[0];
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   const { data: stats, isLoading: statsLoading } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
@@ -370,7 +371,8 @@ export default function AdminDashboard() {
                         {pendingIncidents.map((incident: Incident) => (
                           <div
                             key={incident.id}
-                            className="p-3 rounded-md bg-accent/50 hover-elevate"
+                            className="p-3 rounded-md bg-accent/50 hover-elevate cursor-pointer"
+                            onClick={() => navigate(`/admin/incidents?id=${incident.id}`)}
                             data-testid={`incident-item-${incident.id}`}
                           >
                             <div className="flex items-start justify-between gap-2 mb-1">
@@ -410,7 +412,8 @@ export default function AdminDashboard() {
                         {resolvedIncidents.map((incident: Incident) => (
                           <div
                             key={incident.id}
-                            className="p-2 rounded bg-muted/30 hover-elevate text-xs"
+                            className="p-2 rounded bg-muted/30 hover-elevate text-xs cursor-pointer"
+                            onClick={() => navigate(`/admin/incidents?id=${incident.id}`)}
                             data-testid={`incident-item-${incident.id}`}
                           >
                             <div className="flex items-center justify-between gap-2">

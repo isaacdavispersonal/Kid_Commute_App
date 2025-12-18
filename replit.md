@@ -45,7 +45,8 @@ Preferred communication style: Simple, everyday language.
     - **Lead Driver Permissions**: `isLeadDriver` flag for enhanced permissions.
     - **Driver Utilities System**: Drivers request supplies, submit checklists, provide feedback.
     - **Route Health Monitoring**: Admin dashboard for active route status, driver availability, and student counts.
-    - **Live Fleet Map**: Admin page displaying real-time vehicle locations with auto-refresh. Includes CRUD for vehicle management.
+    - **Live Fleet Map**: Admin page displaying real-time vehicle locations with auto-refresh. Includes CRUD for vehicle management with vehicle nickname support.
+    - **Vehicle Nicknames**: Optional friendly names for vehicles displayed throughout the app (fleet map, vehicle list, popups), with unit number shown as secondary detail when nickname exists.
     - **Route Groups System**: Organizational system for managing multiple routes under shared groups, with integrated admin UI.
     - **Geofence Detection System**: Real-time monitoring of vehicles entering/exiting defined geofences (SCHOOL, STOP, CUSTOM) with automatic parent notifications.
     - **Automatic Stop Geofence Provisioning**: Stops automatically provision 100m STOP-type geofences.

@@ -47,6 +47,7 @@ import { z } from "zod";
 
 // Extended schema to handle "UNASSIGNED" -> null conversion for driverId and samsaraVehicleId
 const vehicleFormSchema = insertVehicleSchema.extend({
+  nickname: z.string().optional().transform(val => val === "" ? null : val || null),
   driverId: z.string().optional().transform(val => val === "UNASSIGNED" || val === "" ? null : val || null),
   samsaraVehicleId: z.string().optional().transform(val => val === "" ? null : val || null),
 });
@@ -72,6 +73,7 @@ export default function AdminVehicles() {
     resolver: zodResolver(vehicleFormSchema),
     defaultValues: {
       name: "",
+      nickname: "",
       plateNumber: "",
       capacity: 0,
       status: "active",
@@ -160,6 +162,7 @@ export default function AdminVehicles() {
     setEditingVehicle(vehicle);
     form.reset({
       name: vehicle.name,
+      nickname: vehicle.nickname || "",
       plateNumber: vehicle.plateNumber,
       capacity: vehicle.capacity,
       status: vehicle.status,
@@ -179,6 +182,14 @@ export default function AdminVehicles() {
     {
       header: "Vehicle Name",
       accessor: "name",
+      cell: (value: string, row: Vehicle) => (
+        <div>
+          <span className="font-medium">{row.nickname || value}</span>
+          {row.nickname && (
+            <span className="text-muted-foreground text-sm ml-2">({value})</span>
+          )}
+        </div>
+      ),
     },
     {
       header: "Plate Number",
@@ -294,12 +305,31 @@ export default function AdminVehicles() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Vehicle Name</FormLabel>
+                    <FormLabel>Vehicle Name / Unit Number</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
                         placeholder="e.g., Bus 1, Van A"
                         data-testid="input-vehicle-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="nickname"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nickname (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value || ""}
+                        placeholder="e.g., Big Yellow, Morning Express"
+                        data-testid="input-vehicle-nickname"
                       />
                     </FormControl>
                     <FormMessage />

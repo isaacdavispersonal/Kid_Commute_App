@@ -380,7 +380,7 @@ export interface IStorage {
   updateUserBambooEmployeeId(userId: string, bambooEmployeeId: string | null): Promise<User>;
   getDriversWithBambooMapping(): Promise<User[]>;
   getDriversWithoutBambooMapping(): Promise<User[]>;
-  getDriversForPayroll(): Promise<Array<{ id: string; firstName: string; lastName: string; bambooEmployeeId: string | null }>>;
+  getDriversForPayroll(): Promise<Array<{ id: string; name: string; bambooEmployeeId: string | null }>>;
   updateDriverBambooId(driverId: string, bambooEmployeeId: string): Promise<User>;
   calculatePayrollData(startDate: string, endDate: string, options?: { includeOvertime?: boolean }): Promise<PayrollCalculationResult[]>;
   createPayrollExport(exportData: InsertPayrollExport, entries: InsertPayrollExportEntry[]): Promise<PayrollExport>;
@@ -4205,7 +4205,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(users.firstName, users.lastName);
   }
 
-  async getDriversForPayroll(): Promise<Array<{ id: string; firstName: string; lastName: string; bambooEmployeeId: string | null }>> {
+  async getDriversForPayroll(): Promise<Array<{ id: string; name: string; bambooEmployeeId: string | null }>> {
     const drivers = await db
       .select({
         id: users.id,
@@ -4217,7 +4217,12 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.role, "driver"))
       .orderBy(users.firstName, users.lastName);
     
-    return drivers;
+    // Transform to include combined name for frontend compatibility
+    return drivers.map(d => ({
+      id: d.id,
+      name: `${d.firstName ?? 'Unknown'} ${d.lastName ?? 'Unknown'}`.trim() || 'Unknown Driver',
+      bambooEmployeeId: d.bambooEmployeeId,
+    }));
   }
 
   async updateDriverBambooId(driverId: string, bambooEmployeeId: string): Promise<User> {

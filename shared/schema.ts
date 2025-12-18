@@ -213,6 +213,7 @@ export const vehicleStatusEnum = pgEnum("vehicle_status", [
 export const vehicles = pgTable("vehicles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
+  nickname: varchar("nickname"), // Optional friendly name displayed throughout the app
   plateNumber: varchar("plate_number").notNull().unique(),
   capacity: integer("capacity").notNull(),
   status: vehicleStatusEnum("status").notNull().default("active"),

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useSearch, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,10 +49,28 @@ export default function AdminIncidentsPage() {
   const { toast } = useToast();
   const [selectedIncident, setSelectedIncident] = useState<EnrichedIncident | null>(null);
   const [filter, setFilter] = useState<"all" | "pending" | "resolved">("all");
+  const search = useSearch();
+  const [, navigate] = useLocation();
 
   const { data: incidents, isLoading } = useQuery<EnrichedIncident[]>({
     queryKey: ["/api/admin/incidents"],
   });
+
+  // Auto-select incident from URL parameter
+  useEffect(() => {
+    if (incidents && search) {
+      const params = new URLSearchParams(search);
+      const incidentId = params.get("id");
+      if (incidentId) {
+        const incident = incidents.find(i => i.id === incidentId);
+        if (incident) {
+          setSelectedIncident(incident);
+          // Clear the URL parameter after opening
+          navigate("/admin/incidents", { replace: true });
+        }
+      }
+    }
+  }, [incidents, search, navigate]);
 
   const resolveMutation = useMutation({
     mutationFn: async (incidentId: string) => {

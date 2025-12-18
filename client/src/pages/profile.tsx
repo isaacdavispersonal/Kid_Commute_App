@@ -281,7 +281,7 @@ export default function Profile() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="address">Address *</Label>
+              <Label htmlFor="address">Address</Label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Textarea
@@ -292,8 +292,6 @@ export default function Profile() {
                   className="pl-10 resize-none"
                   rows={3}
                   placeholder="123 Main St, City, State ZIP"
-                  required
-                  minLength={10}
                   data-testid="input-address"
                 />
               </div>

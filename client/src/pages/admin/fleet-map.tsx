@@ -18,6 +18,7 @@ declare global {
 interface VehicleLocation {
   id: string;
   name: string;
+  nickname: string | null;
   plateNumber: string | null;
   status: string;
   currentLat: string | null;
@@ -27,6 +28,11 @@ interface VehicleLocation {
   lastLocationUpdate: string | null;
   samsaraVehicleId: string | null;
   samsaraLastSync: string | null;
+}
+
+// Helper function to get display name for vehicles (nickname if available, otherwise name)
+function getVehicleDisplayName(vehicle: VehicleLocation): string {
+  return vehicle.nickname || vehicle.name;
 }
 
 function getHeadingLabel(degrees: number): string {
@@ -134,11 +140,13 @@ export default function AdminFleetMap() {
           iconAnchor: [16, 16],
         });
 
+        const displayName = getVehicleDisplayName(vehicle);
         const marker = window.L.marker([lat, lng], { icon })
           .addTo(mapInstanceRef.current)
           .bindPopup(
             `<div style="min-width: 220px;">
-              <strong style="font-size: 16px;">${vehicle.name}</strong><br>
+              <strong style="font-size: 16px;">${displayName}</strong><br>
+              ${vehicle.nickname ? `<span style="color: #666;">Unit: ${vehicle.name}</span><br>` : ''}
               <span style="color: #666;">Plate: ${vehicle.plateNumber || "N/A"}</span><br>
               <span style="color: #666;">Status: ${vehicle.status}</span><br>
               <span style="color: #666;">Speed: ${speed}</span><br>
@@ -286,9 +294,9 @@ export default function AdminFleetMap() {
                         <div className="flex items-center gap-2 w-full">
                           <div className="w-3 h-3 rounded-full bg-green-500 shrink-0" />
                           <div className="flex-1 text-left min-w-0">
-                            <p className="font-medium text-sm truncate">{vehicle.name}</p>
+                            <p className="font-medium text-sm truncate">{getVehicleDisplayName(vehicle)}</p>
                             <p className="text-xs text-muted-foreground truncate">
-                              {vehicle.plateNumber || "No plate"} • {formatTimeSince(vehicle.lastLocationUpdate)}
+                              {vehicle.nickname ? `${vehicle.name} • ` : ''}{vehicle.plateNumber || "No plate"} • {formatTimeSince(vehicle.lastLocationUpdate)}
                             </p>
                           </div>
                           <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -311,9 +319,9 @@ export default function AdminFleetMap() {
                       >
                         <div className="w-3 h-3 rounded-full bg-gray-400 shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-muted-foreground truncate">{vehicle.name}</p>
+                          <p className="font-medium text-sm text-muted-foreground truncate">{getVehicleDisplayName(vehicle)}</p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {vehicle.plateNumber || "No plate"}
+                            {vehicle.nickname ? `${vehicle.name} • ` : ''}{vehicle.plateNumber || "No plate"}
                           </p>
                         </div>
                       </div>
@@ -340,7 +348,10 @@ export default function AdminFleetMap() {
             <div className="flex items-center justify-between gap-4">
               <CardTitle className="text-base flex items-center gap-2">
                 <Truck className="h-5 w-5" />
-                {selectedVehicleData.name}
+                {getVehicleDisplayName(selectedVehicleData)}
+                {selectedVehicleData.nickname && (
+                  <span className="text-sm font-normal text-muted-foreground">({selectedVehicleData.name})</span>
+                )}
               </CardTitle>
               <div className="flex items-center gap-2">
                 <StatusBadge status={selectedVehicleData.status as any} />
