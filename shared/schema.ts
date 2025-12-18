@@ -1188,19 +1188,59 @@ export const vehicleChecklists = pgTable("vehicle_checklists", {
     .references(() => vehicles.id, { onDelete: "cascade" }),
   shiftId: varchar("shift_id").references(() => shifts.id, { onDelete: "cascade" }),
   checklistType: checklistTypeEnum("checklist_type").notNull(),
-  // Checklist items (true = OK, false = issue found)
-  tiresOk: boolean("tires_ok").notNull(),
-  lightsOk: boolean("lights_ok").notNull(),
-  brakesOk: boolean("brakes_ok").notNull(),
-  fluidLevelsOk: boolean("fluid_levels_ok").notNull(),
-  interiorCleanOk: boolean("interior_clean_ok").notNull(),
-  emergencyEquipmentOk: boolean("emergency_equipment_ok").notNull(),
-  mirrorsOk: boolean("mirrors_ok").notNull(),
-  seatsOk: boolean("seats_ok").notNull(),
-  // Optional fields
-  odometerReading: integer("odometer_reading"),
+  
+  // ===== PRE-TRIP INSPECTION ITEMS (true = OK/verified, false = issue found) =====
+  // Lights
+  headTailBrakeLightsOk: boolean("head_tail_brake_lights_ok"),
+  turnSignalHazardOk: boolean("turn_signal_hazard_ok"),
+  interiorLightsOk: boolean("interior_lights_ok"),
+  // Tires & Undercarriage
+  tiresOk: boolean("tires_ok"),
+  undercarriageLeaksOk: boolean("undercarriage_leaks_ok"),
+  // Windshield & Windows
+  windshieldWipersFluidOk: boolean("windshield_wipers_fluid_ok"),
+  windshieldConditionOk: boolean("windshield_condition_ok"),
+  // Mirrors & Exterior
+  mirrorsOk: boolean("mirrors_ok"),
+  newBodyDamage: boolean("new_body_damage"), // true = damage found
+  doorsConditionOk: boolean("doors_condition_ok"),
+  // Interior
+  driverPassengerAreaOk: boolean("driver_passenger_area_ok"),
+  gaugesSwitchesControlsOk: boolean("gauges_switches_controls_ok"),
+  acPerformanceOk: boolean("ac_performance_ok"),
+  heatPerformanceOk: boolean("heat_performance_ok"),
+  backSeatConditionOk: boolean("back_seat_condition_ok"),
+  seatbeltsOk: boolean("seatbelts_ok"),
+  // Safety Equipment
+  emergencyEquipmentOk: boolean("emergency_equipment_ok"), // fire extinguisher, triangles, first aid, seatbelt cutter
+  
+  // Legacy fields (kept for backward compatibility)
+  lightsOk: boolean("lights_ok"),
+  brakesOk: boolean("brakes_ok"),
+  fluidLevelsOk: boolean("fluid_levels_ok"),
+  interiorCleanOk: boolean("interior_clean_ok"),
+  seatsOk: boolean("seats_ok"),
+  
+  // ===== POST-TRIP INSPECTION ITEMS =====
+  cameraUnplugged: boolean("camera_unplugged"),
+  trashRemoved: boolean("trash_removed"),
+  newDamageFound: boolean("new_damage_found"), // true = new damage discovered
+  headlightsPoweredOff: boolean("headlights_powered_off"),
+  doorsLocked: boolean("doors_locked"),
+  
+  // ===== MILEAGE (required for both pre and post trip) =====
+  beginningMileage: integer("beginning_mileage"),
+  endingMileage: integer("ending_mileage"),
+  odometerReading: integer("odometer_reading"), // Legacy field
+  
+  // ===== OPTIONAL FIELDS =====
   fuelLevel: varchar("fuel_level"), // EMPTY, QUARTER, HALF, THREE_QUARTER, FULL
   issues: text("issues"), // Description of any issues found
+  itemComments: text("item_comments"), // JSON string for per-item comments
+  
+  // ===== FLAGS =====
+  hasIssues: boolean("has_issues").default(false), // Quick flag for admin alerting
+  
   createdAt: timestamp("created_at").defaultNow(),
 });
 

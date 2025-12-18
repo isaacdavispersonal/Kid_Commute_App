@@ -1,0 +1,320 @@
+✅ Kid Commute: End-to-End Functional Task List (Driver ↔ Parent ↔ Admin)
+
+Goal: Verify the existing system correctly supports the full “driver runs a route” workflow, parent visibility/notifications, and messaging. Implement any missing wiring, then add tests (unit/integration/e2e) to confirm it stays working.
+
+A) Core Data + Role Relationships (must exist before workflows)
+
+Route → Stops → Students link
+
+Verify each stop has assigned students.
+
+Verify students have a “riding status” for today (normal / not riding).
+
+Acceptance:
+
+Given a route, API returns stops and students per stop.
+
+Students flagged absent still appear but are marked as “Not riding today”.
+
+Driver assignments
+
+Verify driver can be assigned to a route (or a route pair AM/PM).
+
+Verify driver app can fetch “my assigned routes today”.
+
+Acceptance:
+
+Driver sees only routes assigned to them, filtered by date (and optionally AM/PM).
+
+B) Driver Clock-In → Route Activation Gating
+
+Clock-in required before routes become startable
+
+Ensure driver must clock in before they can start a route.
+
+After clock-in, driver sees a list of routes they can start.
+
+Acceptance:
+
+If driver not clocked in → route list shows locked/disabled.
+
+If driver clocked in → route list appears with “Start Route” enabled.
+
+Admin can see clock-in status + hours attribution by driver.
+
+Tests:
+
+Unit test: clock-in status toggle persisted.
+
+Integration test: driver clock-in triggers “available routes” query.
+
+C) Pre-Trip Vehicle Inspection (Required before Start Route)
+
+Pre-Trip checklist required
+When driver taps “Start Route”, show the pre-trip inspection and do not allow route start until submitted.
+
+Checklist items (must store yes/no + optional comment):
+
+Head, Tail, Brake & Clearance Lights – operational
+
+Turn Signal Operation & Hazard Light Operation
+
+Tires Condition (inflation, tread depth, damage, leaks, lug nuts, etc.)
+
+Undercarriage Leaks
+
+Windshield Wiper Condition & Fluid
+
+Windshield Condition – cracks, pits
+
+Mirror Condition – secure, not cracked
+
+New Body Damage
+
+Doors Condition
+
+Driver and Passenger Area Condition
+
+Interior Lights
+
+Vehicle Gauges, Switches & Controls
+
+AC Performance
+
+Heat Performance
+
+Back Seat Conditions – secured, no new damage
+
+Seatbelts – working, no damage
+
+Safety Equipment: fire extinguisher, emergency triangles, first aid kit, seatbelt cutter
+
+Beginning Mileage (numeric)
+
+Interaction rules:
+
+Each item: yes/no checkbox or toggle.
+
+If user selects “Yes” → open optional comments dialog (or expand comment field).
+
+Beginning mileage required to submit.
+
+Acceptance:
+
+Route cannot be started unless checklist submitted successfully.
+
+Checklist submission is stored server-side with driverId, vehicleId, routeId, timestamp.
+
+Tests:
+
+Integration: Start Route fails if no pretrip checklist.
+
+E2E: Fill checklist → submit → route start becomes active.
+
+D) Active Route Flow: “Arrive at Stop” → Attendance → Complete Stop → Next Stop
+
+Stop arrival + attendance gating
+
+In an active route, driver should be able to tap “Arrived at Stop”.
+
+That unlocks attendance UI for that stop.
+
+Attendance supports marking each student: onboard/offboard or present/absent (depending on direction).
+
+Students marked absent by admin/parent remain visible but greyed out / “Not riding today” and cannot be checked in as present unless explicitly overridden (define behavior).
+
+Acceptance:
+
+Driver can’t complete stop unless attendance is submitted (or explicitly “skip attendance” if you allow).
+
+After completing stop, UI navigates to next stop and updates progress.
+
+“Next location” displays correctly.
+
+Tests:
+
+Integration: stop status transitions: pending → arrived → completed.
+
+Integration: attendance records created with stopId + studentId + status.
+
+E2E: arrive → mark attendance → complete → next stop loads.
+
+E) End Route → Post-Trip Checklist
+
+Post-Trip checklist required on End Route
+When driver taps “End Route”, show post-trip checklist before route closes.
+
+Post-Trip checklist items:
+
+Unplug Camera
+
+Remove Any Trash
+
+New Damage (Interior or Exterior) → if yes, require/enable comments
+
+Power Off Headlights (if not auto off)
+
+Lock Vehicle Doors
+
+Ending Mileage (numeric)
+
+Acceptance:
+
+Route is not finalized until post-trip checklist is submitted.
+
+Post-trip checklist stored server-side linked to route + driver + vehicle.
+
+Tests:
+
+Integration: route cannot end without post-trip checklist.
+
+E2E: end route → submit checklist → route marked completed.
+
+F) Admin Visibility: Vehicle Checklists + Alert Badges
+
+Admins can view checklists
+
+In Admin → Activity & Operations → Vehicle Checklists:
+
+See all submitted pre/post trip checklists
+
+Filter by date/vehicle/driver/route
+
+Badge/alert logic
+
+A notification badge appears on “Activity & Operations” tab when any checklist contains flagged items:
+
+ANY “Yes” responses (as defined in your spec) OR “New Damage = Yes”
+
+Admin should be able to click in and see which items were flagged and comments.
+
+Acceptance:
+
+Badge appears reliably and clears when admin views or marks resolved (define clearing behavior).
+
+Admin view shows checklist details including comments.
+
+Tests:
+
+Unit: “shouldTriggerAdminBadge(checklist)” logic.
+
+Integration: creating a checklist with any Yes triggers badge count > 0.
+
+G) Parent Live ETA + Stops Info During Active Routes
+
+Parent dashboard ETA dropdown
+
+When route is active, parents see an ETA dropdown at top of dashboard:
+
+Estimated time for their child/route (define per-stop ETA vs overall)
+
+Number of stops remaining / total stops
+
+Acceptance:
+
+Dropdown appears only when child’s route is active.
+
+ETA updates as driver progresses through stops (arrived/completed).
+
+Tests:
+
+Integration: parent fetches route status + ETA from backend.
+
+E2E: driver completes stop → parent sees updated stops remaining.
+
+H) Push Notifications (Firebase iOS)
+
+Push notification events
+Confirm Firebase push is wired and iOS notifications are received for key events:
+
+Minimum notifications:
+
+Route started (optional)
+
+Approaching / next stop update (or “ETA updated”)
+
+Arrived at stop (optional)
+
+Route completed (optional)
+
+Admin announcement to route parents
+
+Driver message to parent (if chat supports push)
+
+Acceptance:
+
+iOS receives push notifications on real device TestFlight build.
+
+Notifications include correct route/child context (not generic).
+
+Tests:
+
+Integration: backend triggers push send when events occur.
+
+Manual test checklist: run route on device A, parent on device B, confirm notification delivery.
+
+I) Messaging: Announcements + Parent ↔ Driver Chat
+
+Announcements
+
+Parents have an announcement box.
+
+Admins and route drivers can blast an announcement to:
+
+All parents on a route, or
+
+A specific parent (optional)
+
+Announcement appears in parent UI + triggers push.
+
+Acceptance:
+
+Role permissions enforced (only admin/driver can announce).
+
+Parents receive announcement in-app and via push.
+
+Parent ↔ Driver chat
+
+Parents can open a chat thread with the driver for the active route.
+
+Messages are delivered in real-time (or polling) and stored.
+
+Push notifications for new messages (iOS).
+
+Acceptance:
+
+Driver sees parent messages and can reply.
+
+Parent sees driver replies.
+
+Message history persists.
+
+Tests:
+
+Integration: message send/receive endpoints.
+
+E2E: send message driver→parent and parent→driver; confirm both directions.
+
+Deliverable Request to the AI (what you should do)
+
+Audit existing code paths and data models for the above.
+
+Implement missing gating + storage where needed.
+
+Add automated tests (unit + integration + e2e) for the key flows:
+
+clock-in gating
+
+pre-trip checklist gating
+
+stop arrival/attendance/complete
+
+post-trip checklist gating
+
+admin badge trigger
+
+parent ETA updates
+
+push notification triggers
+
+announcements + chat
