@@ -7158,8 +7158,8 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           let hasActiveStartedShift = false;
           
           // Check studentRoutes (multi-route assignments)
-          const studentRoutes = await storage.getStudentRoutes(studentId);
-          for (const sr of studentRoutes) {
+          const studentRouteAssignments = await storage.getStudentRouteAssignments(studentId);
+          for (const sr of studentRouteAssignments) {
             const shift = shifts.find(s => s.routeId === sr.routeId && s.date === date);
             if (shift?.routeStartedAt) {
               hasActiveStartedShift = true;
