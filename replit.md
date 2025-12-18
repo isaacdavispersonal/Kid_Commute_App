@@ -21,6 +21,9 @@ Preferred communication style: Simple, everyday language.
   - **Mobile**: Same credentials, JWT stored via Capacitor Preferences.
   - **Endpoints**: `/api/auth/login`, `/api/auth/register`, `/api/auth/logout`, `/api/auth/user`.
   - **Security**: bcrypt password hashing, JWT_SECRET for token signing, role-based middleware (`requireAuth`, `requireRole`).
+  - **Testing Bypass (Development Only)**: 
+    - `GET /api/auth/test-users` - Returns sample users for each role (admin, driver, parent).
+    - `POST /api/auth/test-login` with `{"role": "admin"|"driver"|"parent"}` - Logs in as any role without password, sets auth cookie. Optional: `{"role": "admin", "userId": "specific-id"}` for specific user.
 - **API**: RESTful APIs in JSON format with structured error handling.
 - **Real-Time Communication**: `ws` WebSocket server.
 - **Data Storage**: PostgreSQL via Neon serverless with Drizzle ORM.

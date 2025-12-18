@@ -491,4 +491,83 @@ export const requireAdminOrLeadDriver: RequestHandler = async (req: any, res, ne
   }
 };
 
+/**
+ * POST /api/auth/test-login
+ * TEST ONLY: Bypass login that works only in development mode
+ * Allows automated testing to login as any role without password
+ */
+router.post("/test-login", async (req, res) => {
+  // Only allow in development mode
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).json({ message: "Test login disabled in production" });
+  }
+
+  try {
+    const { role, userId } = req.body;
+    
+    if (!role || !["admin", "driver", "parent"].includes(role)) {
+      return res.status(400).json({ message: "Valid role required: admin, driver, or parent" });
+    }
+
+    let user;
+    
+    if (userId) {
+      // Login as specific user
+      user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+    } else {
+      // Find first user with the specified role
+      const users = await storage.getUsersByRole(role);
+      if (!users || users.length === 0) {
+        return res.status(404).json({ message: `No ${role} users found` });
+      }
+      user = users[0];
+    }
+
+    // Generate JWT token
+    const token = generateToken(user.id, user.role);
+
+    // Set cookie for web browsers
+    res.cookie(COOKIE_NAME, token, getCookieOptions(req));
+
+    console.log(`[Test Auth] Test login as ${user.role}: ${user.email || user.firstName}`);
+
+    res.json({
+      token,
+      user: formatUserResponse(user),
+    });
+  } catch (error) {
+    console.error("[Test Auth] Error:", error);
+    res.status(500).json({ message: "Test login failed" });
+  }
+});
+
+/**
+ * GET /api/auth/test-users
+ * TEST ONLY: Get sample users for each role (development only)
+ */
+router.get("/test-users", async (req, res) => {
+  // Only allow in development mode
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).json({ message: "Test endpoint disabled in production" });
+  }
+
+  try {
+    const admins = await storage.getUsersByRole("admin");
+    const drivers = await storage.getUsersByRole("driver");
+    const parents = await storage.getUsersByRole("parent");
+
+    res.json({
+      admin: admins[0] ? { id: admins[0].id, email: admins[0].email, name: `${admins[0].firstName} ${admins[0].lastName}` } : null,
+      driver: drivers[0] ? { id: drivers[0].id, email: drivers[0].email, name: `${drivers[0].firstName} ${drivers[0].lastName}` } : null,
+      parent: parents[0] ? { id: parents[0].id, email: parents[0].email, name: `${parents[0].firstName} ${parents[0].lastName}` } : null,
+    });
+  } catch (error) {
+    console.error("[Test Auth] Error fetching test users:", error);
+    res.status(500).json({ message: "Failed to fetch test users" });
+  }
+});
+
 export default router;
