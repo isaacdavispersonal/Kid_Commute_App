@@ -2681,6 +2681,67 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Bulk create student-route assignments
+  app.post(
+    "/api/admin/students/:id/routes/bulk",
+    requireAuth,
+    requireAdminOrLeadDriver,
+    async (req, res) => {
+      try {
+        const studentId = req.params.id;
+        const { routeIds } = req.body;
+
+        if (!routeIds || !Array.isArray(routeIds) || routeIds.length === 0) {
+          return res.status(400).json({ message: "At least one route ID is required" });
+        }
+
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+
+        const existingAssignments = await storage.getStudentRouteAssignments(studentId);
+        const existingRouteIds = new Set(existingAssignments.map(a => a.routeId));
+
+        const results: { success: any[]; errors: string[] } = { success: [], errors: [] };
+
+        for (const routeId of routeIds) {
+          if (existingRouteIds.has(routeId)) {
+            const route = await storage.getRoute(routeId);
+            results.errors.push(`Already assigned to ${route?.name || 'route'}`);
+            continue;
+          }
+
+          try {
+            const assignment = await storage.createStudentRouteAssignment({
+              studentId,
+              routeId,
+              pickupStopId: null,
+              dropoffStopId: null,
+            });
+            results.success.push(assignment);
+            existingRouteIds.add(routeId);
+          } catch (error: any) {
+            if (error instanceof NotFoundError) {
+              results.errors.push(`Route not found: ${routeId}`);
+            } else {
+              results.errors.push(`Failed to assign route: ${routeId}`);
+            }
+          }
+        }
+
+        res.json({
+          message: `Assigned ${results.success.length} route(s)${results.errors.length > 0 ? `, ${results.errors.length} skipped` : ''}`,
+          assignments: results.success,
+          errors: results.errors,
+        });
+      } catch (error: any) {
+        console.error("Error bulk creating student route assignments:", error);
+        res.status(500).json({ message: "Failed to assign routes" });
+      }
+    }
+  );
+
   // Update student-route assignment stops
   app.patch(
     "/api/admin/student-routes/:assignmentId",
