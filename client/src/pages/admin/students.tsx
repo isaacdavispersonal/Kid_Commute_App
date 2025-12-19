@@ -322,6 +322,7 @@ export default function AdminStudentsPage() {
   const { toast } = useToast();
   const [selectedStudent, setSelectedStudent] = useState<EnrichedStudent | null>(null);
   const [newRouteId, setNewRouteId] = useState<string>("");
+  const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<"all" | "assigned" | "unassigned">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -392,6 +393,29 @@ export default function AdminStudentsPage() {
       toast({
         title: "Error",
         description: error.message || "Failed to assign route",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Bulk add route assignments mutation
+  const bulkAddRoutesMutation = useMutation({
+    mutationFn: async ({ studentId, routeIds }: { studentId: string; routeIds: string[] }) => {
+      return await apiRequest("POST", `/api/admin/students/${studentId}/routes/bulk`, { routeIds });
+    },
+    onSuccess: (data: any, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/students"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/students", variables.studentId, "routes"] });
+      setSelectedRouteIds([]);
+      toast({
+        title: "Success",
+        description: data.message || "Routes assigned successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to assign routes",
         variant: "destructive",
       });
     },
@@ -559,6 +583,23 @@ export default function AdminStudentsPage() {
   const handleCloseDialog = () => {
     setSelectedStudent(null);
     setNewRouteId("");
+    setSelectedRouteIds([]);
+  };
+
+  const handleBulkAddRoutes = () => {
+    if (!selectedStudent || selectedRouteIds.length === 0) return;
+    bulkAddRoutesMutation.mutate({
+      studentId: selectedStudent.id,
+      routeIds: selectedRouteIds,
+    });
+  };
+
+  const toggleRouteSelection = (routeId: string) => {
+    setSelectedRouteIds(prev => 
+      prev.includes(routeId)
+        ? prev.filter(id => id !== routeId)
+        : [...prev, routeId]
+    );
   };
 
   const handleAddRoute = () => {
@@ -1101,91 +1142,136 @@ export default function AdminStudentsPage() {
 
       {/* Assignment Dialog */}
       <Dialog open={!!selectedStudent} onOpenChange={handleCloseDialog}>
-        <DialogContent data-testid="dialog-assign-route" className="max-w-2xl">
+        <DialogContent data-testid="dialog-assign-route" className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Manage Routes for {selectedStudent?.firstName} {selectedStudent?.lastName}
             </DialogTitle>
             <DialogDescription>
-              Assign students to multiple routes (morning, afternoon, etc.). Pickup and dropoff stops can be configured later if needed.
+              View and manage route assignments. You can assign multiple routes at once.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            {/* Current Assignments */}
-            {studentRouteAssignments && studentRouteAssignments.length > 0 && (
-              <div className="space-y-2">
-                <Label>Current Route Assignments</Label>
-                <div className="space-y-2">
-                  {studentRouteAssignments.map((assignment: any) => {
-                    const route = routes?.find(r => r.id === assignment.routeId);
-                    return (
-                      <div key={assignment.id} className="flex items-center justify-between p-2 border rounded-md gap-2">
-                        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-                          <span className="truncate">{route?.name || "Unknown Route"}</span>
-                          <RouteTypeBadge routeType={route?.routeType || null} />
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveRoute(assignment.id)}
-                          disabled={removeRouteAssignmentMutation.isPending}
-                          data-testid={`button-remove-route-${assignment.id}`}
-                          className="flex-shrink-0"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    );
-                  })}
+          <div className="space-y-6">
+            {/* Current Route Assignments Table */}
+            <div className="space-y-3">
+              <Label className="text-base font-semibold">Current Route Assignments</Label>
+              <div className="border rounded-lg overflow-hidden">
+                {/* Table Header */}
+                <div className="bg-muted/50 px-4 py-3 border-b">
+                  <div className="flex items-center gap-4">
+                    <span className="flex-1 font-medium text-sm">Route Name</span>
+                    <span className="w-20 text-center font-medium text-sm">Type</span>
+                    <span className="w-24 text-center font-medium text-sm">Action</span>
+                  </div>
                 </div>
-              </div>
-            )}
-
-            {/* Add New Route */}
-            <div className="space-y-2">
-              <Label htmlFor="new-route">Add Route Assignment</Label>
-              <div className="flex gap-2">
-                <Select value={newRouteId} onValueChange={setNewRouteId}>
-                  <SelectTrigger id="new-route" data-testid="select-new-route" className="flex-1">
-                    <SelectValue placeholder="Select a route" />
-                  </SelectTrigger>
-                  <SelectContent 
-                    position="popper" 
-                    side="bottom" 
-                    align="start" 
-                    sideOffset={4}
-                    collisionPadding={8}
-                    className="max-h-48 overflow-y-auto z-50"
-                  >
-                    {routes?.map((route) => (
-                      <SelectItem key={route.id} value={route.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{route.name}</span>
-                          {route.routeType && (
-                            <span className="text-xs opacity-70">
-                              {route.routeType === "MORNING" && "☀️ AM"}
-                              {route.routeType === "AFTERNOON" && "🌅 PM"}
-                              {route.routeType === "EXTRA" && "🕐 Extra"}
+                
+                {/* Table Body */}
+                <div className="divide-y">
+                  {(!studentRouteAssignments || studentRouteAssignments.length === 0) ? (
+                    <div className="px-4 py-8 text-center text-muted-foreground" data-testid="empty-routes-message">
+                      <RouteIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>Student has no assigned routes</p>
+                    </div>
+                  ) : (
+                    studentRouteAssignments.map((assignment: any) => {
+                      const route = routes?.find(r => r.id === assignment.routeId);
+                      return (
+                        <div key={assignment.id} className="px-4 py-3 hover:bg-muted/30 transition-colors" data-testid={`row-route-${assignment.id}`}>
+                          <div className="flex items-center gap-4">
+                            <span className="flex-1 truncate" data-testid={`text-route-name-${assignment.id}`}>
+                              {route?.name || "Unknown Route"}
                             </span>
-                          )}
+                            <div className="w-20 flex justify-center">
+                              <RouteTypeBadge routeType={route?.routeType || null} />
+                            </div>
+                            <div className="w-24 flex justify-center">
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleRemoveRoute(assignment.id)}
+                                disabled={removeRouteAssignmentMutation.isPending}
+                                data-testid={`button-remove-route-${assignment.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  onClick={handleAddRoute}
-                  disabled={!newRouteId || addRouteAssignmentMutation.isPending}
-                  data-testid="button-add-route"
-                >
-                  Add
-                </Button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="flex justify-end pt-4">
+            {/* Add Routes Section */}
+            <div className="space-y-3">
+              <Label className="text-base font-semibold">Add Routes</Label>
+              <p className="text-sm text-muted-foreground">
+                Select one or more routes to assign to this student.
+              </p>
+              
+              {/* Available Routes List */}
+              <div className="border rounded-lg max-h-60 overflow-y-auto">
+                {(() => {
+                  const assignedRouteIds = new Set(studentRouteAssignments?.map((a: any) => a.routeId) || []);
+                  const availableRoutes = routes?.filter(r => !assignedRouteIds.has(r.id)) || [];
+                  
+                  if (availableRoutes.length === 0) {
+                    return (
+                      <div className="px-4 py-6 text-center text-muted-foreground">
+                        <CheckCircle className="h-6 w-6 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">All routes have been assigned</p>
+                      </div>
+                    );
+                  }
+                  
+                  return availableRoutes.map((route) => {
+                    const isSelected = selectedRouteIds.includes(route.id);
+                    return (
+                      <div
+                        key={route.id}
+                        className={`flex items-center gap-3 px-4 py-3 border-b last:border-b-0 cursor-pointer transition-colors ${
+                          isSelected ? "bg-primary/10" : "hover:bg-muted/50"
+                        }`}
+                        onClick={() => toggleRouteSelection(route.id)}
+                        data-testid={`option-route-${route.id}`}
+                      >
+                        <div
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                            isSelected 
+                              ? "bg-primary border-primary text-primary-foreground" 
+                              : "border-muted-foreground/30"
+                          }`}
+                        >
+                          {isSelected && <CheckCircle className="h-3 w-3" />}
+                        </div>
+                        <span className="flex-1 truncate">{route.name}</span>
+                        <RouteTypeBadge routeType={route.routeType || null} />
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+              
+              {/* Assign Button */}
+              {selectedRouteIds.length > 0 && (
+                <Button
+                  onClick={handleBulkAddRoutes}
+                  disabled={bulkAddRoutesMutation.isPending}
+                  className="w-full"
+                  data-testid="button-assign-routes"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Assign {selectedRouteIds.length} Route{selectedRouteIds.length > 1 ? "s" : ""}
+                </Button>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
               <Button variant="outline" onClick={handleCloseDialog} data-testid="button-close">
-                Close
+                Done
               </Button>
             </div>
           </div>
