@@ -407,9 +407,17 @@ export default function AdminStudentsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/students"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/students", variables.studentId, "routes"] });
       setSelectedRouteIds([]);
+      
+      // Show detailed message including any errors
+      let description = data.message || "Routes assigned successfully";
+      if (data.errors && data.errors.length > 0) {
+        description += `. Note: ${data.errors.join(", ")}`;
+      }
+      
       toast({
-        title: "Success",
-        description: data.message || "Routes assigned successfully",
+        title: data.errors?.length > 0 ? "Partially Assigned" : "Success",
+        description,
+        variant: data.errors?.length > 0 ? "default" : "default",
       });
     },
     onError: (error: any) => {
