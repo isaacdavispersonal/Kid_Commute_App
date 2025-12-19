@@ -2668,8 +2668,14 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         });
 
         res.json(assignment);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error creating student route assignment:", error);
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
         res.status(500).json({ message: "Failed to create student route assignment" });
       }
     }

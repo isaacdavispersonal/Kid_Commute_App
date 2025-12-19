@@ -13,7 +13,17 @@ function debugLog(message: string, data?: any) {
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    // Try to parse JSON and extract message for better error display
+    let errorMessage = `${res.status}: ${text}`;
+    try {
+      const json = JSON.parse(text);
+      if (json.message) {
+        errorMessage = json.message;
+      }
+    } catch (e) {
+      // If JSON parsing fails, use the raw text with status code
+    }
+    throw new Error(errorMessage);
   }
 }
 
