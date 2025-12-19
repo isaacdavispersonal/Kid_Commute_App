@@ -1134,21 +1134,46 @@ export class DatabaseStorage implements IStorage {
     // Normalize phone to digits only for comparison
     const normalizedPhone = phoneNumber.replace(/\D/g, '');
     
-    // Find all households that have students with this guardian phone
+    console.log(`[relinkParentHouseholds] Looking for students with guardian phone: ${normalizedPhone}`);
+    
+    // Find all students with this guardian phone
     // Use EXISTS with unnest to normalize stored phone numbers for comparison
     const studentsWithPhone = await db
       .select()
       .from(students)
       .where(sql`EXISTS (SELECT 1 FROM unnest(${students.guardianPhones}) AS gp WHERE regexp_replace(gp, '[^0-9]', '', 'g') = ${normalizedPhone})`);
     
-    // Get unique household IDs
+    console.log(`[relinkParentHouseholds] Found ${studentsWithPhone.length} students with matching phone`);
+    
+    // Get unique household IDs, creating households for students that don't have one
     const uniqueHouseholdIds = new Set<string>();
+    
     for (const student of studentsWithPhone) {
       if (student.householdId) {
         uniqueHouseholdIds.add(student.householdId);
+      } else {
+        // Student has no household - create one and assign it
+        console.log(`[relinkParentHouseholds] Student ${student.id} (${student.firstName} ${student.lastName}) has no household, creating one...`);
+        
+        const [newHousehold] = await db.insert(households).values({
+          primaryPhone: normalizedPhone,
+          isPlaceholder: true,
+          placeholderSource: 'parent_phone_link',
+          notes: `Auto-created when parent linked via phone ${normalizedPhone}`,
+        }).returning();
+        
+        // Update the student to reference this household
+        await db.update(students)
+          .set({ householdId: newHousehold.id })
+          .where(eq(students.id, student.id));
+        
+        uniqueHouseholdIds.add(newHousehold.id);
+        console.log(`[relinkParentHouseholds] Created household ${newHousehold.id} for student ${student.id}`);
       }
     }
+    
     const householdIds = Array.from(uniqueHouseholdIds);
+    console.log(`[relinkParentHouseholds] Linking user ${userId} to ${householdIds.length} households`);
     
     // Link user to all matching households
     for (const householdId of householdIds) {
@@ -1158,6 +1183,8 @@ export class DatabaseStorage implements IStorage {
         roleInHousehold: "SECONDARY",
       });
     }
+    
+    console.log(`[relinkParentHouseholds] Completed linking for user ${userId}`);
   }
 
   // ============ Student operations ============

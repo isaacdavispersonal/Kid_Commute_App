@@ -238,10 +238,18 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       
       const updatedUser = await storage.updateUserProfile(userId, normalizedData);
       
-      // For parents, re-link to households with new phone if changed
-      if (user?.role === "parent" && normalizedNewPhone && user.phoneNumber !== normalizedNewPhone) {
-        await storage.relinkParentHouseholds(userId, normalizedNewPhone);
-        console.log(`[PATCH /api/profile] Parent re-linked to households`);
+      // For parents, re-link to households with their phone number
+      // This handles: 1) phone number changes, 2) first-time phone set, 3) existing phone but never linked to household
+      if (user?.role === "parent" && normalizedNewPhone) {
+        const phoneChanged = user.phoneNumber !== normalizedNewPhone;
+        const currentHousehold = await storage.getUserHousehold(userId);
+        const needsLinking = phoneChanged || !currentHousehold;
+        
+        if (needsLinking) {
+          console.log(`[PATCH /api/profile] Parent needs household linking - phoneChanged: ${phoneChanged}, hasHousehold: ${!!currentHousehold}`);
+          await storage.relinkParentHouseholds(userId, normalizedNewPhone);
+          console.log(`[PATCH /api/profile] Parent re-linked to households`);
+        }
       }
       
       console.log(`[PATCH /api/profile] Updated user:`, {
