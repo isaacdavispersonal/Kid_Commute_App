@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Navigation, Clock, Truck, Compass, Gauge, Radio, ChevronRight } from "lucide-react";
+import { MapPin, Navigation, Clock, Truck, Compass, Gauge, Radio, ChevronRight, ExternalLink } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
@@ -416,7 +416,7 @@ export default function AdminFleetMap() {
             {selectedVehicleData.samsaraVehicleId && (
               <div className="mt-4 pt-4 border-t">
                 <p className="text-xs text-muted-foreground mb-2">Samsara Integration</p>
-                <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-4 text-sm flex-wrap">
                   <span className="text-muted-foreground">Vehicle ID:</span>
                   <code className="bg-muted px-2 py-0.5 rounded text-xs" data-testid="text-samsara-id">
                     {selectedVehicleData.samsaraVehicleId}
@@ -427,6 +427,21 @@ export default function AdminFleetMap() {
                       <span>{formatTimeSince(selectedVehicleData.samsaraLastSync)}</span>
                     </>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const samsaraId = selectedVehicleData.samsaraVehicleId;
+                      // Open Samsara cloud dashboard for this vehicle
+                      // On mobile, this may redirect to Samsara Fleet app if installed
+                      const samsaraUrl = `https://cloud.samsara.com/fleet#/vehicles/${samsaraId}/tracking`;
+                      window.open(samsaraUrl, '_blank');
+                    }}
+                    data-testid="button-open-samsara"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-1" />
+                    Open in Samsara
+                  </Button>
                 </div>
               </div>
             )}
