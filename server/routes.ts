@@ -348,6 +348,73 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   });
 
+  // ============ Push Notification Test Routes (Admin Only) ============
+
+  // Send a test push notification (admin only)
+  app.post("/api/admin/push-notifications/test", requireRole("admin"), async (req: any, res) => {
+    try {
+      const { targetUserId, title, body } = req.body;
+
+      if (!targetUserId) {
+        return res.status(400).json({ message: "Target user ID is required" });
+      }
+
+      // Get device tokens for the target user
+      const tokens = await storage.getDeviceTokensByUser(targetUserId);
+      
+      if (tokens.length === 0) {
+        return res.status(404).json({ 
+          message: "No registered device tokens found for this user",
+          tokenCount: 0
+        });
+      }
+
+      // Send test notification
+      await pushNotificationService.sendToUsers([targetUserId], {
+        title: title || "Test Notification",
+        body: body || "This is a test push notification from Kid Commute",
+        data: { type: "test", timestamp: new Date().toISOString() }
+      });
+
+      res.json({ 
+        success: true, 
+        message: `Test notification sent to ${tokens.length} device(s)`,
+        tokenCount: tokens.length 
+      });
+    } catch (error: any) {
+      console.error("Error sending test push notification:", error);
+      res.status(500).json({ message: "Failed to send test notification", error: error.message });
+    }
+  });
+
+  // Get users with registered device tokens (admin only)
+  app.get("/api/admin/push-tokens/users", requireRole("admin"), async (req: any, res) => {
+    try {
+      // Get all users and check which have device tokens
+      const allUsers = await storage.getAllUsers();
+      
+      const usersWithTokens = await Promise.all(
+        allUsers.map(async (user) => {
+          const tokens = await storage.getDeviceTokensByUser(user.id);
+          const activeTokens = tokens.filter(t => t.isActive);
+          return {
+            userId: user.id,
+            userName: `${user.firstName} ${user.lastName}`,
+            userRole: user.role,
+            tokenCount: activeTokens.length,
+            platforms: activeTokens.map(t => t.platform).filter((v, i, a) => a.indexOf(v) === i)
+          };
+        })
+      );
+
+      // Only return users who have at least one token
+      res.json(usersWithTokens.filter(u => u.tokenCount > 0));
+    } catch (error: any) {
+      console.error("Error fetching users with tokens:", error);
+      res.status(500).json({ message: "Failed to fetch users with tokens" });
+    }
+  });
+
   // Get unread counts for current user (with 3-second cache to reduce DB load)
   const getUnreadCountsCached = memoizee(
     async (userId: string, userRole: string) => {

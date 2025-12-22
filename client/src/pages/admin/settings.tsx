@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, Phone, Plus, Trash2, Save, ExternalLink, Activity, GripVertical, Navigation } from "lucide-react";
+import { Settings, Phone, Plus, Trash2, Save, ExternalLink, Activity, GripVertical, Navigation, Bell, Send, Smartphone } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface EmergencyContact {
   id: string;
@@ -24,14 +25,48 @@ interface AdminSetting {
   description?: string;
 }
 
+interface UserWithToken {
+  userId: string;
+  userName: string;
+  userRole: string;
+  tokenCount: number;
+  platforms: string[];
+}
+
 export default function AdminSettings() {
   const { toast } = useToast();
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [testTitle, setTestTitle] = useState("Test Notification");
+  const [testBody, setTestBody] = useState("This is a test push notification from Kid Commute");
 
   const { data: settings, isLoading } = useQuery<AdminSetting[]>({
     queryKey: ["/api/admin/settings"],
+  });
+
+  const { data: usersWithTokens, isLoading: isLoadingTokens } = useQuery<UserWithToken[]>({
+    queryKey: ["/api/admin/push-tokens/users"],
+  });
+
+  const sendTestNotificationMutation = useMutation({
+    mutationFn: async ({ targetUserId, title, body }: { targetUserId: string; title: string; body: string }) => {
+      return await apiRequest("POST", "/api/admin/push-notifications/test", { targetUserId, title, body });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Test notification sent",
+        description: data.message || `Notification sent to ${data.tokenCount} device(s)`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to send notification",
+        description: error.message || "Check if the user has registered devices",
+        variant: "destructive",
+      });
+    },
   });
 
   const saveSettingMutation = useMutation({
@@ -290,6 +325,115 @@ export default function AdminSettings() {
                 </Button>
               </Link>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2 sm:pb-4">
+            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              Push Notification Testing
+            </CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              Test push notifications through Firebase to iOS/Android devices
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isLoadingTokens ? (
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : !usersWithTokens || usersWithTokens.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground">
+                <Smartphone className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No devices registered for push notifications</p>
+                <p className="text-xs mt-1">Users need to log in from the mobile app to register</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-sm">Select User</Label>
+                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                    <SelectTrigger data-testid="select-push-user">
+                      <SelectValue placeholder="Choose a user with registered device..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {usersWithTokens.map((user) => (
+                        <SelectItem 
+                          key={user.userId} 
+                          value={user.userId}
+                          data-testid={`option-user-${user.userId}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{user.userName}</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {user.userRole}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              ({user.tokenCount} device{user.tokenCount > 1 ? "s" : ""})
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Notification Title</Label>
+                  <Input
+                    value={testTitle}
+                    onChange={(e) => setTestTitle(e.target.value)}
+                    placeholder="Enter notification title"
+                    data-testid="input-push-title"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Notification Body</Label>
+                  <Input
+                    value={testBody}
+                    onChange={(e) => setTestBody(e.target.value)}
+                    placeholder="Enter notification message"
+                    data-testid="input-push-body"
+                  />
+                </div>
+
+                <Button
+                  onClick={() => sendTestNotificationMutation.mutate({
+                    targetUserId: selectedUserId,
+                    title: testTitle,
+                    body: testBody
+                  })}
+                  disabled={!selectedUserId || sendTestNotificationMutation.isPending}
+                  className="w-full"
+                  data-testid="button-send-test-push"
+                >
+                  {sendTestNotificationMutation.isPending ? (
+                    <>Sending...</>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Send Test Notification
+                    </>
+                  )}
+                </Button>
+
+                {usersWithTokens.length > 0 && (
+                  <div className="text-xs text-muted-foreground pt-2 border-t">
+                    <p className="font-medium mb-1">Registered devices:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {usersWithTokens.map((user) => (
+                        <Badge key={user.userId} variant="outline" className="text-xs">
+                          {user.userName}: {user.platforms.join(", ") || "unknown"}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
