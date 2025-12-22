@@ -1664,67 +1664,119 @@ export default function AdminRoutes() {
 
       {/* Manage Route Stops Dialog */}
       <Dialog open={isManageStopsDialogOpen} onOpenChange={setIsManageStopsDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
           <DialogHeader>
-            <DialogTitle>Manage Stops for {selectedRoute?.name}</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Manage Stops for {selectedRoute?.name}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
               Add, remove, and reorder stops on this route
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Current Stops */}
             <div>
-              <h3 className="text-sm font-medium mb-3">Current Stops</h3>
+              <h3 className="text-sm font-medium mb-2 sm:mb-3">Current Stops</h3>
               {routeStopsLoading ? (
                 <p className="text-sm text-muted-foreground">Loading stops...</p>
               ) : routeStops && routeStops.length > 0 ? (
                 <div className="space-y-2">
                   {routeStops.map((routeStop, index) => (
                     <Card key={routeStop.routeStopId}>
-                      <CardContent className="flex items-center justify-between p-4">
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-medium">
-                            {index + 1}
+                      <CardContent className="p-3 sm:p-4">
+                        {/* Mobile Layout - Stacked */}
+                        <div className="sm:hidden space-y-2">
+                          <div className="flex items-start gap-3">
+                            <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
+                              {index + 1}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-sm truncate">{routeStop.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{routeStop.address}</p>
+                              {routeStop.scheduledTime && (
+                                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                  <Clock className="h-3 w-3" />
+                                  {routeStop.scheduledTime}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium">{routeStop.name}</p>
-                            <p className="text-sm text-muted-foreground">{routeStop.address}</p>
-                            {routeStop.scheduledTime && (
-                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                <Clock className="h-3 w-3" />
-                                {routeStop.scheduledTime}
-                              </p>
-                            )}
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => handleMoveStopUp(index)}
+                              disabled={index === 0}
+                              data-testid={`button-move-up-${routeStop.routeStopId}`}
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => handleMoveStopDown(index)}
+                              disabled={index === routeStops.length - 1}
+                              data-testid={`button-move-down-${routeStop.routeStopId}`}
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => handleRemoveStopFromRoute(routeStop.routeStopId)}
+                              data-testid={`button-remove-stop-${routeStop.routeStopId}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleMoveStopUp(index)}
-                            disabled={index === 0}
-                            data-testid={`button-move-up-${routeStop.routeStopId}`}
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleMoveStopDown(index)}
-                            disabled={index === routeStops.length - 1}
-                            data-testid={`button-move-down-${routeStop.routeStopId}`}
-                          >
-                            <ArrowDown className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleRemoveStopFromRoute(routeStop.routeStopId)}
-                            data-testid={`button-remove-stop-${routeStop.routeStopId}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                        {/* Desktop Layout - Row */}
+                        <div className="hidden sm:flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <p className="font-medium">{routeStop.name}</p>
+                              <p className="text-sm text-muted-foreground">{routeStop.address}</p>
+                              {routeStop.scheduledTime && (
+                                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                  <Clock className="h-3 w-3" />
+                                  {routeStop.scheduledTime}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleMoveStopUp(index)}
+                              disabled={index === 0}
+                              data-testid={`button-move-up-${routeStop.routeStopId}`}
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleMoveStopDown(index)}
+                              disabled={index === routeStops.length - 1}
+                              data-testid={`button-move-down-${routeStop.routeStopId}`}
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRemoveStopFromRoute(routeStop.routeStopId)}
+                              data-testid={`button-remove-stop-${routeStop.routeStopId}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -1738,23 +1790,42 @@ export default function AdminRoutes() {
             {/* Available Stops */}
             {availableStops.length > 0 && (
               <div>
-                <h3 className="text-sm font-medium mb-3">Add Stops</h3>
+                <h3 className="text-sm font-medium mb-2 sm:mb-3">Add Stops</h3>
                 <div className="space-y-2">
                   {availableStops.map((stop) => (
                     <Card key={stop.id}>
-                      <CardContent className="flex items-center justify-between p-4">
-                        <div>
-                          <p className="font-medium">{stop.name}</p>
-                          <p className="text-sm text-muted-foreground">{stop.address}</p>
+                      <CardContent className="p-3 sm:p-4">
+                        {/* Mobile Layout */}
+                        <div className="sm:hidden space-y-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{stop.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{stop.address}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            onClick={() => handleAddStopToRoute(stop.id)}
+                            data-testid={`button-add-stop-${stop.id}`}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add to Route
+                          </Button>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleAddStopToRoute(stop.id)}
-                          data-testid={`button-add-stop-${stop.id}`}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add
-                        </Button>
+                        {/* Desktop Layout */}
+                        <div className="hidden sm:flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">{stop.name}</p>
+                            <p className="text-sm text-muted-foreground">{stop.address}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleAddStopToRoute(stop.id)}
+                            data-testid={`button-add-stop-${stop.id}`}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}

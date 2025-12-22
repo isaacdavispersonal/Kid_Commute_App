@@ -121,10 +121,10 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Dashboard</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
           Fleet overview and system status
         </p>
       </div>
@@ -185,7 +185,7 @@ export default function AdminDashboard() {
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         <StatCard
           title="Active Vehicles"
           value={stats?.activeVehicles || 0}
@@ -223,53 +223,53 @@ export default function AdminDashboard() {
         </CardHeader>
         <CardContent>
           {attendanceLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-24 w-full" />
+                <Skeleton key={i} className="h-20 sm:h-24 w-full" />
               ))}
             </div>
           ) : attendanceOverview ? (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="p-4 rounded-lg bg-accent/30 hover-elevate" data-testid="attendance-total">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              <div className="p-3 sm:p-4 rounded-lg bg-accent/30 hover-elevate" data-testid="attendance-total">
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm text-muted-foreground">Total Students</p>
-                  <p className="text-3xl font-bold">{attendanceOverview.total}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Total</p>
+                  <p className="text-2xl sm:text-3xl font-bold">{attendanceOverview.total}</p>
                 </div>
               </div>
-              <div className="p-4 rounded-lg bg-yellow-500/10 hover-elevate" data-testid="attendance-pending">
+              <div className="p-3 sm:p-4 rounded-lg bg-yellow-500/10 hover-elevate" data-testid="attendance-pending">
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm text-muted-foreground">Pending</p>
-                  <p className="text-3xl font-bold text-yellow-700 dark:text-yellow-400">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Pending</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-yellow-700 dark:text-yellow-400">
                     {attendanceOverview.pending}
                   </p>
                   {attendanceOverview.total > 0 && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground hidden sm:block">
                       {Math.round((attendanceOverview.pending / attendanceOverview.total) * 100)}%
                     </p>
                   )}
                 </div>
               </div>
-              <div className="p-4 rounded-lg bg-green-500/10 hover-elevate" data-testid="attendance-riding">
+              <div className="p-3 sm:p-4 rounded-lg bg-green-500/10 hover-elevate" data-testid="attendance-riding">
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm text-muted-foreground">Riding</p>
-                  <p className="text-3xl font-bold text-green-700 dark:text-green-400">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Riding</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-green-700 dark:text-green-400">
                     {attendanceOverview.riding}
                   </p>
                   {attendanceOverview.total > 0 && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground hidden sm:block">
                       {Math.round((attendanceOverview.riding / attendanceOverview.total) * 100)}%
                     </p>
                   )}
                 </div>
               </div>
-              <div className="p-4 rounded-lg bg-red-500/10 hover-elevate" data-testid="attendance-absent">
+              <div className="p-3 sm:p-4 rounded-lg bg-red-500/10 hover-elevate" data-testid="attendance-absent">
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm text-muted-foreground">Absent</p>
-                  <p className="text-3xl font-bold text-red-700 dark:text-red-400">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Absent</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-red-700 dark:text-red-400">
                     {attendanceOverview.absent}
                   </p>
                   {attendanceOverview.total > 0 && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground hidden sm:block">
                       {Math.round((attendanceOverview.absent / attendanceOverview.total) * 100)}%
                     </p>
                   )}

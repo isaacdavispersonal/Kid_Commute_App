@@ -384,10 +384,10 @@ export default function AdminUsers() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 px-4 sm:px-0">
       <div>
-        <h1 className="text-2xl font-bold">User Management</h1>
-        <p className="text-muted-foreground text-sm mt-1">
+        <h1 className="text-xl sm:text-2xl font-bold">User Management</h1>
+        <p className="text-muted-foreground text-xs sm:text-sm mt-1">
           Manage user roles and permissions
         </p>
       </div>

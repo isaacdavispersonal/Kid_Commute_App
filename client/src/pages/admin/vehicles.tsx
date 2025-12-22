@@ -257,17 +257,18 @@ export default function AdminVehicles() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Vehicle Management</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Vehicle Management</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Manage and monitor your fleet vehicles
           </p>
         </div>
         <Button
           data-testid="button-add-vehicle"
           onClick={() => setIsDialogOpen(true)}
+          className="w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add Vehicle

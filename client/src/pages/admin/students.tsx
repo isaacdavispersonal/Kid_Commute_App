@@ -1150,49 +1150,70 @@ export default function AdminStudentsPage() {
 
       {/* Assignment Dialog */}
       <Dialog open={!!selectedStudent} onOpenChange={handleCloseDialog}>
-        <DialogContent data-testid="dialog-assign-route" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent data-testid="dialog-assign-route" className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">
               Manage Routes for {selectedStudent?.firstName} {selectedStudent?.lastName}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs sm:text-sm">
               View and manage route assignments. You can assign multiple routes at once.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-6">
-            {/* Current Route Assignments Table */}
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Current Route Assignments</Label>
+          <div className="space-y-4 sm:space-y-6">
+            {/* Current Route Assignments */}
+            <div className="space-y-2 sm:space-y-3">
+              <Label className="text-sm sm:text-base font-semibold">Current Route Assignments</Label>
               <div className="border rounded-lg overflow-hidden">
-                {/* Table Header */}
-                <div className="bg-muted/50 px-4 py-3 border-b">
+                {/* Table Header - Hidden on mobile */}
+                <div className="hidden sm:block bg-muted/50 px-4 py-3 border-b">
                   <div className="flex items-center gap-4">
                     <span className="flex-1 font-medium text-sm">Route Name</span>
-                    <span className="w-20 text-center font-medium text-sm">Type</span>
-                    <span className="w-24 text-center font-medium text-sm">Action</span>
+                    <span className="w-16 text-center font-medium text-sm">Type</span>
+                    <span className="w-20 text-center font-medium text-sm">Action</span>
                   </div>
                 </div>
                 
                 {/* Table Body */}
                 <div className="divide-y">
                   {(!studentRouteAssignments || studentRouteAssignments.length === 0) ? (
-                    <div className="px-4 py-8 text-center text-muted-foreground" data-testid="empty-routes-message">
-                      <RouteIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>Student has no assigned routes</p>
+                    <div className="px-4 py-6 sm:py-8 text-center text-muted-foreground" data-testid="empty-routes-message">
+                      <RouteIcon className="h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Student has no assigned routes</p>
                     </div>
                   ) : (
                     studentRouteAssignments.map((assignment: any) => {
                       const route = routes?.find(r => r.id === assignment.routeId);
                       return (
-                        <div key={assignment.id} className="px-4 py-3 hover:bg-muted/30 transition-colors" data-testid={`row-route-${assignment.id}`}>
-                          <div className="flex items-center gap-4">
+                        <div key={assignment.id} className="px-3 sm:px-4 py-3 hover:bg-muted/30 transition-colors" data-testid={`row-route-${assignment.id}`}>
+                          {/* Mobile Layout - Stacked */}
+                          <div className="sm:hidden space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-sm truncate flex-1" data-testid={`text-route-name-${assignment.id}`}>
+                                {route?.name || "Unknown Route"}
+                              </span>
+                              <RouteTypeBadge routeType={route?.routeType || null} />
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => handleRemoveRoute(assignment.id)}
+                              disabled={removeRouteAssignmentMutation.isPending}
+                              data-testid={`button-remove-route-${assignment.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Remove
+                            </Button>
+                          </div>
+                          {/* Desktop Layout - Row */}
+                          <div className="hidden sm:flex items-center gap-4">
                             <span className="flex-1 truncate" data-testid={`text-route-name-${assignment.id}`}>
                               {route?.name || "Unknown Route"}
                             </span>
-                            <div className="w-20 flex justify-center">
+                            <div className="w-16 flex justify-center">
                               <RouteTypeBadge routeType={route?.routeType || null} />
                             </div>
-                            <div className="w-24 flex justify-center">
+                            <div className="w-20 flex justify-center">
                               <Button
                                 variant="destructive"
                                 size="sm"
@@ -1214,14 +1235,14 @@ export default function AdminStudentsPage() {
             </div>
 
             {/* Add Routes Section */}
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Add Routes</Label>
-              <p className="text-sm text-muted-foreground">
+            <div className="space-y-2 sm:space-y-3">
+              <Label className="text-sm sm:text-base font-semibold">Add Routes</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Select one or more routes to assign to this student.
               </p>
               
               {/* Available Routes List */}
-              <div className="border rounded-lg max-h-60 overflow-y-auto">
+              <div className="border rounded-lg max-h-48 sm:max-h-60 overflow-y-auto">
                 {(() => {
                   const assignedRouteIds = new Set(studentRouteAssignments?.map((a: any) => a.routeId) || []);
                   const availableRoutes = routes?.filter(r => !assignedRouteIds.has(r.id)) || [];
@@ -1240,7 +1261,7 @@ export default function AdminStudentsPage() {
                     return (
                       <div
                         key={route.id}
-                        className={`flex items-center gap-3 px-4 py-3 border-b last:border-b-0 cursor-pointer transition-colors ${
+                        className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 border-b last:border-b-0 cursor-pointer transition-colors ${
                           isSelected ? "bg-primary/10" : "hover:bg-muted/50"
                         }`}
                         onClick={() => toggleRouteSelection(route.id)}
@@ -1255,7 +1276,7 @@ export default function AdminStudentsPage() {
                         >
                           {isSelected && <CheckCircle className="h-3 w-3" />}
                         </div>
-                        <span className="flex-1 truncate">{route.name}</span>
+                        <span className="flex-1 truncate text-sm">{route.name}</span>
                         <RouteTypeBadge routeType={route.routeType || null} />
                       </div>
                     );

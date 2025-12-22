@@ -274,17 +274,17 @@ export default function AdminStopsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Stop Management</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage pickup/dropoff locations. Geofences auto-provision when coordinates are added (100m radius).
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Stop Management</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Manage pickup/dropoff locations with auto-provisioned geofences.
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add-stop">
+            <Button data-testid="button-add-stop" className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Add Stop
             </Button>

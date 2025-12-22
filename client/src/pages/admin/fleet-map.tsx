@@ -189,46 +189,46 @@ export default function AdminFleetMap() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Live Fleet Map</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Live Fleet Map</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
           Real-time location tracking for all vehicles
         </p>
       </div>
 
       {/* Fleet Summary */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3 sm:p-4 pb-1 sm:pb-2">
             <CardTitle className="text-sm font-medium">Total Vehicles</CardTitle>
             <Truck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-4 pt-0">
             <div className="text-2xl font-bold">{vehicles?.length || 0}</div>
             <p className="text-xs text-muted-foreground mt-1">Fleet size</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3 sm:p-4 pb-1 sm:pb-2">
             <CardTitle className="text-sm font-medium">GPS Tracking</CardTitle>
             <Navigation className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-4 pt-0">
             <div className="text-2xl font-bold text-green-600">{trackedVehicles.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Vehicles with live GPS</p>
+            <p className="text-xs text-muted-foreground mt-1">Live tracking</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">No GPS</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3 sm:p-4 pb-1 sm:pb-2">
+            <CardTitle className="text-sm font-medium">Offline</CardTitle>
             <MapPin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-4 pt-0">
             <div className="text-2xl font-bold text-orange-600">{untrackedVehicles.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Vehicles offline</p>
+            <p className="text-xs text-muted-foreground mt-1">No signal</p>
           </CardContent>
         </Card>
       </div>
@@ -344,16 +344,16 @@ export default function AdminFleetMap() {
       {/* Selected Vehicle Details */}
       {selectedVehicleData && selectedVehicleData.currentLat && (
         <Card data-testid="card-vehicle-details">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-4">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Truck className="h-5 w-5" />
-                {getVehicleDisplayName(selectedVehicleData)}
+          <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                <Truck className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="truncate">{getVehicleDisplayName(selectedVehicleData)}</span>
                 {selectedVehicleData.nickname && (
-                  <span className="text-sm font-normal text-muted-foreground">({selectedVehicleData.name})</span>
+                  <span className="text-xs sm:text-sm font-normal text-muted-foreground hidden sm:inline">({selectedVehicleData.name})</span>
                 )}
               </CardTitle>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge status={selectedVehicleData.status as any} />
                 {selectedVehicleData.samsaraVehicleId && (
                   <Badge variant="outline" className="text-xs">
@@ -364,8 +364,8 @@ export default function AdminFleetMap() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
