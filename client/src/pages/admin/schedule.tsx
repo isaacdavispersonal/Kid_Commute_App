@@ -86,6 +86,24 @@ function getDriverDisplayName(driver: Driver | undefined): string {
   }
 }
 
+function getDriverInitials(driver: Driver | undefined): string {
+  if (!driver) return "??";
+  
+  const firstName = driver.firstName?.trim();
+  const lastName = driver.lastName?.trim();
+  
+  if (firstName && lastName) {
+    return `${firstName[0]}${lastName[0]}`.toUpperCase();
+  } else if (firstName) {
+    return firstName.slice(0, 2).toUpperCase();
+  } else if (lastName) {
+    return lastName.slice(0, 2).toUpperCase();
+  } else if (driver.email) {
+    return driver.email.slice(0, 2).toUpperCase();
+  }
+  return "??";
+}
+
 interface RouteType {
   id: string;
   name: string;
@@ -673,6 +691,16 @@ export default function AdminSchedule() {
     );
   }
 
+  // Calculate monthly totals
+  const monthlyTotals = (allShifts || []).reduce(
+    (acc, shift) => {
+      acc[shift.shiftType] = (acc[shift.shiftType] || 0) + 1;
+      acc.total = (acc.total || 0) + 1;
+      return acc;
+    },
+    { MORNING: 0, AFTERNOON: 0, EXTRA: 0, total: 0 } as Record<string, number>
+  );
+
   return (
     <div className="space-y-4 sm:space-y-6 overflow-x-hidden px-4 sm:px-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
@@ -681,7 +709,7 @@ export default function AdminSchedule() {
             Shift Schedule
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Manage driver shifts - tap any day to view details
+            Manage driver shifts — tap any day to view details
           </p>
         </div>
         <Button
@@ -693,6 +721,25 @@ export default function AdminSchedule() {
           <Edit className="h-4 w-4" />
           <span className="text-xs sm:text-sm">{bulkEditMode ? "Exit Bulk" : "Bulk Edit"}</span>
         </Button>
+      </div>
+
+      {/* Stats Bar - Monthly Totals */}
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
+          <div className="w-2 h-2 rounded-full bg-blue-500" />
+          <span className="text-xs sm:text-sm font-medium">AM shifts:</span>
+          <span className="text-sm sm:text-base font-bold">{monthlyTotals.MORNING}</span>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-orange-500/10 border border-orange-500/20">
+          <div className="w-2 h-2 rounded-full bg-orange-500" />
+          <span className="text-xs sm:text-sm font-medium">PM shifts:</span>
+          <span className="text-sm sm:text-base font-bold">{monthlyTotals.AFTERNOON}</span>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-500/10 border border-purple-500/20">
+          <div className="w-2 h-2 rounded-full bg-purple-500" />
+          <span className="text-xs sm:text-sm font-medium">Extra shifts:</span>
+          <span className="text-sm sm:text-base font-bold">{monthlyTotals.EXTRA}</span>
+        </div>
       </div>
 
       <Card className="overflow-hidden">
@@ -712,19 +759,19 @@ export default function AdminSchedule() {
               </Button>
             </div>
           </div>
-          {/* Mobile legend for shift type colors */}
-          <div className="flex items-center justify-center gap-3 mt-2 sm:hidden">
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-blue-500" />
-              <span className="text-[10px] text-muted-foreground">AM</span>
+          {/* Legend for shift type colors */}
+          <div className="flex items-center justify-center gap-4 mt-2">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+              <span className="text-xs text-muted-foreground">AM</span>
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-orange-500" />
-              <span className="text-[10px] text-muted-foreground">PM</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />
+              <span className="text-xs text-muted-foreground">PM</span>
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-purple-500" />
-              <span className="text-[10px] text-muted-foreground">Extra</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+              <span className="text-xs text-muted-foreground">Extra</span>
             </div>
           </div>
         </CardHeader>
@@ -786,7 +833,7 @@ export default function AdminSchedule() {
 
                         {summary.total > 0 ? (
                           <div
-                            className={`space-y-0.5 sm:space-y-1.5 p-1 sm:p-2 rounded-md bg-accent/30 ${!bulkEditMode ? "cursor-pointer hover-elevate" : ""}`}
+                            className={`space-y-1 ${!bulkEditMode ? "cursor-pointer" : ""}`}
                             onClick={(e) => {
                               if (!bulkEditMode) {
                                 e.stopPropagation();
@@ -795,56 +842,72 @@ export default function AdminSchedule() {
                             }}
                             data-testid={`summary-${dateStr}`}
                           >
-                            {/* Mobile: Compact summary with color coding */}
-                            <div className="sm:hidden">
-                              <div className="flex items-center justify-center gap-0.5">
-                                {summary.MORNING > 0 && (
-                                  <div className="w-2 h-2 rounded-full bg-blue-500" title="Morning" />
-                                )}
-                                {summary.AFTERNOON > 0 && (
-                                  <div className="w-2 h-2 rounded-full bg-orange-500" title="Afternoon" />
-                                )}
-                                {summary.EXTRA > 0 && (
-                                  <div className="w-2 h-2 rounded-full bg-purple-500" title="Extra" />
-                                )}
-                              </div>
-                              <div className="text-[10px] font-medium text-center mt-0.5">{summary.total}</div>
+                            {/* Shift type badges */}
+                            <div className="space-y-0.5">
+                              {summary.MORNING > 0 && (
+                                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] sm:text-xs bg-blue-500/15 text-blue-700 dark:text-blue-400">
+                                  <span className="font-medium">AM:</span>
+                                  <span>+{summary.MORNING}</span>
+                                </div>
+                              )}
+                              {summary.AFTERNOON > 0 && (
+                                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] sm:text-xs bg-orange-500/15 text-orange-700 dark:text-orange-400">
+                                  <span className="font-medium">PM:</span>
+                                  <span>+{summary.AFTERNOON}</span>
+                                </div>
+                              )}
+                              {summary.EXTRA > 0 && (
+                                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] sm:text-xs bg-purple-500/15 text-purple-700 dark:text-purple-400">
+                                  <span className="font-medium hidden sm:inline">Extra:</span>
+                                  <span className="font-medium sm:hidden">Ex:</span>
+                                  <span>+{summary.EXTRA}</span>
+                                </div>
+                              )}
                             </div>
                             
-                            {/* Desktop: Detailed breakdown */}
-                            <div className="hidden sm:block">
-                              <div className="text-xs font-medium text-muted-foreground mb-1">
-                                {summary.total} {summary.total === 1 ? 'shift' : 'shifts'}
-                              </div>
-                              
-                              {summary.MORNING > 0 && (
-                                <div className="flex items-center gap-1.5 text-xs">
-                                  <SHIFT_TYPE_LABELS.MORNING.Icon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                                  <span className="text-muted-foreground">Morning:</span>
-                                  <span className="font-medium">{summary.MORNING}</span>
-                                </div>
-                              )}
-                              
-                              {summary.AFTERNOON > 0 && (
-                                <div className="flex items-center gap-1.5 text-xs">
-                                  <SHIFT_TYPE_LABELS.AFTERNOON.Icon className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
-                                  <span className="text-muted-foreground">Afternoon:</span>
-                                  <span className="font-medium">{summary.AFTERNOON}</span>
-                                </div>
-                              )}
-                              
-                              {summary.EXTRA > 0 && (
-                                <div className="flex items-center gap-1.5 text-xs">
-                                  <SHIFT_TYPE_LABELS.EXTRA.Icon className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                                  <span className="text-muted-foreground">Extra:</span>
-                                  <span className="font-medium">{summary.EXTRA}</span>
-                                </div>
-                              )}
+                            {/* Driver initials on desktop */}
+                            <div className="hidden sm:flex flex-wrap gap-0.5 mt-1">
+                              {(() => {
+                                const dayShifts = allShifts?.filter(s => s.date === dateStr) || [];
+                                const uniqueDriverIds = Array.from(new Set(dayShifts.map(s => s.driverId)));
+                                const displayDrivers = uniqueDriverIds.slice(0, 3);
+                                const remainingCount = uniqueDriverIds.length - 3;
+                                
+                                return (
+                                  <>
+                                    {displayDrivers.map(driverId => {
+                                      const driver = drivers.find(d => d.id === driverId);
+                                      const driverShifts = dayShifts.filter(s => s.driverId === driverId);
+                                      const shiftTypes = Array.from(new Set(driverShifts.map(s => s.shiftType)));
+                                      
+                                      return (
+                                        <div 
+                                          key={driverId}
+                                          className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted/50 text-[9px] font-medium"
+                                          title={getDriverDisplayName(driver)}
+                                        >
+                                          <div className="flex gap-px">
+                                            {shiftTypes.includes("MORNING") && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                                            {shiftTypes.includes("AFTERNOON") && <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
+                                            {shiftTypes.includes("EXTRA") && <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />}
+                                          </div>
+                                          <span>{getDriverInitials(driver)}</span>
+                                        </div>
+                                      );
+                                    })}
+                                    {remainingCount > 0 && (
+                                      <div className="px-1 py-0.5 rounded bg-muted/50 text-[9px] text-muted-foreground">
+                                        +{remainingCount}
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
                         ) : (
-                          <div className="text-[10px] sm:text-xs text-muted-foreground text-center py-1 sm:py-4">
-                            <span className="hidden sm:inline">No shifts</span>
+                          <div className="text-[10px] sm:text-xs text-muted-foreground text-center py-1 sm:py-2">
+                            <span className="hidden sm:inline">—</span>
                             <span className="sm:hidden">-</span>
                           </div>
                         )}
@@ -858,83 +921,81 @@ export default function AdminSchedule() {
         </CardContent>
       </Card>
 
-      {/* Day Details Dialog - Mobile optimized */}
+      {/* Day Details Dialog - Redesigned to match Figma */}
       <Dialog open={!!viewDayDialog} onOpenChange={(open) => !open && setViewDayDialog(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] w-[calc(100vw-32px)] sm:w-auto p-4 sm:p-6">
-          <DialogHeader className="pb-2">
-            <DialogTitle className="text-base sm:text-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] w-[calc(100vw-32px)] sm:w-auto p-0">
+          {/* Header */}
+          <div className="px-4 py-3 border-b bg-muted/30">
+            <DialogTitle className="text-lg font-semibold">
               {viewDayDialog && new Date(viewDayDialog + 'T00:00:00').toLocaleDateString('en-US', { 
-                weekday: 'short', 
+                weekday: 'long',
                 month: 'short', 
-                day: 'numeric' 
+                day: 'numeric',
+                year: 'numeric'
               })}
             </DialogTitle>
-          </DialogHeader>
+          </div>
           
-          <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-6 pr-4">
+          <ScrollArea className="max-h-[65vh]">
+            <div className="p-4 space-y-4">
               {viewDayDialog && (
                 <>
                   {(['MORNING', 'AFTERNOON', 'EXTRA'] as const).map((shiftType) => {
                     const driverGroups = getShiftsByTypeForDate(viewDayDialog, shiftType);
-                    
-                    if (driverGroups.length === 0) return null;
-                    
-                    const ShiftIcon = SHIFT_TYPE_LABELS[shiftType].Icon;
+                    const shiftLabel = shiftType === 'MORNING' ? 'AM' : shiftType === 'AFTERNOON' ? 'PM' : 'Extra';
+                    const dotColor = shiftType === 'MORNING' ? 'bg-blue-500' : shiftType === 'AFTERNOON' ? 'bg-orange-500' : 'bg-purple-500';
+                    const bgColor = shiftType === 'MORNING' ? 'bg-blue-500/10' : shiftType === 'AFTERNOON' ? 'bg-orange-500/10' : 'bg-purple-500/10';
                     
                     return (
-                      <div key={shiftType} className="space-y-3">
-                        <div className="flex items-center gap-2 pb-2 border-b">
-                          <ShiftIcon className="h-5 w-5" />
-                          <h3 className="font-semibold">{SHIFT_TYPE_LABELS[shiftType].label} Shifts</h3>
-                          <Badge variant="secondary" className="ml-auto">
-                            {driverGroups.length} {driverGroups.length === 1 ? 'driver' : 'drivers'}
-                          </Badge>
+                      <div key={shiftType} className={`rounded-lg p-3 ${bgColor}`}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className={`w-2.5 h-2.5 rounded-full ${dotColor}`} />
+                          <span className="font-semibold text-sm">{shiftLabel} Shift</span>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            ({driverGroups.length} {driverGroups.length === 1 ? 'driver' : 'drivers'})
+                          </span>
                         </div>
                         
-                        <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2">
-                          {driverGroups.map((group) => (
-                            <div
-                              key={group.driverId}
-                              className="p-3 rounded-md border bg-card space-y-3"
-                            >
-                              {/* Driver Header */}
-                              <div className="flex items-center gap-2 pb-2 border-b">
-                                <User className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                                <span className="font-medium text-sm flex-1">{group.driverName}</span>
-                                {group.shifts.length > 1 && (
-                                  <Badge variant="secondary" className="text-[10px]">
-                                    {group.shifts.length} shifts
-                                  </Badge>
-                                )}
-                              </div>
-                              
-                              {/* All shifts for this driver */}
-                              <div className="space-y-2">
+                        {driverGroups.length === 0 ? (
+                          <p className="text-sm text-muted-foreground italic">No drivers scheduled</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {driverGroups.map((group) => (
+                              <div key={group.driverId} className="space-y-2">
+                                {/* Driver name header */}
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-2 h-2 rounded-full ${dotColor}`} />
+                                  <span className="text-sm font-medium">{group.driverName}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {getDriverInitials(drivers.find(d => d.id === group.driverId))}
+                                  </span>
+                                </div>
+                                
+                                {/* Each shift with full details */}
                                 {group.shifts.map((shift) => (
                                   <div 
                                     key={shift.id}
-                                    className="text-xs space-y-1.5 p-2 rounded bg-accent/30"
+                                    className="ml-4 p-2.5 rounded-md bg-background/60 space-y-2"
                                   >
                                     <div className="flex items-start justify-between gap-2">
-                                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                                        <Clock className="h-3 w-3" />
-                                        <span className="text-foreground font-medium">{shift.plannedStart} - {shift.plannedEnd}</span>
+                                      <div className="flex items-center gap-1.5 text-sm">
+                                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <span className="font-medium">{shift.plannedStart} - {shift.plannedEnd}</span>
                                       </div>
-                                      <div className="flex items-center gap-1 flex-shrink-0">
+                                      <div className="flex items-center gap-0.5 flex-shrink-0">
                                         <Button
-                                          size="sm"
+                                          size="icon"
                                           variant="ghost"
-                                          className="h-6 w-6 p-0"
+                                          className="h-6 w-6"
                                           onClick={() => handleEditShift(shift)}
                                           data-testid={`button-edit-${shift.id}`}
                                         >
                                           <Edit className="h-3 w-3" />
                                         </Button>
                                         <Button
-                                          size="sm"
+                                          size="icon"
                                           variant="ghost"
-                                          className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                          className="h-6 w-6 text-destructive hover:text-destructive"
                                           onClick={() => setDeleteDialog(shift)}
                                           data-testid={`button-delete-${shift.id}`}
                                         >
@@ -943,16 +1004,17 @@ export default function AdminSchedule() {
                                       </div>
                                     </div>
                                     
-                                    <div className="text-muted-foreground">
-                                      Route: <span className="text-foreground">{getRouteName(shift.routeId)}</span>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                      <div className="text-muted-foreground">
+                                        Route: <span className="text-foreground">{getRouteName(shift.routeId)}</span>
+                                      </div>
+                                      <div className="text-muted-foreground">
+                                        Vehicle: <span className="text-foreground">{getVehicleName(shift.vehicleId)}</span>
+                                      </div>
                                     </div>
                                     
-                                    <div className="text-muted-foreground">
-                                      Vehicle: <span className="text-foreground">{getVehicleName(shift.vehicleId)}</span>
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                      Status:
+                                    <div className="flex items-center gap-1.5 text-xs">
+                                      <span className="text-muted-foreground">Status:</span>
                                       <Badge 
                                         variant="secondary"
                                         className={`text-[10px] ${STATUS_LABELS[shift.status].color}`}
@@ -962,16 +1024,16 @@ export default function AdminSchedule() {
                                     </div>
                                     
                                     {shift.notes && (
-                                      <div className="pt-1.5 border-t text-muted-foreground">
+                                      <div className="pt-1.5 border-t text-xs text-muted-foreground">
                                         Notes: <span className="text-foreground italic">{shift.notes}</span>
                                       </div>
                                     )}
                                   </div>
                                 ))}
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -979,6 +1041,23 @@ export default function AdminSchedule() {
               )}
             </div>
           </ScrollArea>
+          
+          {/* Footer with Add button */}
+          <div className="px-4 py-3 border-t">
+            <Button
+              className="w-full gap-2"
+              onClick={() => {
+                if (viewDayDialog) {
+                  handleAddShift(viewDayDialog);
+                  setViewDayDialog(null);
+                }
+              }}
+              data-testid="button-add-shift-dialog"
+            >
+              <Plus className="h-4 w-4" />
+              Add Shift
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
