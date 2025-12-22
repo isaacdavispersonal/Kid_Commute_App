@@ -51,7 +51,7 @@ interface ClockEvent {
   shiftId: string | null;
   type: "IN" | "OUT";
   timestamp: string;
-  source: "USER" | "AUTO" | "ADMIN_EDIT";
+  source: "USER" | "AUTO" | "ADMIN_EDIT" | "AUTO_CLOCKOUT";
   notes: string | null;
   isResolved?: boolean;
   resolved?: boolean;
@@ -586,6 +586,11 @@ export default function TimeManagementSection() {
                                               Auto
                                             </Badge>
                                           )}
+                                          {event.source === "AUTO_CLOCKOUT" && (
+                                            <Badge variant="destructive" className="text-[10px]">
+                                              Max Duration
+                                            </Badge>
+                                          )}
                                           {event.source === "ADMIN_EDIT" && (
                                             <Badge variant="outline" className="text-[10px]">
                                               Edited
@@ -700,15 +705,16 @@ export default function TimeManagementSection() {
                             Clock {event.type === "IN" ? "In" : "Out"} Event
                           </CardTitle>
                           <Badge 
-                            variant="secondary" 
+                            variant={event.source === "AUTO_CLOCKOUT" ? "destructive" : "secondary"}
                             className={
                               event.source === "AUTO" ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" :
                               event.source === "ADMIN_EDIT" ? "bg-blue-500/10 text-blue-700 dark:text-blue-400" :
+                              event.source === "AUTO_CLOCKOUT" ? "" :
                               ""
                             }
                             data-testid={`badge-source-${event.id}`}
                           >
-                            {event.source}
+                            {event.source === "AUTO_CLOCKOUT" ? "Max Duration" : event.source}
                           </Badge>
                         </div>
                         <Button

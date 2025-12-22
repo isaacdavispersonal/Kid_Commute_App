@@ -139,10 +139,21 @@ app.use((req, res, next) => {
       const graceSetting = await storage.getAdminSetting("auto_clockout_grace_hours");
       const graceHours = graceSetting ? parseFloat(graceSetting.settingValue) : 1;
       
-      const result = await storage.autoClockoutOrphanedShifts(graceHours);
+      // Get max shift duration from admin settings, default to 10 hours
+      const maxShiftSetting = await storage.getAdminSetting("max_shift_duration_hours");
+      const maxShiftHours = maxShiftSetting ? parseFloat(maxShiftSetting.settingValue) : 10;
+      
+      const result = await storage.autoClockoutOrphanedShifts(graceHours, maxShiftHours);
       
       if (result.processed > 0) {
-        log(`Auto-clockout: Processed ${result.processed} orphaned shifts`);
+        log(`Auto-clockout: Processed ${result.processed} shifts (${result.clockedOut.length} grace period, ${result.maxDurationClockouts.length} max duration exceeded)`);
+      }
+      
+      // Log details for max duration clockouts (these are important safeguard events)
+      if (result.maxDurationClockouts.length > 0) {
+        for (const event of result.maxDurationClockouts) {
+          log(`[SAFEGUARD] Driver ${event.driverId} auto-clocked out after exceeding ${maxShiftHours}h maximum shift duration`);
+        }
       }
     } catch (error) {
       console.error("Error running auto-clockout:", error);

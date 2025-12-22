@@ -230,7 +230,7 @@ export interface IStorage {
   getUnresolvedClockEvents(): Promise<ClockEvent[]>;
   resolveClockEvent(id: string, notes?: string): Promise<ClockEvent>;
   getActiveClockIn(driverId: string): Promise<{clockEvent: ClockEvent, shift: Shift} | null>;
-  autoClockoutOrphanedShifts(graceHours?: number): Promise<{processed: number, clockedOut: ClockEvent[]}>;
+  autoClockoutOrphanedShifts(graceHours?: number, maxShiftHours?: number): Promise<{processed: number, clockedOut: ClockEvent[], maxDurationClockouts: ClockEvent[]}>;
   getActiveBreak(driverId: string): Promise<ClockEvent | null>;
   startBreak(driverId: string, shiftId: string | null, notes?: string): Promise<ClockEvent>;
   endBreak(driverId: string, notes?: string): Promise<ClockEvent>;
@@ -2032,7 +2032,7 @@ export class DatabaseStorage implements IStorage {
     return { clockEvent: activeIn, shift: null as any };
   }
 
-  async autoClockoutOrphanedShifts(graceHours: number = 2): Promise<{processed: number, clockedOut: ClockEvent[]}> {
+  async autoClockoutOrphanedShifts(graceHours: number = 2, maxShiftHours: number = 10): Promise<{processed: number, clockedOut: ClockEvent[], maxDurationClockouts: ClockEvent[]}> {
     // Get all shifts from the past week that might have orphaned clock-ins
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -2045,6 +2045,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(shifts.date, shifts.plannedStart);
 
     const clockedOutEvents: ClockEvent[] = [];
+    const maxDurationClockouts: ClockEvent[] = [];
     const now = new Date();
 
     for (const shift of allShifts) {
@@ -2056,6 +2057,34 @@ export class DatabaseStorage implements IStorage {
       // Check if the last event is an IN (orphaned)
       const lastEvent = events[events.length - 1];
       if (lastEvent.type !== "IN") continue;
+
+      const clockInTime = new Date(lastEvent.timestamp);
+      const hoursSinceClockIn = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
+      
+      // SAFEGUARD: Check if max shift duration exceeded (10 hours default)
+      if (hoursSinceClockIn >= maxShiftHours) {
+        // Calculate clock-out time at exactly max hours after clock-in
+        const maxDurationClockoutTime = new Date(clockInTime.getTime() + maxShiftHours * 60 * 60 * 1000);
+        
+        const autoClockOut: InsertClockEvent = {
+          driverId: shift.driverId,
+          shiftId: shift.id,
+          type: "OUT",
+          timestamp: maxDurationClockoutTime,
+          source: "AUTO_CLOCKOUT",
+          notes: `Auto-clocked out: Maximum shift duration of ${maxShiftHours} hours exceeded. Original clock-in: ${clockInTime.toLocaleString()}. Please review and adjust if needed.`,
+        };
+
+        const clockOutEvent = await this.createClockEvent(autoClockOut);
+        maxDurationClockouts.push(clockOutEvent);
+
+        // Update shift status to COMPLETED if it's still ACTIVE
+        if (shift.status === "ACTIVE") {
+          await this.updateShift(shift.id, { status: "COMPLETED" });
+        }
+        
+        continue; // Don't also check grace period for this shift
+      }
 
       // Calculate shift end time + grace period
       const shiftEndDateTime = new Date(`${shift.date}T${shift.plannedEnd}`);
@@ -2078,7 +2107,7 @@ export class DatabaseStorage implements IStorage {
         type: "OUT",
         timestamp: shiftEndDateTime,
         source: "AUTO",
-        notes: `Auto-clocked out after ${graceHours}h grace period. Original clock-in: ${new Date(lastEvent.timestamp).toLocaleString()}`,
+        notes: `Auto-clocked out after ${graceHours}h grace period. Original clock-in: ${clockInTime.toLocaleString()}`,
       };
 
       const clockOutEvent = await this.createClockEvent(autoClockOut);
@@ -2091,8 +2120,9 @@ export class DatabaseStorage implements IStorage {
     }
 
     return {
-      processed: clockedOutEvents.length,
+      processed: clockedOutEvents.length + maxDurationClockouts.length,
       clockedOut: clockedOutEvents,
+      maxDurationClockouts: maxDurationClockouts,
     };
   }
 

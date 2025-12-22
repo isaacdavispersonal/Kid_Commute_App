@@ -403,6 +403,9 @@ export default function DriverTimeHistory() {
                               {event.source === "AUTO" && (
                                 <Badge variant="outline" className="text-xs">Auto</Badge>
                               )}
+                              {event.source === "AUTO_CLOCKOUT" && (
+                                <Badge variant="destructive" className="text-xs">Max Duration</Badge>
+                              )}
                             </div>
                             <Button
                               size="icon"
