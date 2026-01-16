@@ -554,17 +554,32 @@ router.post("/forgot-password", async (req, res) => {
     // Store the token
     await storage.createPasswordResetToken(user.id, token, expiresAt);
 
-    // In a real app, you would send an email/SMS here
-    // For now, log the token (in development) and return a message
-    console.log(`[Password Reset] Token generated for user ${user.id.substring(0, 8)}... Token: ${token}`);
+    // Build the reset URL
+    const baseUrl = process.env.APP_URL || `https://${req.get("host")}`;
+    const resetUrl = `${baseUrl}/reset-password?token=${token}`;
     
-    // For development/testing, include the token in response
-    // In production, you would send via email/SMS and NOT include in response
+    console.log(`[Password Reset] Token generated for user ${user.id.substring(0, 8)}...`);
+    
+    // Send password reset email if user has an email address
+    if (user.email) {
+      const { sendPasswordResetEmail } = await import("../services/email");
+      const emailResult = await sendPasswordResetEmail(user.email, token, resetUrl);
+      
+      if (emailResult.success) {
+        console.log(`[Password Reset] Email sent to ${user.email.substring(0, 3)}***`);
+      } else {
+        console.log(`[Password Reset] Email failed: ${emailResult.error}`);
+      }
+    } else {
+      console.log(`[Password Reset] User has no email address`);
+    }
+    
+    // In development, also include the token in response for testing
     const isDev = process.env.NODE_ENV !== "production";
     
     res.json({ 
       message: "If an account exists with this email/phone, you will receive reset instructions.",
-      ...(isDev && { resetToken: token, resetUrl: `/reset-password?token=${token}` }),
+      ...(isDev && { resetToken: token, resetUrl }),
     });
   } catch (error) {
     console.error("[Password Reset] Error:", error);
