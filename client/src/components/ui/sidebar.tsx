@@ -135,12 +135,13 @@ function SidebarProvider({
   React.useEffect(() => {
     if (!isMobile) return
 
-    // Thresholds for swipe detection - tuned for comfortable anywhere-swipe
-    const MIN_SWIPE_DISTANCE = 80 // minimum px to consider a swipe (slightly longer for anywhere swipe)
+    // Thresholds for swipe detection - tuned for comfortable left-side-only swipe
+    const MIN_SWIPE_DISTANCE = 80 // minimum px to consider a swipe
     const MAX_VERTICAL_DISTANCE = 50 // max vertical movement - stricter to avoid conflicts with scroll
     const MIN_VELOCITY = 0.4 // minimum px/ms velocity for quick swipes
     const QUICK_SWIPE_DISTANCE = 50 // shorter distance allowed for fast swipes
     const HORIZONTAL_RATIO = 2.5 // horizontal movement must be this many times greater than vertical
+    const LEFT_EDGE_ZONE = 0.5 // swipe-to-open only works from left 50% of screen
 
     const handleTouchStart = (e: TouchEvent) => {
       // Don't track swipes when dialogs/modals are open
@@ -149,6 +150,15 @@ function SidebarProvider({
         return;
       }
       const touch = e.touches[0]
+      const screenWidth = window.innerWidth
+      
+      // For opening sidebar: only track swipes starting on left ~50% of screen
+      // For closing sidebar: allow swipes from anywhere (sidebar is open, so user might be on the sidebar)
+      if (!openMobile && touch.clientX > screenWidth * LEFT_EDGE_ZONE) {
+        swipeRef.current.isTracking = false;
+        return;
+      }
+      
       swipeRef.current.startX = touch.clientX
       swipeRef.current.startY = touch.clientY
       swipeRef.current.startTime = Date.now()
@@ -185,7 +195,7 @@ function SidebarProvider({
 
       if (!isHorizontalSwipe) return
 
-      // Swipe right to open (when sidebar is closed) - works from anywhere on screen
+      // Swipe right to open (when sidebar is closed) - only works from left 50% of screen
       if (!openMobile && deltaX > 0) {
         const isLongSwipe = deltaX > MIN_SWIPE_DISTANCE
         const isQuickSwipe = velocity > MIN_VELOCITY && deltaX > QUICK_SWIPE_DISTANCE
