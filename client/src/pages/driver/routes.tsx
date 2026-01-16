@@ -108,7 +108,7 @@ export default function DriverRoutes() {
 
   return (
     <PullToRefresh queryKeys={[["/api/driver/today-route"], ["/api/driver/shifts/today"], ["/api/driver/route-progress"]]}>
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden w-full max-w-full">
       <div>
         <h1 className="text-2xl font-semibold mb-1">My Routes</h1>
         <p className="text-sm text-muted-foreground">
@@ -125,27 +125,29 @@ export default function DriverRoutes() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-start justify-between gap-2 flex-wrap">
-              <div>
-                <h3 className="text-lg font-semibold mb-1">{todayRoute.routeName}</h3>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    {todayRoute.startTime} - {todayRoute.endTime}
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold mb-1 break-words">{todayRoute.routeName}</h3>
+                <div className="flex items-center gap-2 sm:gap-4 text-sm text-muted-foreground flex-wrap min-w-0">
+                  <span className="flex items-center gap-1 min-w-0">
+                    <Clock className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap">{todayRoute.startTime} - {todayRoute.endTime}</span>
                   </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="h-4 w-4" />
-                    {todayRoute.stops?.length || 0} stops
+                  <span className="flex items-center gap-1 min-w-0">
+                    <Users className="h-4 w-4 flex-shrink-0" />
+                    <span>{todayRoute.stops?.length || 0} stops</span>
                   </span>
                 </div>
               </div>
-              <StatusBadge status="active" />
+              <div className="flex-shrink-0">
+                <StatusBadge status="active" />
+              </div>
             </div>
 
             <div className="space-y-3">
-              <h4 className="font-semibold text-sm flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Route Stops
+              <h4 className="font-semibold text-sm flex items-center gap-2 min-w-0">
+                <MapPin className="h-4 w-4 flex-shrink-0" />
+                <span>Route Stops</span>
               </h4>
               
               {todayRoute.stops && todayRoute.stops.length > 0 ? (
@@ -181,21 +183,21 @@ export default function DriverRoutes() {
                             <span className="text-sm font-bold">{index + 1}</span>
                           )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 flex-wrap mb-1">
-                            <div className="flex items-center gap-2">
-                              <h5 className="font-semibold text-base">{stop.name}</h5>
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <div className="flex items-start justify-between gap-2 mb-1 min-w-0">
+                            <div className="flex items-start gap-2 min-w-0 flex-1 flex-wrap">
+                              <h5 className="font-semibold text-sm sm:text-base break-words min-w-0">{stop.name}</h5>
                               {status !== "PENDING" && (
-                                <Badge variant={status === "COMPLETED" ? "default" : "secondary"} className="text-xs">
+                                <Badge variant={status === "COMPLETED" ? "default" : "secondary"} className="text-xs flex-shrink-0">
                                   {status === "COMPLETED" ? "Completed" : "Skipped"}
                                 </Badge>
                               )}
                             </div>
-                            <span className="text-sm font-medium text-primary whitespace-nowrap">
+                            <span className="text-xs sm:text-sm font-medium text-primary whitespace-nowrap flex-shrink-0">
                               {stop.scheduledTime}
                             </span>
                           </div>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
                             {stop.address}
                           </p>
                           {stop.notes && (
@@ -205,11 +207,11 @@ export default function DriverRoutes() {
                           )}
                           
                           {shiftId && progress && (
-                            <div className="flex gap-2 mt-3">
+                            <div className="flex gap-2 mt-3 flex-wrap">
                               {status === "PENDING" && (
                                 <>
                                   <Button
-                                    size="touch"
+                                    size="default"
                                     onClick={() => updateStopMutation.mutate({ 
                                       routeStopId: progress.routeStopId, 
                                       status: "COMPLETED" 
@@ -221,7 +223,7 @@ export default function DriverRoutes() {
                                     Complete
                                   </Button>
                                   <Button
-                                    size="touch"
+                                    size="default"
                                     variant="outline"
                                     onClick={() => updateStopMutation.mutate({ 
                                       routeStopId: progress.routeStopId, 
@@ -237,7 +239,7 @@ export default function DriverRoutes() {
                               )}
                               {status !== "PENDING" && (
                                 <Button
-                                  size="touch"
+                                  size="default"
                                   variant="ghost"
                                   onClick={() => updateStopMutation.mutate({ 
                                     routeStopId: progress.routeStopId, 

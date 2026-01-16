@@ -31,7 +31,6 @@ import {
   Bus,
   CheckCircle2,
   ChevronDown,
-  ChevronUp,
   Clock,
   MapPin,
   User,
@@ -343,23 +342,23 @@ export default function DriverRoutePage() {
   };
 
   return (
-    <div className="space-y-6 p-4">
+    <div className="space-y-6 p-4 overflow-x-hidden w-full max-w-full">
       {/* Route Header */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <CardTitle className="text-2xl" data-testid="title-route-name">
+          <div className="flex items-start justify-between gap-3 min-w-0">
+            <div className="space-y-1 flex-1 min-w-0">
+              <CardTitle className="text-xl sm:text-2xl break-words" data-testid="title-route-name">
                 {route.name}
               </CardTitle>
-              <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                <div className="flex items-center gap-1">
-                  <Bus className="h-4 w-4" />
-                  {vehicle?.name || "No Vehicle"} ({vehicle?.plateNumber || "N/A"})
+              <div className="flex items-center gap-2 sm:gap-4 text-sm text-muted-foreground flex-wrap min-w-0">
+                <div className="flex items-center gap-1 min-w-0">
+                  <Bus className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{vehicle?.name || "No Vehicle"} ({vehicle?.plateNumber || "N/A"})</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  {shift.plannedStart} - {shift.plannedEnd}
+                <div className="flex items-center gap-1 min-w-0">
+                  <Clock className="h-4 w-4 flex-shrink-0" />
+                  <span className="whitespace-nowrap">{shift.plannedStart} - {shift.plannedEnd}</span>
                 </div>
                 <Badge variant="default" data-testid="badge-shift-type">
                   {shift.shiftType}
@@ -372,11 +371,11 @@ export default function DriverRoutePage() {
                 )}
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold" data-testid="text-progress-count">
+            <div className="text-right flex-shrink-0">
+              <div className="text-xl sm:text-2xl font-bold" data-testid="text-progress-count">
                 {progress.completedStops}/{progress.totalStops}
               </div>
-              <div className="text-sm text-muted-foreground">Stops Complete</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Stops Complete</div>
             </div>
           </div>
         </CardHeader>
@@ -387,8 +386,8 @@ export default function DriverRoutePage() {
         <Alert className="border-destructive" data-testid="alert-inspection-required">
           <AlertCircle className="h-4 w-4 text-destructive" />
           <AlertDescription>
-            <div className="flex items-center justify-between gap-4">
-              <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <h3 className="font-semibold">Vehicle Inspection Required</h3>
                 <p className="text-sm text-muted-foreground">
                   Complete the vehicle inspection checklist before starting this route.
@@ -396,6 +395,7 @@ export default function DriverRoutePage() {
               </div>
               <Button
                 variant="default"
+                className="flex-shrink-0"
                 onClick={() => setLocation("/driver/checklist")}
                 data-testid="button-go-to-inspection"
               >
@@ -438,18 +438,18 @@ export default function DriverRoutePage() {
                       }`}
                       data-testid={`item-student-${student.id}`}
                     >
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div className="flex-1">
-                          <div className="font-medium flex items-center gap-2">
-                            {student.firstName} {student.lastName}
+                      <div className="flex items-start justify-between gap-3 mb-3 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium flex items-center gap-2 flex-wrap">
+                            <span className="break-words">{student.firstName} {student.lastName}</span>
                             {hasDisembarked && (
-                              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
                             )}
                           </div>
                           {student.plannedStopName && (
-                            <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              Planned: {student.plannedStopName}
+                            <div className="text-sm text-muted-foreground mt-1 flex items-start gap-1 min-w-0">
+                              <MapPin className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                              <span className="break-words">Planned: {student.plannedStopName}</span>
                             </div>
                           )}
                         </div>
@@ -458,6 +458,7 @@ export default function DriverRoutePage() {
                         {hasAttendance && (
                           <Badge
                             variant={isRiding ? "default" : "secondary"}
+                            className="flex-shrink-0"
                             data-testid={`badge-attendance-${student.id}`}
                           >
                             {isRiding ? "Riding" : "Absent"}
@@ -469,20 +470,18 @@ export default function DriverRoutePage() {
                       {(hasBoarded || hasDisembarked) && (
                         <div className="space-y-2 mb-3 text-sm">
                           {hasBoarded && student.boardEvent && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <LogIn className="h-4 w-4 text-green-600 dark:text-green-400" />
-                              <span>
-                                Boarded at <strong>{student.boardEvent.stopName}</strong> •{" "}
-                                {new Date(student.boardEvent.recordedAt).toLocaleTimeString()}
+                            <div className="flex items-start gap-2 text-muted-foreground min-w-0">
+                              <LogIn className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                              <span className="break-words min-w-0">
+                                Boarded at <strong className="break-words">{student.boardEvent.stopName}</strong> • {new Date(student.boardEvent.recordedAt).toLocaleTimeString()}
                               </span>
                             </div>
                           )}
                           {hasDisembarked && student.deboardEvent && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <LogOut className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                              <span>
-                                Deboarded at <strong>{student.deboardEvent.stopName}</strong> •{" "}
-                                {new Date(student.deboardEvent.recordedAt).toLocaleTimeString()}
+                            <div className="flex items-start gap-2 text-muted-foreground min-w-0">
+                              <LogOut className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                              <span className="break-words min-w-0">
+                                Deboarded at <strong className="break-words">{student.deboardEvent.stopName}</strong> • {new Date(student.deboardEvent.recordedAt).toLocaleTimeString()}
                               </span>
                             </div>
                           )}
@@ -614,27 +613,35 @@ export default function DriverRoutePage() {
                 >
                   <CollapsibleTrigger asChild>
                     <CardHeader className="cursor-pointer hover-elevate">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="flex-shrink-0">
-                            {isCompleted ? (
-                              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
-                            ) : (
-                              <div className="h-6 w-6 rounded-full border-2 border-muted-foreground flex items-center justify-center text-xs font-semibold">
-                                {index + 1}
-                              </div>
-                            )}
+                      <div className="flex items-start gap-3 w-full min-w-0">
+                        {/* Stop number/check indicator */}
+                        <div className="flex-shrink-0 mt-0.5">
+                          {isCompleted ? (
+                            <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <div className="h-6 w-6 rounded-full border-2 border-muted-foreground flex items-center justify-center text-xs font-semibold">
+                              {index + 1}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Stop info - constrained width */}
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-semibold flex items-start gap-1.5" data-testid={`text-stop-name-${stop.id}`}>
+                                <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                <span className="break-words">{stop.name}</span>
+                              </h3>
+                              <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
+                                {stop.address}
+                              </p>
+                            </div>
+                            <ChevronDown className={`h-5 w-5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold flex items-center gap-2" data-testid={`text-stop-name-${stop.id}`}>
-                              <MapPin className="h-4 w-4 flex-shrink-0" />
-                              {stop.name}
-                            </h3>
-                            <p className="text-sm text-muted-foreground truncate">
-                              {stop.address}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-3 flex-wrap">
+                          
+                          {/* Badges row */}
+                          <div className="flex items-center gap-2 flex-wrap mt-2">
                             {stop.scheduledTime && (
                               <Badge variant="outline">
                                 <Clock className="h-3 w-3 mr-1" />
@@ -650,11 +657,6 @@ export default function DriverRoutePage() {
                               <Badge variant="default" data-testid={`badge-next-stop-${stop.id}`}>
                                 Next Stop
                               </Badge>
-                            )}
-                            {isExpanded ? (
-                              <ChevronUp className="h-5 w-5" />
-                            ) : (
-                              <ChevronDown className="h-5 w-5" />
                             )}
                           </div>
                         </div>
