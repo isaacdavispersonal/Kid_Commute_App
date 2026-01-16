@@ -311,17 +311,24 @@ export default function AdminDriverAssignments() {
   };
 
   const onSubmit = (data: FormData) => {
+    // Convert empty strings to null for optional fields
+    const cleanedData = {
+      ...data,
+      vehicleId: data.vehicleId?.trim() || null,
+      notes: data.notes?.trim() || null,
+    };
+
     if (editingAssignment) {
-      updateMutation.mutate({ id: editingAssignment.id, data });
+      updateMutation.mutate({ id: editingAssignment.id, data: cleanedData });
     } else {
       if (selectedRouteIds.length > 0) {
         const assignments = selectedRouteIds.map(routeId => ({
-          ...data,
+          ...cleanedData,
           routeId,
         }));
         bulkCreateMutation.mutate(assignments);
-      } else if (data.routeId) {
-        createMutation.mutate(data);
+      } else if (cleanedData.routeId) {
+        createMutation.mutate(cleanedData);
       } else {
         toast({
           title: "Error",
@@ -478,7 +485,7 @@ export default function AdminDriverAssignments() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg mx-4">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-lg sm:w-full">
           <DialogHeader>
             <DialogTitle className="text-lg">
               {editingAssignment ? "Edit Assignment" : "New Assignment"}
@@ -580,13 +587,19 @@ export default function AdminDriverAssignments() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm">Vehicle (Optional)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || undefined}>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)} 
+                      value={field.value || "__none__"}
+                    >
                       <FormControl>
                         <SelectTrigger data-testid="select-vehicle">
-                          <SelectValue placeholder="Select vehicle" />
+                          <SelectValue placeholder="No vehicle" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="__none__">
+                          <span className="text-muted-foreground">No vehicle</span>
+                        </SelectItem>
                         {vehicles?.map((vehicle) => (
                           <SelectItem key={vehicle.id} value={vehicle.id}>
                             {vehicle.name}
