@@ -89,7 +89,7 @@ export default function ForgotPassword() {
                   </div>
                 )}
               </div>
-              <Link href="/mobile-login">
+              <Link href="/">
                 <Button variant="outline" className="w-full" data-testid="button-back-to-login">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to Login
@@ -126,7 +126,7 @@ export default function ForgotPassword() {
                   "Send Reset Instructions"
                 )}
               </Button>
-              <Link href="/mobile-login">
+              <Link href="/">
                 <Button variant="ghost" className="w-full" data-testid="button-back-to-login">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to Login

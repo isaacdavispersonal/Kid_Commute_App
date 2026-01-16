@@ -138,7 +138,7 @@ export default function ResetPassword() {
                   Request New Reset Link
                 </Button>
               </Link>
-              <Link href="/mobile-login">
+              <Link href="/">
                 <Button variant="outline" className="w-full" data-testid="button-back-to-login">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to Login
@@ -165,7 +165,7 @@ export default function ResetPassword() {
             <CardDescription>Your password has been successfully reset</CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/mobile-login">
+            <Link href="/">
               <Button className="w-full" data-testid="button-go-to-login">
                 Go to Login
               </Button>
