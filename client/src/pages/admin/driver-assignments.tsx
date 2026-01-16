@@ -152,6 +152,16 @@ export default function AdminDriverAssignments() {
     );
   };
 
+  const { data: assignments, isLoading: assignmentsLoading } = useQuery<EnrichedDriverAssignment[]>({
+    queryKey: ["/api/admin/driver-assignments"],
+  });
+
+  const { data: allUsers } = useQuery<Driver[]>({
+    queryKey: ["/api/admin/users"],
+  });
+
+  const drivers = allUsers?.filter((user) => user.role === "driver") || [];
+
   // Watch driver selection and auto-populate default vehicle
   const selectedDriverId = form.watch("driverId");
   useEffect(() => {
@@ -166,16 +176,6 @@ export default function AdminDriverAssignments() {
       }
     }
   }, [selectedDriverId, drivers, editingAssignment, form]);
-
-  const { data: assignments, isLoading: assignmentsLoading } = useQuery<EnrichedDriverAssignment[]>({
-    queryKey: ["/api/admin/driver-assignments"],
-  });
-
-  const { data: allUsers } = useQuery<Driver[]>({
-    queryKey: ["/api/admin/users"],
-  });
-
-  const drivers = allUsers?.filter((user) => user.role === "driver") || [];
 
   const { data: routes } = useQuery<RouteType[]>({
     queryKey: ["/api/admin/routes"],
