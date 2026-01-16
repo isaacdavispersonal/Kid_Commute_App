@@ -1885,11 +1885,14 @@ export class DatabaseStorage implements IStorage {
       const plannedStopId = isPickup ? student.pickupStopId : student.dropoffStopId;
       const plannedStop = routeStopsData.find(s => s.id === plannedStopId);
       
+      // Extract just the status string from the attendance object (or null if not set)
+      const attendanceStatus = student.attendance?.status || null;
+      
       return {
         id: student.id,
         firstName: student.firstName,
         lastName: student.lastName,
-        attendance: student.attendance,
+        attendance: attendanceStatus as "riding" | "absent" | null,
         plannedStopId,
         plannedStopName: plannedStop?.name || null,
         plannedStopOrder: plannedStop?.stopOrder || null,
