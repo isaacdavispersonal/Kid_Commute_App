@@ -5296,6 +5296,12 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const { tiresOk, lightsOk, brakesOk, fluidLevelsOk, cleanlinessOk, notes } =
           req.body;
 
+        // Check that driver is clocked in before allowing inspection
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        if (!activeClockIn) {
+          return res.status(400).json({ message: "You must clock in before submitting a vehicle inspection" });
+        }
+
         // Get driver's assigned vehicle (simplified - in production, would fetch from assignment)
         const vehicles = await storage.getAllVehicles();
         const vehicleId = vehicles[0]?.id;
