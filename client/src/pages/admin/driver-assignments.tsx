@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -98,6 +98,7 @@ interface Driver {
   lastName: string | null;
   email: string;
   role: string;
+  assignedVehicleId: string | null;
 }
 
 function getDriverDisplayName(driver: { firstName: string | null; lastName: string | null; email: string } | null | undefined): string {
@@ -150,6 +151,21 @@ export default function AdminDriverAssignments() {
         : [...prev, routeId]
     );
   };
+
+  // Watch driver selection and auto-populate default vehicle
+  const selectedDriverId = form.watch("driverId");
+  useEffect(() => {
+    if (!editingAssignment && selectedDriverId && drivers.length > 0) {
+      const selectedDriver = drivers.find(d => d.id === selectedDriverId);
+      if (selectedDriver?.assignedVehicleId) {
+        // Only set if no vehicle is currently selected
+        const currentVehicle = form.getValues("vehicleId");
+        if (!currentVehicle || currentVehicle === "__none__") {
+          form.setValue("vehicleId", selectedDriver.assignedVehicleId);
+        }
+      }
+    }
+  }, [selectedDriverId, drivers, editingAssignment, form]);
 
   const { data: assignments, isLoading: assignmentsLoading } = useQuery<EnrichedDriverAssignment[]>({
     queryKey: ["/api/admin/driver-assignments"],

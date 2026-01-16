@@ -47,6 +47,7 @@ export const users = pgTable("users", {
   address: text("address"),
   isLeadDriver: boolean("is_lead_driver").notNull().default(false),
   bambooEmployeeId: varchar("bamboo_employee_id"),
+  assignedVehicleId: varchar("assigned_vehicle_id"), // Default vehicle for drivers
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

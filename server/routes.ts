@@ -1636,6 +1636,51 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Update driver's assigned vehicle (admin only)
+  app.patch(
+    "/api/admin/users/:userId/assigned-vehicle",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { userId } = req.params;
+        const { vehicleId } = req.body;
+
+        // Get the user and verify they are a driver
+        const user = await storage.getUser(userId);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        if (user.role !== "driver") {
+          return res.status(400).json({ message: "Assigned vehicle can only be set for drivers" });
+        }
+
+        // Validate vehicle exists if provided
+        if (vehicleId) {
+          const vehicle = await storage.getVehicle(vehicleId);
+          if (!vehicle) {
+            return res.status(404).json({ message: "Vehicle not found" });
+          }
+        }
+
+        // Update the assigned vehicle (null to clear)
+        const updatedUser = await storage.updateUserProfile(userId, { 
+          assignedVehicleId: vehicleId || null 
+        } as any);
+        res.json(updatedUser);
+      } catch (error: any) {
+        console.error("Error updating driver assigned vehicle:", error);
+        
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        
+        res.status(500).json({ message: "Failed to update driver assigned vehicle" });
+      }
+    }
+  );
+
   // Get all vehicles (for any authenticated user - drivers need this for checklists)
   app.get(
     "/api/vehicles",
