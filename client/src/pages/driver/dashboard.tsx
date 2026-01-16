@@ -384,8 +384,8 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
             </div>
           </div>
 
-          {/* Inspection Status */}
-          {!isCompleted && (
+          {/* Inspection Status - Only show after clocked in */}
+          {!isCompleted && clockStatus?.isClockedIn && (
             <div className={`p-3 rounded-md border ${isInspectionComplete ? "bg-green-500/10 border-green-500/20" : "bg-muted/50 border-muted"}`}>
               <div className="flex items-center gap-2">
                 {isInspectionComplete ? (
@@ -406,6 +406,18 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
               </div>
             </div>
           )}
+          
+          {/* Clock In Required Notice - Show when not clocked in */}
+          {!isCompleted && !clockStatus?.isClockedIn && (
+            <div className="p-3 rounded-md border bg-amber-500/10 border-amber-500/20">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-sm text-amber-600 dark:text-amber-400">
+                  Clock in to start this shift
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Route Status */}
           {isRouteStarted && !isCompleted && (
@@ -422,14 +434,17 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
             </div>
           )}
 
-          {/* Action Buttons */}
+          {/* Action Buttons - Gated by clock-in status */}
           <div className="flex flex-col gap-2">
             {!isCompleted && !isRouteStarted ? (
-              shift.routeId ? (
+              !clockStatus?.isClockedIn ? (
+                // Not clocked in - no action buttons, just the notice above
+                null
+              ) : shift.routeId ? (
                 <Button
                   className="flex-1"
                   onClick={handleStartRoute}
-                  disabled={!clockStatus?.isClockedIn || startRouteMutation.isPending}
+                  disabled={startRouteMutation.isPending}
                   data-testid={`button-start-route-${shift.id}`}
                 >
                   {startRouteMutation.isPending ? (
@@ -440,7 +455,7 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
                   ) : (
                     <>
                       <Play className="h-4 w-4 mr-2" />
-                      Start Route
+                      {isInspectionComplete ? "Start Route" : "Complete Inspection & Start Route"}
                     </>
                   )}
                 </Button>
