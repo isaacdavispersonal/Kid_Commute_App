@@ -1,0 +1,256 @@
+![Image](https://help.deputy.com/hc/article_attachments/4788130371983)
+
+![Image](https://clockify.me/assets/images/features-apps-800w.png)
+
+![Image](https://cdn.prod.website-files.com/60882c80d0ef9737f2ee0911/672105ea10b57efdc1e23486_672104d3e9faeb6235ce616a_timeero%2520time%2520card.webp)
+
+This screenshot is actually very revealing — the UI is **correctly detecting an error state**, but the **data pipeline underneath is broken**. That distinction matters a lot.
+
+Below is a **clear technical diagnosis**, followed by **exact things to verify/fix**, written so you can hand it directly to Replit AI or use it yourself.
+
+---
+
+## What the UI Is Telling Us (Important)
+
+From the screenshot:
+
+* Shift **exists**
+* Route assignment **exists**
+* Planned hours **exist** (2.00h)
+* Status badge shows **“Missing Clock”**
+* **Clock Events: “No clock events recorded”**
+* Actual hours = **0.00h**
+
+👉 This means:
+
+* The **scheduler / shift generator ran**
+* The **clock-in/out UX is reachable**
+* But **clock events are NOT being persisted or reconciled**
+
+So this is **not** a UI rendering bug — it’s a **clock event persistence or reconciliation bug**.
+
+---
+
+## Most Likely Root Causes (Ranked)
+
+### 1️⃣ Clock events are NOT being written to the database
+
+**(Highest probability)**
+
+Common failure modes:
+
+* `POST /clock-events` succeeds in UI but:
+
+  * Fails silently
+  * Writes to wrong table
+  * Writes without `shift_id`
+  * Writes without `driver_id`
+* API returns `200 OK` but DB insert never happens
+
+**Tell-tale sign:**
+Shift exists, but `clock_events.length === 0`
+
+✅ **What to check immediately**
+
+```sql
+SELECT * 
+FROM clock_events
+WHERE driver_id = ?
+ORDER BY created_at DESC;
+```
+
+If empty → your clock-in/out endpoint is broken.
+
+---
+
+### 2️⃣ Clock events are stored, but NOT linked to the shift
+
+**(Very common in systems like this)**
+
+Example bug:
+
+* Clock event saved
+* But:
+
+  * `shift_id = NULL`
+  * or linked to a **template shift**, not the **daily shift instance**
+
+Then when Shift History runs:
+
+```ts
+clock_events.filter(e => e.shift_id === shift.id)
+```
+
+→ returns empty array
+→ UI shows “No clock events recorded”
+
+✅ **Verify**
+
+```sql
+SELECT id, shift_id, driver_id, type
+FROM clock_events
+WHERE driver_id = ?
+```
+
+If `shift_id` is missing or wrong → this is the bug.
+
+---
+
+### 3️⃣ Shift reconciliation logic never runs
+
+(UI expects backend aggregation that never happens)
+
+Many systems do this:
+
+* Store raw clock events
+* Later compute:
+
+  * actual_hours
+  * missing clock flags
+
+If that reconciliation job:
+
+* Only runs on admin tools
+* Only runs on payroll export
+* Never runs for mobile views
+
+Then:
+
+* Clock events exist
+* But shift.actual_hours remains `0`
+
+✅ **Check**
+
+* Where is `actual_hours` computed?
+* Is it:
+
+  * computed on read?
+  * computed on write?
+  * computed by a cron/job?
+
+If it’s **not computed on read**, the mobile UI will always show `0.00h`.
+
+---
+
+### 4️⃣ Timezone mismatch causing discard
+
+(Seen often in mobile + WebView setups)
+
+Example:
+
+* Clock-in timestamp is UTC
+* Shift is local (Phoenix)
+* Backend validation thinks:
+
+  > “Clock-in is outside shift window”
+* Event is rejected or ignored
+
+✅ **Check**
+
+* Clock event timestamps vs shift start/end
+* Validation logic like:
+
+```ts
+if (eventTime < shift.start || eventTime > shift.end) reject
+```
+
+This silently kills valid clock events.
+
+---
+
+## Why the Badge Still Shows “Missing Clock”
+
+This part is **working correctly** 👇
+
+Your system logic is likely:
+
+```ts
+if (shift.actual_hours === 0 && shift.planned_hours > 0) {
+  status = "Missing Clock"
+}
+```
+
+So the badge is:
+
+* **Symptom**
+* Not the cause
+
+This is good — it means your **error detection logic works**.
+
+---
+
+## What I’d Fix First (Concrete Order)
+
+### ✅ Step 1 — Add logging to clock-in/out API
+
+```ts
+console.log("CLOCK EVENT ATTEMPT", {
+  driverId,
+  shiftId,
+  type,
+  timestamp
+});
+```
+
+And after DB write:
+
+```ts
+console.log("CLOCK EVENT SAVED", event.id);
+```
+
+---
+
+### ✅ Step 2 — Assert shift linkage at write-time
+
+**Do NOT allow clock events without a shift_id**
+
+```ts
+if (!shiftId) {
+  throw new Error("Clock event missing shift_id");
+}
+```
+
+Fail loudly. Silent failures are killing you here.
+
+---
+
+### ✅ Step 3 — Compute actual_hours on read (temporary fix)
+
+Until reconciliation is bulletproof:
+
+```ts
+actual_hours = sum(
+  clockOut.time - clockIn.time
+)
+```
+
+This guarantees the UI reflects reality immediately.
+
+---
+
+### ✅ Step 4 — Add a DB constraint (strongly recommended)
+
+```sql
+ALTER TABLE clock_events
+ADD CONSTRAINT clock_events_shift_fk
+FOREIGN KEY (shift_id) REFERENCES shifts(id);
+```
+
+This prevents orphaned events forever.
+
+---
+
+## TL;DR Diagnosis (You Can Paste This to Replit AI)
+
+> The UI correctly detects missing clock events, but clock-in/out data is not being persisted or reconciled. Shifts exist, planned hours exist, but no clock events are linked to the shift. Most likely causes are: clock events not being written, missing `shift_id` on write, reconciliation not running for mobile reads, or timezone-based validation rejecting events. Fix by logging clock writes, enforcing shift linkage, computing actual_hours on read, and adding DB constraints.
+
+---
+
+If you want next, I can:
+
+* Write **exact SQL + TypeScript fixes**
+* Draft a **Replit AI debug prompt**
+* Map this into a **payroll-safe clocking model**
+* Or audit **clock-in/out UX edge cases**
+
+Just tell me which direction you want to go.

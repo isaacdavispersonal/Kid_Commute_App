@@ -3963,7 +3963,24 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           shifts.map(async (shift) => {
             const route = shift.routeId ? await storage.getRoute(shift.routeId) : null;
             const vehicle = shift.vehicleId ? await storage.getVehicle(shift.vehicleId) : null;
-            const clockEvents = await storage.getClockEventsByShift(shift.id);
+            
+            // First try to get clock events linked by shift_id
+            let clockEvents = await storage.getClockEventsByShift(shift.id);
+            
+            // If no linked events found, try to match by driver and date range
+            if (clockEvents.length === 0 && shift.date) {
+              const shiftStart = new Date(`${shift.date}T${shift.plannedStart || "00:00"}`);
+              const shiftEnd = new Date(`${shift.date}T${shift.plannedEnd || "23:59"}`);
+              shiftStart.setHours(shiftStart.getHours() - 1);
+              shiftEnd.setHours(shiftEnd.getHours() + 2);
+              
+              const driverEvents = await storage.getClockEventsByDriver(
+                shift.driverId,
+                shiftStart,
+                shiftEnd
+              );
+              clockEvents = driverEvents.filter(e => !e.shiftId);
+            }
             
             return {
               ...shift,
@@ -4006,7 +4023,28 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           shifts.map(async (shift) => {
             const route = shift.routeId ? await storage.getRoute(shift.routeId) : null;
             const vehicle = shift.vehicleId ? await storage.getVehicle(shift.vehicleId) : null;
-            const clockEvents = await storage.getClockEventsByShift(shift.id);
+            
+            // First try to get clock events linked by shift_id
+            let clockEvents = await storage.getClockEventsByShift(shift.id);
+            
+            // If no linked events found, try to match by driver and date range
+            if (clockEvents.length === 0 && shift.date) {
+              const shiftStart = new Date(`${shift.date}T${shift.plannedStart || "00:00"}`);
+              const shiftEnd = new Date(`${shift.date}T${shift.plannedEnd || "23:59"}`);
+              // Add buffer before/after shift window (1 hour)
+              shiftStart.setHours(shiftStart.getHours() - 1);
+              shiftEnd.setHours(shiftEnd.getHours() + 2);
+              
+              const driverEvents = await storage.getClockEventsByDriver(
+                shift.driverId,
+                shiftStart,
+                shiftEnd
+              );
+              
+              // Filter to only include events without shiftId (unlinked general clock events)
+              clockEvents = driverEvents.filter(e => !e.shiftId);
+            }
+            
             const calculatedHours = calculateShiftHours(shift, clockEvents);
             
             return {
@@ -4209,9 +4247,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // ============ Simple Clock In/Out System (Not Shift-Based) ============
+  // ============ Simple Clock In/Out System (Auto-links to shifts when possible) ============
 
-  // Simple clock-in (general timekeeping, not tied to a specific shift)
+  // Simple clock-in (auto-links to today's shift if available)
   app.post(
     "/api/driver/clock-in",
     requireAuth,
@@ -4219,34 +4257,65 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req: any, res) => {
       try {
         const driverId = req.user.id;
+        const now = new Date();
+        const today = now.toISOString().split("T")[0];
+        
+        console.log("[clock-in] CLOCK EVENT ATTEMPT", {
+          driverId,
+          timestamp: now.toISOString(),
+          today
+        });
         
         // Check if already clocked in
         const activeClockIn = await storage.getActiveClockIn(driverId);
         if (activeClockIn) {
+          console.log("[clock-in] Already clocked in, rejecting", { activeClockIn: activeClockIn.clockEvent.id });
           return res.status(400).json({ 
             message: "Already clocked in. Please clock out first." 
           });
         }
         
-        // Create clock IN event (no shift association)
+        // Try to find a scheduled/active shift for today to auto-link
+        const todaysShifts = await storage.getShiftsByDate(today, driverId);
+        let autoLinkedShiftId: string | null = null;
+        
+        if (todaysShifts.length > 0) {
+          // Prefer SCHEDULED shifts, then ACTIVE
+          const eligibleShift = todaysShifts.find(s => s.status === "SCHEDULED") 
+            || todaysShifts.find(s => s.status === "ACTIVE");
+          if (eligibleShift) {
+            autoLinkedShiftId = eligibleShift.id;
+            console.log("[clock-in] Auto-linking to shift", { shiftId: autoLinkedShiftId, shiftType: eligibleShift.shiftType });
+            // Also update shift status to ACTIVE
+            await storage.updateShift(eligibleShift.id, { status: "ACTIVE" });
+          }
+        }
+        
+        // Create clock IN event (auto-linked to shift if found)
         const clockEvent = await storage.createClockEvent({
           driverId,
-          shiftId: null, // Not tied to a specific shift
+          shiftId: autoLinkedShiftId,
           type: "IN",
           source: "USER",
           notes: null,
           isResolved: true,
         });
         
-        res.json({ clockEvent });
+        console.log("[clock-in] CLOCK EVENT SAVED", { 
+          eventId: clockEvent.id, 
+          shiftId: autoLinkedShiftId,
+          timestamp: clockEvent.timestamp
+        });
+        
+        res.json({ clockEvent, autoLinkedShiftId });
       } catch (error) {
-        console.error("Error clocking in:", error);
+        console.error("[clock-in] Error clocking in:", error);
         res.status(500).json({ message: "Failed to clock in" });
       }
     }
   );
 
-  // Simple clock-out (general timekeeping)
+  // Simple clock-out (auto-links to active shift if clock-in was linked)
   app.post(
     "/api/driver/clock-out",
     requireAuth,
@@ -4255,28 +4324,54 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       try {
         const driverId = req.user.id;
         const { notes } = req.body;
+        const now = new Date();
+        
+        console.log("[clock-out] CLOCK EVENT ATTEMPT", {
+          driverId,
+          timestamp: now.toISOString(),
+          notes: notes || null
+        });
         
         // Check if clocked in
         const activeClockIn = await storage.getActiveClockIn(driverId);
         if (!activeClockIn) {
+          console.log("[clock-out] Not clocked in, rejecting");
           return res.status(400).json({ 
             message: "Not currently clocked in" 
           });
         }
         
-        // Create clock OUT event
+        // Use the same shiftId as the clock-in event for consistency
+        const linkedShiftId = activeClockIn.clockEvent.shiftId;
+        
+        // Create clock OUT event (linked to same shift as clock-in)
         const clockEvent = await storage.createClockEvent({
           driverId,
-          shiftId: null,
+          shiftId: linkedShiftId,
           type: "OUT",
           source: "USER",
           notes: notes || null,
           isResolved: true,
         });
         
-        res.json({ clockEvent });
+        // If linked to a shift, mark it as COMPLETED
+        if (linkedShiftId) {
+          await storage.updateShift(linkedShiftId, { 
+            status: "COMPLETED",
+            notes: notes || undefined
+          });
+          console.log("[clock-out] Marked shift as COMPLETED", { shiftId: linkedShiftId });
+        }
+        
+        console.log("[clock-out] CLOCK EVENT SAVED", { 
+          eventId: clockEvent.id, 
+          shiftId: linkedShiftId,
+          timestamp: clockEvent.timestamp
+        });
+        
+        res.json({ clockEvent, linkedShiftId });
       } catch (error) {
-        console.error("Error clocking out:", error);
+        console.error("[clock-out] Error clocking out:", error);
         res.status(500).json({ message: "Failed to clock out" });
       }
     }
