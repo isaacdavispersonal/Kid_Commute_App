@@ -168,6 +168,45 @@ export const mobileRegisterSchema = z.object({
 
 export type MobileRegisterRequest = z.infer<typeof mobileRegisterSchema>;
 
+// ============ Password Reset Tokens ============
+
+// Password reset tokens table for forgot password flow
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_password_reset_tokens_token").on(table.token),
+  index("idx_password_reset_tokens_user").on(table.userId),
+]);
+
+export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({
+  id: true,
+  createdAt: true,
+  usedAt: true,
+});
+
+export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
+// Forgot password request schema
+export const forgotPasswordSchema = z.object({
+  identifier: z.string().min(1, "Email or phone is required"),
+});
+
+export type ForgotPasswordRequest = z.infer<typeof forgotPasswordSchema>;
+
+// Reset password request schema
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  newPassword: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export type ResetPasswordRequest = z.infer<typeof resetPasswordSchema>;
+
 // ============ Billing Portal Configuration ============
 
 // Payment portal provider enum
