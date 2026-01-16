@@ -1184,15 +1184,17 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       try {
         const result = await storage.cleanupStaleRouteAssignments();
         
-        // Audit log
-        await storage.createAuditLog({
-          userId: req.user.id,
-          userRole: "admin",
-          action: "cleanup",
-          entityType: "route_assignments",
-          entityId: "system",
-          description: `Cleaned up ${result.removed} stale route assignments`,
-        });
+        // Audit log - use "deleted" action since we're removing stale records
+        if (result.removed > 0) {
+          await storage.createAuditLog({
+            userId: req.user.id,
+            userRole: "admin",
+            action: "deleted",
+            entityType: "student",
+            entityId: "cleanup",
+            description: `Cleaned up ${result.removed} stale route assignments`,
+          });
+        }
 
         res.json({
           success: true,
