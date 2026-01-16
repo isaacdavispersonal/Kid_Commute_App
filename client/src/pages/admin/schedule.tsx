@@ -191,8 +191,8 @@ const MONTH_NAMES = [
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const SHIFT_TYPE_LABELS: Record<string, { label: string; Icon: any; color: string }> = {
-  MORNING: { label: "Morning", Icon: Sun, color: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20" },
-  AFTERNOON: { label: "Afternoon", Icon: Sunset, color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20" },
+  MORNING: { label: "AM", Icon: Sun, color: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20" },
+  AFTERNOON: { label: "PM", Icon: Sunset, color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20" },
   EXTRA: { label: "Extra", Icon: Star, color: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20" },
 };
 

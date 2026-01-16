@@ -52,8 +52,8 @@ interface EnrichedShift {
 }
 
 const SHIFT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  MORNING: { label: "Morning", color: "bg-blue-500/10 text-blue-700 dark:text-blue-400" },
-  AFTERNOON: { label: "Afternoon", color: "bg-orange-500/10 text-orange-700 dark:text-orange-400" },
+  MORNING: { label: "AM", color: "bg-blue-500/10 text-blue-700 dark:text-blue-400" },
+  AFTERNOON: { label: "PM", color: "bg-orange-500/10 text-orange-700 dark:text-orange-400" },
   EXTRA: { label: "Extra", color: "bg-purple-500/10 text-purple-700 dark:text-purple-400" },
 };
 

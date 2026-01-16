@@ -677,8 +677,8 @@ export default function AdminRoutes() {
       cell: (value: string | null) => {
         if (!value) return "—";
         const typeLabels: Record<string, string> = {
-          MORNING: "Morning",
-          AFTERNOON: "Afternoon",
+          MORNING: "AM",
+          AFTERNOON: "PM",
           EXTRA: "Extra",
         };
         return (

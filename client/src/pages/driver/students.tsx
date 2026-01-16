@@ -43,8 +43,8 @@ function ShiftTypeBadge({ type }: { type: "MORNING" | "AFTERNOON" | "EXTRA" | nu
   if (!type) return null;
   
   const config = {
-    MORNING: { icon: Sunrise, label: "Morning", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" },
-    AFTERNOON: { icon: Sunset, label: "Afternoon", className: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20" },
+    MORNING: { icon: Sunrise, label: "AM", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" },
+    AFTERNOON: { icon: Sunset, label: "PM", className: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20" },
     EXTRA: { icon: Clock, label: "Extra", className: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" },
   };
 
