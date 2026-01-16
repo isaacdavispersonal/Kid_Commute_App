@@ -1,5 +1,6 @@
 // Unified authentication routes (JWT-based for both web and mobile)
 import { Router, Request, Response, NextFunction, RequestHandler } from "express";
+import crypto from "crypto";
 import { storage } from "../storage";
 import { mobileLoginSchema, mobileRegisterSchema } from "@shared/schema";
 import { 
@@ -490,6 +491,176 @@ export const requireAdminOrLeadDriver: RequestHandler = async (req: any, res, ne
     res.status(401).json({ message: "Unauthorized" });
   }
 };
+
+// =========================
+// Password Reset Endpoints
+// =========================
+
+// Schema for forgot password request
+const forgotPasswordSchema = z.object({
+  identifier: z.string().min(1, "Email or phone is required"),
+});
+
+// Schema for reset password request
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+// Token expiration: 1 hour
+const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000;
+
+/**
+ * POST /api/auth/forgot-password
+ * Request a password reset link
+ */
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const parsed = forgotPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        message: "Invalid request", 
+        errors: parsed.error.flatten().fieldErrors 
+      });
+    }
+
+    const { identifier } = parsed.data;
+    
+    // Find user by email or phone
+    const user = await storage.getUserByEmailOrPhone(identifier);
+    
+    // Always respond with success to prevent user enumeration
+    // Even if user not found, we don't reveal this
+    if (!user) {
+      console.log(`[Password Reset] No user found for identifier: ${identifier.substring(0, 3)}***`);
+      return res.json({ 
+        message: "If an account exists with this email/phone, you will receive reset instructions." 
+      });
+    }
+
+    // Check if user has auth credentials
+    const credentials = await storage.getAuthCredentialsByUserId(user.id);
+    if (!credentials) {
+      console.log(`[Password Reset] No credentials for user: ${user.id.substring(0, 8)}...`);
+      return res.json({ 
+        message: "If an account exists with this email/phone, you will receive reset instructions." 
+      });
+    }
+
+    // Generate secure reset token
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
+
+    // Store the token
+    await storage.createPasswordResetToken(user.id, token, expiresAt);
+
+    // In a real app, you would send an email/SMS here
+    // For now, log the token (in development) and return a message
+    console.log(`[Password Reset] Token generated for user ${user.id.substring(0, 8)}... Token: ${token}`);
+    
+    // For development/testing, include the token in response
+    // In production, you would send via email/SMS and NOT include in response
+    const isDev = process.env.NODE_ENV !== "production";
+    
+    res.json({ 
+      message: "If an account exists with this email/phone, you will receive reset instructions.",
+      ...(isDev && { resetToken: token, resetUrl: `/reset-password?token=${token}` }),
+    });
+  } catch (error) {
+    console.error("[Password Reset] Error:", error);
+    res.status(500).json({ message: "Failed to process password reset request" });
+  }
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Reset password using token
+ */
+router.post("/reset-password", async (req, res) => {
+  try {
+    const parsed = resetPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        message: "Invalid request", 
+        errors: parsed.error.flatten().fieldErrors 
+      });
+    }
+
+    const { token, password } = parsed.data;
+
+    // Look up the token
+    const resetToken = await storage.getPasswordResetToken(token);
+    
+    if (!resetToken) {
+      return res.status(400).json({ message: "Invalid or expired reset token" });
+    }
+
+    // Check if already used
+    if (resetToken.usedAt) {
+      return res.status(400).json({ message: "This reset token has already been used" });
+    }
+
+    // Check if expired
+    if (new Date() > resetToken.expiresAt) {
+      return res.status(400).json({ message: "This reset token has expired" });
+    }
+
+    // Hash the new password
+    const passwordHash = await hashPassword(password);
+
+    // Update the password
+    await storage.updateAuthCredentialsPassword(resetToken.userId, passwordHash);
+
+    // Mark token as used
+    await storage.markPasswordResetTokenUsed(token);
+
+    // Get user for logging
+    const user = await storage.getUser(resetToken.userId);
+    console.log(`[Password Reset] Password successfully reset for user: ${user?.email || resetToken.userId.substring(0, 8)}...`);
+
+    res.json({ message: "Password successfully reset. You can now log in with your new password." });
+  } catch (error) {
+    console.error("[Password Reset] Error:", error);
+    res.status(500).json({ message: "Failed to reset password" });
+  }
+});
+
+/**
+ * GET /api/auth/validate-reset-token
+ * Check if a reset token is valid
+ */
+router.get("/validate-reset-token", async (req, res) => {
+  try {
+    const token = req.query.token as string;
+    
+    if (!token) {
+      return res.status(400).json({ valid: false, message: "Token is required" });
+    }
+
+    const resetToken = await storage.getPasswordResetToken(token);
+    
+    if (!resetToken) {
+      return res.json({ valid: false, message: "Invalid reset token" });
+    }
+
+    if (resetToken.usedAt) {
+      return res.json({ valid: false, message: "This reset token has already been used" });
+    }
+
+    if (new Date() > resetToken.expiresAt) {
+      return res.json({ valid: false, message: "This reset token has expired" });
+    }
+
+    res.json({ valid: true });
+  } catch (error) {
+    console.error("[Password Reset] Validate token error:", error);
+    res.status(500).json({ valid: false, message: "Failed to validate token" });
+  }
+});
+
+// =========================
+// Test/Development Endpoints
+// =========================
 
 /**
  * POST /api/auth/test-login
