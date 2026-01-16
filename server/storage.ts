@@ -121,7 +121,7 @@ import {
   type PasswordResetToken,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray } from "drizzle-orm";
+import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray, isNotNull } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "./errors";
 
 export interface IStorage {
@@ -194,8 +194,10 @@ export interface IStorage {
   deleteStudentRouteAssignment(id: string): Promise<void>;
   deleteStudentRouteAssignmentByRouteAndStudent(routeId: string, studentId: string): Promise<void>;
   getStudentRouteAssignments(studentId: string): Promise<StudentRoute[]>;
+  getValidStudentRouteAssignments(studentId: string): Promise<(StudentRoute & { route: Route })[]>;
   updateStudentRouteStops(id: string, pickupStopId: string | null, dropoffStopId: string | null): Promise<StudentRoute>;
   deleteAllStudentRouteAssignments(studentId: string): Promise<void>;
+  cleanupStaleRouteAssignments(): Promise<{ removed: number; details: string[] }>;
 
   // Bulk import operations
   bulkUpsertStops(stops: import("@shared/schema").BulkImportStopInput[], source: string): Promise<import("@shared/schema").BulkImportStopResult>;
@@ -1336,6 +1338,87 @@ export class DatabaseStorage implements IStorage {
       .from(studentRoutes)
       .where(eq(studentRoutes.studentId, studentId))
       .orderBy(desc(studentRoutes.createdAt));
+  }
+
+  async getValidStudentRouteAssignments(studentId: string): Promise<(StudentRoute & { route: Route })[]> {
+    // Join with routes table to get only assignments where route exists and is active
+    const results = await db
+      .select({
+        id: studentRoutes.id,
+        studentId: studentRoutes.studentId,
+        routeId: studentRoutes.routeId,
+        pickupStopId: studentRoutes.pickupStopId,
+        dropoffStopId: studentRoutes.dropoffStopId,
+        createdAt: studentRoutes.createdAt,
+        route: routes,
+      })
+      .from(studentRoutes)
+      .innerJoin(routes, eq(studentRoutes.routeId, routes.id))
+      .where(
+        and(
+          eq(studentRoutes.studentId, studentId),
+          eq(routes.isActive, true)
+        )
+      )
+      .orderBy(desc(studentRoutes.createdAt));
+    
+    return results as (StudentRoute & { route: Route })[];
+  }
+
+  async cleanupStaleRouteAssignments(): Promise<{ removed: number; details: string[] }> {
+    const details: string[] = [];
+    let removed = 0;
+
+    // Find all student route assignments
+    const allAssignments = await db.select().from(studentRoutes);
+    
+    for (const assignment of allAssignments) {
+      // Check if the route still exists
+      const [route] = await db
+        .select()
+        .from(routes)
+        .where(eq(routes.id, assignment.routeId))
+        .limit(1);
+      
+      if (!route) {
+        // Route doesn't exist - delete the assignment
+        await db.delete(studentRoutes).where(eq(studentRoutes.id, assignment.id));
+        details.push(`Removed orphaned assignment ${assignment.id} (routeId: ${assignment.routeId} no longer exists)`);
+        removed++;
+      }
+    }
+
+    // Also clean up legacy assignedRouteId in students table where route no longer exists
+    const studentsWithLegacyRoutes = await db
+      .select()
+      .from(students)
+      .where(isNotNull(students.assignedRouteId));
+    
+    for (const student of studentsWithLegacyRoutes) {
+      if (student.assignedRouteId) {
+        const [route] = await db
+          .select()
+          .from(routes)
+          .where(eq(routes.id, student.assignedRouteId))
+          .limit(1);
+        
+        if (!route) {
+          // Route doesn't exist - clear the legacy fields
+          await db
+            .update(students)
+            .set({
+              assignedRouteId: null,
+              pickupStopId: null,
+              dropoffStopId: null,
+            })
+            .where(eq(students.id, student.id));
+          details.push(`Cleared legacy route from student ${student.id} (routeId: ${student.assignedRouteId} no longer exists)`);
+          removed++;
+        }
+      }
+    }
+
+    return { removed, details };
   }
 
   async updateStudentRouteStops(
