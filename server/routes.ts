@@ -1173,6 +1173,39 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // ============ Admin Data Cleanup Routes ============
+
+  // Cleanup stale route assignments (routes that no longer exist)
+  app.post(
+    "/api/admin/cleanup/stale-routes",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const result = await storage.cleanupStaleRouteAssignments();
+        
+        // Audit log
+        await storage.createAuditLog({
+          userId: req.user.id,
+          userRole: "admin",
+          action: "cleanup",
+          entityType: "route_assignments",
+          entityId: "system",
+          description: `Cleaned up ${result.removed} stale route assignments`,
+        });
+
+        res.json({
+          success: true,
+          message: `Cleaned up ${result.removed} stale route assignments`,
+          ...result,
+        });
+      } catch (error) {
+        console.error("Error cleaning up stale routes:", error);
+        res.status(500).json({ message: "Failed to cleanup stale routes" });
+      }
+    }
+  );
+
   // ============ Public Settings Routes (for drivers/parents) ============
 
   // Get emergency phone setting (accessible by all authenticated users)
@@ -2400,37 +2433,35 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               }
             }
             
-            // Get all route assignments from junction table
-            const routeAssignments = await storage.getStudentRouteAssignments(student.id);
-            const assignedRoutes = await Promise.all(
-              routeAssignments.map(async (assignment) => {
-                const route = await storage.getRoute(assignment.routeId);
-                return {
-                  assignmentId: assignment.id,
-                  routeId: assignment.routeId,
-                  routeName: route?.name || "Unknown",
-                  routeType: route?.routeType || null,
-                  pickupStopId: assignment.pickupStopId,
-                  dropoffStopId: assignment.dropoffStopId,
-                };
-              })
-            );
+            // Get all valid route assignments from junction table (only routes that exist and are active)
+            const validAssignments = await storage.getValidStudentRouteAssignments(student.id);
+            const assignedRoutes = validAssignments.map((assignment) => ({
+              assignmentId: assignment.id,
+              routeId: assignment.routeId,
+              routeName: assignment.route?.name || "Unknown",
+              routeType: assignment.route?.routeType || null,
+              pickupStopId: assignment.pickupStopId,
+              dropoffStopId: assignment.dropoffStopId,
+            }));
 
             // Legacy single-route support for backwards compatibility
+            // Only show if route still exists and is active
             let routeName = null;
             let pickupStop = null;
             let dropoffStop = null;
 
             if (student.assignedRouteId) {
               const route = await storage.getRoute(student.assignedRouteId);
-              routeName = route?.name || null;
-              
-              const stops = await storage.getRouteStops(student.assignedRouteId);
-              if (student.pickupStopId) {
-                pickupStop = stops.find(s => s.id === student.pickupStopId);
-              }
-              if (student.dropoffStopId) {
-                dropoffStop = stops.find(s => s.id === student.dropoffStopId);
+              if (route && route.isActive) {
+                routeName = route.name || null;
+                
+                const stops = await storage.getRouteStops(student.assignedRouteId);
+                if (student.pickupStopId) {
+                  pickupStop = stops.find(s => s.id === student.pickupStopId);
+                }
+                if (student.dropoffStopId) {
+                  dropoffStop = stops.find(s => s.id === student.dropoffStopId);
+                }
               }
             }
 
@@ -5487,27 +5518,34 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             let routeStatus = "inactive";
 
             // First check for route assignments in studentRoutes junction table (multi-route system)
+            // Only return assignments for routes that exist AND are active
             let effectiveRouteId = null;
             let effectivePickupStopId = null;
             let effectiveDropoffStopId = null;
+            let effectiveRoute = null;
 
-            const routeAssignments = await storage.getStudentRouteAssignments(student.id);
-            if (routeAssignments && routeAssignments.length > 0) {
-              // Use the first route assignment (could be enhanced to prioritize AM routes or active routes)
-              const assignment = routeAssignments[0];
+            const validAssignments = await storage.getValidStudentRouteAssignments(student.id);
+            if (validAssignments && validAssignments.length > 0) {
+              // Use the first valid route assignment (route exists and is active)
+              const assignment = validAssignments[0];
               effectiveRouteId = assignment.routeId;
               effectivePickupStopId = assignment.pickupStopId;
               effectiveDropoffStopId = assignment.dropoffStopId;
+              effectiveRoute = assignment.route;
             } else if (student.assignedRouteId) {
               // Fall back to legacy single-route fields for backward compatibility
-              effectiveRouteId = student.assignedRouteId;
-              effectivePickupStopId = student.pickupStopId;
-              effectiveDropoffStopId = student.dropoffStopId;
+              // But only if the route still exists and is active
+              const legacyRoute = await storage.getRoute(student.assignedRouteId);
+              if (legacyRoute && legacyRoute.isActive) {
+                effectiveRouteId = student.assignedRouteId;
+                effectivePickupStopId = student.pickupStopId;
+                effectiveDropoffStopId = student.dropoffStopId;
+                effectiveRoute = legacyRoute;
+              }
             }
 
-            if (effectiveRouteId) {
-              const route = await storage.getRoute(effectiveRouteId);
-              routeName = route?.name || null;
+            if (effectiveRouteId && effectiveRoute) {
+              routeName = effectiveRoute.name || null;
 
               // Get current driver assignment for this route (assignments are ongoing, not date-specific)
               const assignments = await storage.getDriverAssignmentsByRoute(effectiveRouteId);
@@ -5629,12 +5667,17 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
 
         // Get effective route ID (check junction table first, fall back to legacy field)
+        // Only use valid routes (exist and are active)
         let effectiveRouteId = null;
-        const routeAssignments = await storage.getStudentRouteAssignments(students[0].id);
-        if (routeAssignments && routeAssignments.length > 0) {
-          effectiveRouteId = routeAssignments[0].routeId;
+        const validAssignments = await storage.getValidStudentRouteAssignments(students[0].id);
+        if (validAssignments && validAssignments.length > 0) {
+          effectiveRouteId = validAssignments[0].routeId;
         } else if (students[0].assignedRouteId) {
-          effectiveRouteId = students[0].assignedRouteId;
+          // Check if legacy route exists and is active
+          const legacyRoute = await storage.getRoute(students[0].assignedRouteId);
+          if (legacyRoute && legacyRoute.isActive) {
+            effectiveRouteId = students[0].assignedRouteId;
+          }
         }
 
         if (!effectiveRouteId) {
@@ -5970,23 +6013,18 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(404).json({ message: "Student not found" });
         }
 
-        // Get all route assignments from junction table
-        const routeAssignments = await storage.getStudentRouteAssignments(studentId);
+        // Get all valid route assignments from junction table (only routes that exist and are active)
+        const validAssignments = await storage.getValidStudentRouteAssignments(studentId);
         
-        // Enrich with route details
-        const enrichedAssignments = await Promise.all(
-          routeAssignments.map(async (assignment) => {
-            const route = await storage.getRoute(assignment.routeId);
-            return {
-              id: assignment.id,
-              routeId: assignment.routeId,
-              routeName: route?.name || "Unknown Route",
-              routeType: route?.routeType || null,
-              pickupStopId: assignment.pickupStopId,
-              dropoffStopId: assignment.dropoffStopId,
-            };
-          })
-        );
+        // Format response with route details already included
+        const enrichedAssignments = validAssignments.map((assignment) => ({
+          id: assignment.id,
+          routeId: assignment.routeId,
+          routeName: assignment.route?.name || "Unknown Route",
+          routeType: assignment.route?.routeType || null,
+          pickupStopId: assignment.pickupStopId,
+          dropoffStopId: assignment.dropoffStopId,
+        }));
 
         res.json(enrichedAssignments);
       } catch (error: any) {
