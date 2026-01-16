@@ -66,6 +66,9 @@ import ParentMessages from "@/pages/parent/messages";
 import DriverMessages from "@/pages/driver/messages";
 import AdminMessages from "@/pages/admin/messages";
 
+import ForgotPassword from "@/pages/forgot-password";
+import ResetPassword from "@/pages/reset-password";
+
 function Router() {
   // Unified auth hook works for both web and mobile platforms
   const { user, isAuthenticated, isLoading, logout } = useUnifiedAuth();
@@ -86,6 +89,8 @@ function Router() {
         <Route path="/" component={Landing} />
         <Route path="/privacy-policy" component={PrivacyPolicy} />
         <Route path="/terms-of-service" component={TermsOfService} />
+        <Route path="/forgot-password" component={ForgotPassword} />
+        <Route path="/reset-password" component={ResetPassword} />
         <Route component={NotFound} />
       </Switch>
     );
