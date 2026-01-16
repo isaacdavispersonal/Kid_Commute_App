@@ -525,7 +525,9 @@ export default function DriverDashboard() {
       return await apiRequest("POST", "/api/driver/clock-in", {});
     },
     onSuccess: async () => {
+      // Invalidate both clock status AND shifts - clock-in updates shift status to ACTIVE
       await queryClient.invalidateQueries({ queryKey: ["/api/driver/clock-status"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/driver/today-shifts"] });
       toast({
         title: "Clocked In",
         description: "You are now clocked in",
@@ -547,8 +549,10 @@ export default function DriverDashboard() {
       });
     },
     onSuccess: async () => {
+      // Invalidate all related queries - clock-out updates shift status to COMPLETED
       await queryClient.invalidateQueries({ queryKey: ["/api/driver/clock-status"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/driver/break/status"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/driver/today-shifts"] });
       setShowClockOutDialog(false);
       setClockOutNotes("");
       toast({
