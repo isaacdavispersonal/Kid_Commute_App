@@ -79,6 +79,7 @@ Preferred communication style: Simple, everyday language.
 - **Samsara**: GPS provider integration.
 - **QuickBooks/ClassWallet**: Payment portal integrations.
 - **BambooHR**: Payroll integration.
+- **Resend**: Email service for password reset emails (requires `RESEND_API_KEY` secret).
 
 ### Key NPM Packages
 - `drizzle-orm`, `drizzle-kit`: ORM and migrations.
@@ -90,4 +91,5 @@ Preferred communication style: Simple, everyday language.
 - `@tanstack/react-query`: Client-side data fetching.
 - `date-fns`: Date utility library.
 - `zod`: Runtime schema validation.
+- `resend`: Email delivery service.
 - Radix UI component primitives.
