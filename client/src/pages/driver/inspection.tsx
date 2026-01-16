@@ -1,15 +1,24 @@
 // Driver vehicle inspection checklist
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ClipboardCheck, CheckCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ClipboardCheck, CheckCircle, Clock, AlertTriangle, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { getLoginUrl } from "@/lib/config";
+import { Link } from "wouter";
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface ClockStatus {
+  isClockedIn: boolean;
+  clockInTime?: string;
+  shiftId?: string;
+}
 
 const inspectionItems = [
   { id: "tiresOk", label: "Tires (pressure, tread, damage)" },
@@ -29,6 +38,10 @@ export default function DriverInspection() {
     cleanlinessOk: false,
   });
   const [notes, setNotes] = useState("");
+
+  const { data: clockStatus, isLoading: clockStatusLoading } = useQuery<ClockStatus>({
+    queryKey: ["/api/driver/clock-status"],
+  });
 
   const submitInspectionMutation = useMutation({
     mutationFn: async () => {
@@ -76,6 +89,53 @@ export default function DriverInspection() {
   };
 
   const allChecked = Object.values(checklist).every((value) => value === true);
+
+  if (clockStatusLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <Card>
+          <CardContent className="py-8">
+            <div className="flex items-center justify-center gap-2">
+              <Clock className="h-5 w-5 animate-spin text-muted-foreground" />
+              <span className="text-muted-foreground">Loading...</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!clockStatus?.isClockedIn) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Vehicle Inspection</h1>
+          <p className="text-sm text-muted-foreground">
+            Complete your pre-trip vehicle safety check
+          </p>
+        </div>
+
+        <Alert className="border-amber-500/50 bg-amber-500/10">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertTitle className="text-amber-600 dark:text-amber-400">Clock In Required</AlertTitle>
+          <AlertDescription className="text-amber-600/80 dark:text-amber-400/80">
+            You must clock in before completing vehicle inspections. Please return to the dashboard and clock in first.
+          </AlertDescription>
+        </Alert>
+
+        <Link href="/driver">
+          <Button className="w-full" data-testid="button-back-to-dashboard">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Return to Dashboard
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
