@@ -272,6 +272,8 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
   const isInspectionComplete = !!shift.inspectionCompletedAt;
   const isActive = shift.status === "ACTIVE";
   const isCompleted = shift.status === "COMPLETED";
+  const isClockedIn = clockStatus?.isClockedIn === true;
+  const hasRoute = !!shift.routeId;
 
   const startRouteMutation = useMutation({
     mutationFn: async () => {
@@ -295,7 +297,7 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
 
   const handleStartRoute = () => {
     // Guard: Cannot start route without a routeId
-    if (!shift.routeId) {
+    if (!hasRoute) {
       toast({
         title: "No Route Assigned",
         description: "This shift does not have an assigned route",
@@ -304,7 +306,7 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
       return;
     }
 
-    if (!clockStatus?.isClockedIn) {
+    if (!isClockedIn) {
       toast({
         title: "Clock In Required",
         description: "You must clock in before starting a route",
@@ -326,6 +328,40 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
     // After inspection is complete, automatically start the route
     startRouteMutation.mutate();
   };
+
+  // Determine current workflow step for visual indicator (max 4 steps to match UI)
+  const getWorkflowStep = (): { step: number; label: string; description: string } => {
+    if (isRouteStarted) return { step: 4, label: "Route Active", description: "Managing stops" };
+    if (isInspectionComplete) return { step: 3, label: "Ready", description: "Start your route" };
+    if (isClockedIn) return { step: 2, label: "Clocked In", description: "Complete inspection" };
+    return { step: 1, label: "Not Started", description: "Clock in to begin" };
+  };
+
+  const workflow = getWorkflowStep();
+
+  // Get the primary CTA button state
+  const getButtonState = (): { 
+    disabled: boolean; 
+    loading: boolean; 
+    label: string; 
+    disabledReason?: string;
+  } => {
+    if (!hasRoute) {
+      return { disabled: true, loading: false, label: "Start Route", disabledReason: "No route assigned to this shift" };
+    }
+    if (!isClockedIn) {
+      return { disabled: true, loading: false, label: "Start Route", disabledReason: "Clock in first to start your route" };
+    }
+    if (startRouteMutation.isPending) {
+      return { disabled: true, loading: true, label: "Starting..." };
+    }
+    if (!isInspectionComplete) {
+      return { disabled: false, loading: false, label: "Start Route" };
+    }
+    return { disabled: false, loading: false, label: "Start Route" };
+  };
+
+  const buttonState = getButtonState();
 
   return (
     <>
@@ -384,87 +420,136 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
             </div>
           </div>
 
-          {/* Inspection Status - Only show after clocked in */}
-          {!isCompleted && clockStatus?.isClockedIn && (
-            <div className={`p-3 rounded-md border ${isInspectionComplete ? "bg-green-500/10 border-green-500/20" : "bg-muted/50 border-muted"}`}>
+          {/* Workflow Step Indicator */}
+          {!isCompleted && (
+            <div className="p-3 rounded-md border bg-muted/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Workflow Progress
+                </span>
+                <Badge 
+                  variant="outline" 
+                  className={
+                    workflow.step >= 4 ? "border-primary text-primary" :
+                    workflow.step >= 2 ? "border-green-500 text-green-600 dark:text-green-400" :
+                    "border-muted-foreground text-muted-foreground"
+                  }
+                  data-testid={`badge-workflow-${shift.id}`}
+                >
+                  {workflow.label}
+                </Badge>
+              </div>
+              
+              {/* Step Progress Bar */}
+              <div className="flex gap-1 mb-2">
+                {[1, 2, 3, 4].map((step) => (
+                  <div 
+                    key={step}
+                    className={`h-1 flex-1 rounded-full transition-colors ${
+                      step <= workflow.step 
+                        ? step === 4 ? "bg-primary" : "bg-green-500" 
+                        : "bg-muted"
+                    }`}
+                  />
+                ))}
+              </div>
+              
+              {/* Step Labels */}
+              <div className="flex justify-between gap-2 text-[10px] text-muted-foreground">
+                <span className={workflow.step >= 1 ? "text-green-600 dark:text-green-400" : ""}>Clock In</span>
+                <span className={workflow.step >= 2 ? "text-green-600 dark:text-green-400" : ""}>Inspect</span>
+                <span className={workflow.step >= 3 ? "text-green-600 dark:text-green-400" : ""}>Start</span>
+                <span className={workflow.step >= 4 ? "text-primary" : ""}>Route</span>
+              </div>
+            </div>
+          )}
+
+          {/* Current Status Message */}
+          {!isCompleted && (
+            <div className={`p-3 rounded-md border ${
+              isRouteStarted ? "bg-primary/10 border-primary/20" :
+              isInspectionComplete ? "bg-green-500/10 border-green-500/20" :
+              isClockedIn ? "bg-blue-500/10 border-blue-500/20" :
+              "bg-amber-500/10 border-amber-500/20"
+            }`}>
               <div className="flex items-center gap-2">
-                {isInspectionComplete ? (
+                {isRouteStarted ? (
+                  <>
+                    <Play className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-primary">
+                      Route in progress - Manage your stops
+                    </span>
+                  </>
+                ) : isInspectionComplete ? (
                   <>
                     <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                     <span className="text-sm font-medium text-green-600 dark:text-green-400">
-                      Inspection Complete
+                      Ready to start route
+                    </span>
+                  </>
+                ) : isClockedIn ? (
+                  <>
+                    <ClipboardCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm text-blue-600 dark:text-blue-400">
+                      Complete vehicle inspection to continue
                     </span>
                   </>
                 ) : (
                   <>
-                    <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">
-                      Inspection Required
+                    <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <span className="text-sm text-amber-600 dark:text-amber-400">
+                      Clock in to start this shift
                     </span>
                   </>
                 )}
               </div>
             </div>
           )}
-          
-          {/* Clock In Required Notice - Show when not clocked in */}
-          {!isCompleted && !clockStatus?.isClockedIn && (
-            <div className="p-3 rounded-md border bg-amber-500/10 border-amber-500/20">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <span className="text-sm text-amber-600 dark:text-amber-400">
-                  Clock in to start this shift
-                </span>
-              </div>
-            </div>
-          )}
 
-          {/* Route Status */}
-          {isRouteStarted && !isCompleted && (
-            <div className="p-3 rounded-md border bg-primary/10 border-primary/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Route Active</p>
-                  <p className="text-sm font-medium text-primary">
-                    Operations in progress
-                  </p>
-                </div>
-                <Play className="h-5 w-5 text-primary" />
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons - Gated by clock-in status */}
+          {/* Single Primary CTA with Clear States */}
           <div className="flex flex-col gap-2">
             {!isCompleted && !isRouteStarted ? (
-              !clockStatus?.isClockedIn ? (
-                // Not clocked in - no action buttons, just the notice above
-                null
-              ) : shift.routeId ? (
-                <Button
-                  className="flex-1"
-                  onClick={handleStartRoute}
-                  disabled={startRouteMutation.isPending}
-                  data-testid={`button-start-route-${shift.id}`}
-                >
-                  {startRouteMutation.isPending ? (
-                    <>
-                      <Clock className="h-4 w-4 mr-2 animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-4 w-4 mr-2" />
-                      {isInspectionComplete ? "Start Route" : "Complete Inspection & Start Route"}
-                    </>
+              hasRoute ? (
+                <div className="space-y-2">
+                  <Button
+                    className="w-full"
+                    onClick={handleStartRoute}
+                    disabled={buttonState.disabled}
+                    data-testid={`button-start-route-${shift.id}`}
+                  >
+                    {buttonState.loading ? (
+                      <>
+                        <Clock className="h-4 w-4 mr-2 animate-spin" />
+                        {buttonState.label}
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-2" />
+                        {buttonState.label}
+                      </>
+                    )}
+                  </Button>
+                  
+                  {/* Disabled Reason Explanation */}
+                  {buttonState.disabled && buttonState.disabledReason && (
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-muted/50 border border-dashed" data-testid={`text-disabled-reason-${shift.id}`}>
+                      <AlertCircle className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                      <span className="text-xs text-muted-foreground">
+                        {buttonState.disabledReason}
+                      </span>
+                    </div>
                   )}
-                </Button>
+                </div>
               ) : (
+                /* Prominent No Route Assigned Message */
                 <div 
-                  className="flex-1 text-center text-sm text-muted-foreground py-2 border border-dashed rounded-md"
+                  className="flex items-center justify-center gap-2 p-4 rounded-md border-2 border-dashed bg-muted/30"
                   data-testid={`text-no-route-${shift.id}`}
                 >
-                  No route assigned
+                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground">
+                    No route assigned to this shift
+                  </span>
                 </div>
               )
             ) : isRouteStarted && !isCompleted ? (
@@ -476,9 +561,10 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
               </Link>
             ) : (
               <div 
-                className="flex-1 text-center text-sm text-muted-foreground py-2"
+                className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground"
                 data-testid={`text-completed-${shift.id}`}
               >
+                <CheckCircle className="h-4 w-4" />
                 Shift Completed
               </div>
             )}

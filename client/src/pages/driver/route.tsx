@@ -32,6 +32,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  Loader2,
   MapPin,
   User,
   UserCheck,
@@ -488,7 +489,7 @@ export default function DriverRoutePage() {
                         </div>
                       )}
 
-                      {/* Action Buttons */}
+                      {/* Action Buttons with Loading States */}
                       <div className="flex gap-2 flex-wrap">
                         {/* Attendance marking - only for lead drivers */}
                         {!hasAttendance && !routeCompleted && canMarkAttendance && (
@@ -505,8 +506,12 @@ export default function DriverRoutePage() {
                               disabled={attendanceMutation.isPending}
                               data-testid={`button-mark-riding-${student.id}`}
                             >
-                              <UserCheck className="h-4 w-4 mr-1" />
-                              Riding
+                              {attendanceMutation.isPending ? (
+                                <Clock className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <UserCheck className="h-4 w-4 mr-1" />
+                              )}
+                              {attendanceMutation.isPending ? "Saving..." : "Riding"}
                             </Button>
                             <Button
                               size="touch"
@@ -520,8 +525,12 @@ export default function DriverRoutePage() {
                               disabled={attendanceMutation.isPending}
                               data-testid={`button-mark-absent-${student.id}`}
                             >
-                              <UserX className="h-4 w-4 mr-1" />
-                              Absent
+                              {attendanceMutation.isPending ? (
+                                <Clock className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <UserX className="h-4 w-4 mr-1" />
+                              )}
+                              {attendanceMutation.isPending ? "Saving..." : "Absent"}
                             </Button>
                           </>
                         )}
@@ -545,9 +554,14 @@ export default function DriverRoutePage() {
                                 student.plannedStopName
                               )
                             }
+                            disabled={rideEventMutation.isPending}
                             data-testid={`button-board-${student.id}`}
                           >
-                            <LogIn className="h-4 w-4 mr-1" />
+                            {rideEventMutation.isPending ? (
+                              <Clock className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <LogIn className="h-4 w-4 mr-1" />
+                            )}
                             Board
                           </Button>
                         )}
@@ -564,9 +578,14 @@ export default function DriverRoutePage() {
                                 student.plannedStopName
                               )
                             }
+                            disabled={rideEventMutation.isPending}
                             data-testid={`button-deboard-${student.id}`}
                           >
-                            <LogOut className="h-4 w-4 mr-1" />
+                            {rideEventMutation.isPending ? (
+                              <Clock className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <LogOut className="h-4 w-4 mr-1" />
+                            )}
                             Deboard
                           </Button>
                         )}
@@ -668,16 +687,36 @@ export default function DriverRoutePage() {
                       <div className="space-y-4">
                         {/* Actions */}
                         {isPending && (
-                          <div className="flex gap-2">
-                            <Button
-                              className="flex-1"
-                              onClick={() => completeStopMutation.mutate(stop.routeStopId)}
-                              disabled={!canComplete || completeStopMutation.isPending}
-                              data-testid={`button-mark-complete-${stop.id}`}
-                            >
-                              <CheckCircle2 className="h-4 w-4 mr-2" />
-                              Mark Stop Complete
-                            </Button>
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <Button
+                                className="flex-1"
+                                onClick={() => completeStopMutation.mutate(stop.routeStopId)}
+                                disabled={!canComplete || completeStopMutation.isPending}
+                                data-testid={`button-mark-complete-${stop.id}`}
+                              >
+                                {completeStopMutation.isPending ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Completing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                    Mark Stop Complete
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                            {/* Disabled Reason */}
+                            {!canComplete && !completeStopMutation.isPending && (
+                              <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-muted/50 border border-dashed" data-testid={`text-complete-blocked-${stop.id}`}>
+                                <AlertCircle className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                <span className="text-xs text-muted-foreground">
+                                  Complete previous stops first or process remaining students
+                                </span>
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -716,8 +755,17 @@ export default function DriverRoutePage() {
                 disabled={finishRouteMutation.isPending}
                 data-testid="button-finish-route"
               >
-                <Flag className="h-5 w-5 mr-2" />
-                Finish Route
+                {finishRouteMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Finishing...
+                  </>
+                ) : (
+                  <>
+                    <Flag className="h-5 w-5 mr-2" />
+                    Finish Route
+                  </>
+                )}
               </Button>
             </div>
           </CardContent>
