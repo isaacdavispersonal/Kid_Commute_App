@@ -43,6 +43,7 @@ import {
   Flag,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ShiftRouteContext } from "@shared/schema";
 import { Input } from "@/components/ui/input";
@@ -71,6 +72,11 @@ export default function DriverRoutePage() {
   const shiftId = params.shiftId;
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
+  
+  // Only lead drivers can mark attendance (absent/riding)
+  // Regular drivers can only record board/deboard events
+  const canMarkAttendance = user?.isLeadDriver === true;
 
   const { data: routeContext, isLoading } = useQuery<ShiftRouteContext>({
     queryKey: ["/api/driver/route", shiftId],
@@ -485,7 +491,8 @@ export default function DriverRoutePage() {
 
                       {/* Action Buttons */}
                       <div className="flex gap-2 flex-wrap">
-                        {!hasAttendance && !routeCompleted && (
+                        {/* Attendance marking - only for lead drivers */}
+                        {!hasAttendance && !routeCompleted && canMarkAttendance && (
                           <>
                             <Button
                               size="touch"
@@ -519,7 +526,14 @@ export default function DriverRoutePage() {
                             </Button>
                           </>
                         )}
-                        {isRiding && !hasBoarded && !routeCompleted && (
+                        {/* Pending status indicator for non-lead drivers */}
+                        {!hasAttendance && !routeCompleted && !canMarkAttendance && (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            Pending
+                          </Badge>
+                        )}
+                        {/* Board button - available to all drivers, but only shows when student is riding OR is pending */}
+                        {(isRiding || (!hasAttendance && !canMarkAttendance)) && !hasBoarded && !routeCompleted && (
                           <Button
                             size="touch"
                             variant="default"

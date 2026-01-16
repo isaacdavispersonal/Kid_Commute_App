@@ -7196,10 +7196,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req: any, res) => {
       try {
         const driverId = req.user.id;
-        const today = new Date().toISOString().split('T')[0];
+        
+        // Use local date for shift lookup to match how shifts are stored
+        const now = new Date();
+        const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         
         // Get all driver's shifts for today
-        const todayShifts = await storage.getShiftsByDriver(driverId, today, today);
+        const todayShifts = await storage.getShiftsByDriver(driverId, localToday, localToday);
         
         if (todayShifts.length === 0) {
           return res.json([]);
@@ -7208,13 +7211,16 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         // Get unique route IDs from shifts
         const routeIds = [...new Set(todayShifts.map(s => s.routeId).filter(Boolean))];
         
-        // Get students from all routes
+        // Get students from all routes, using each shift's actual date for consistency
         const allStudents: any[] = [];
         for (const routeId of routeIds) {
           if (routeId) {
-            const students = await storage.getStudentsByRouteForDate(routeId, today);
-            const route = await storage.getRoute(routeId);
             const shift = todayShifts.find(s => s.routeId === routeId);
+            // Use the shift's date for querying to ensure consistency
+            const queryDate = shift?.date || localToday;
+            const students = await storage.getStudentsByRouteForDate(routeId, queryDate);
+            const route = await storage.getRoute(routeId);
+            
             allStudents.push(...students.map(s => ({ 
               ...s, 
               routeName: route?.name || "Unknown Route",
@@ -7241,11 +7247,14 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       try {
         const driverId = req.user.id;
         const routeId = req.params.routeId;
-        const today = new Date().toISOString().split('T')[0];
+        
+        // Use local date for shift lookup to match how shifts are stored
+        const now = new Date();
+        const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         
         // Find driver's active shift for this route today
-        const shifts = await storage.getShiftsByDriver(driverId, today, today);
-        const activeShift = shifts.find(s => s.routeId === routeId && s.date === today);
+        const shifts = await storage.getShiftsByDriver(driverId, localToday, localToday);
+        const activeShift = shifts.find(s => s.routeId === routeId);
         
         if (!activeShift) {
           return res.status(404).json({ message: "No shift found for this route today" });
@@ -7258,7 +7267,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           });
         }
         
-        const students = await storage.getStudentsByRouteForDate(routeId, today);
+        // Use the shift date to query students for consistency
+        const shiftDate = activeShift.date;
+        const students = await storage.getStudentsByRouteForDate(routeId, shiftDate);
         res.json(students);
       } catch (error) {
         console.error("Error fetching route students:", error);
@@ -7286,8 +7297,16 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(401).json({ message: "User not found" });
         }
 
-        // Authorization check for drivers - must have started route
+        // Authorization check for drivers - ONLY lead drivers can mark attendance
+        // Regular drivers can only record board/deboard events via ride-events endpoint
         if (user.role === "driver") {
+          // Check if driver is a lead driver
+          if (!user.isLeadDriver) {
+            return res.status(403).json({ 
+              message: "Only lead drivers can mark students as absent or riding. Regular drivers can record when students board or leave the bus during the route." 
+            });
+          }
+          
           const student = await storage.getStudent(studentId);
           if (!student) {
             return res.status(404).json({ message: "Student not found" });
@@ -7435,6 +7454,86 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       } catch (error) {
         console.error("Error fetching attendance:", error);
         res.status(500).json({ message: "Failed to fetch attendance" });
+      }
+    }
+  );
+
+  // Debug endpoint for admin to diagnose driver attendance issues
+  // Only accessible in development or by explicitly enabling DEBUG_MODE env var
+  app.get(
+    "/api/admin/debug/driver-attendance/:driverId/:date",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      // Allow in development or if DEBUG_MODE is enabled
+      const isDebugAllowed = process.env.NODE_ENV === 'development' || process.env.DEBUG_MODE === 'true';
+      if (!isDebugAllowed) {
+        return res.status(404).json({ message: "Not found" });
+      }
+      
+      try {
+        const { driverId, date } = req.params;
+        
+        // Get driver info
+        const driver = await storage.getUser(driverId);
+        if (!driver) {
+          return res.status(404).json({ message: "Driver not found" });
+        }
+        
+        // Get driver's shifts for date
+        const shifts = await storage.getShiftsByDriver(driverId, date, date);
+        
+        // Get students for each route
+        const routeStudentData = [];
+        for (const shift of shifts) {
+          if (shift.routeId) {
+            const route = await storage.getRoute(shift.routeId);
+            const students = await storage.getStudentsByRouteForDate(shift.routeId, date);
+            const studentRouteAssignments = await Promise.all(
+              students.map(async (s) => {
+                const assignments = await storage.getStudentRouteAssignments(s.id);
+                return {
+                  studentId: s.id,
+                  studentName: `${s.firstName} ${s.lastName}`,
+                  attendance: s.attendance,
+                  legacyRouteId: s.assignedRouteId,
+                  junctionAssignments: assignments.map(a => ({ routeId: a.routeId })),
+                };
+              })
+            );
+            
+            routeStudentData.push({
+              shiftId: shift.id,
+              routeId: shift.routeId,
+              routeName: route?.name,
+              shiftType: shift.shiftType,
+              shiftDate: shift.date,
+              routeStartedAt: shift.routeStartedAt,
+              studentCount: students.length,
+              students: studentRouteAssignments,
+            });
+          }
+        }
+        
+        // Use local date for server comparison
+        const now = new Date();
+        const serverLocalDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        
+        res.json({
+          driver: {
+            id: driver.id,
+            name: `${driver.firstName} ${driver.lastName}`,
+            isLeadDriver: driver.isLeadDriver,
+          },
+          queryDate: date,
+          serverLocalDate,
+          serverTimestamp: new Date().toISOString(),
+          shiftCount: shifts.length,
+          routeData: routeStudentData,
+        });
+      } catch (error) {
+        console.error("Error in debug endpoint:", error);
+        res.status(500).json({ message: "Failed to get debug info" });
       }
     }
   );

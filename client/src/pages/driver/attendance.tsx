@@ -4,8 +4,10 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, XCircle, Users, Clock, Bell } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { CheckCircle, XCircle, Users, Clock, Bell, Info } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 
@@ -24,15 +26,31 @@ type Student = {
 export default function DriverAttendance() {
   const { toast } = useToast();
   const { socket } = useWebSocket();
-  const today = new Date().toISOString().split('T')[0];
+  const { user } = useAuth();
+  
+  // Only lead drivers can mark attendance (absent/riding)
+  // Regular drivers can only record board/deboard events on the route page
+  const canMarkAttendance = user?.isLeadDriver === true;
 
   const { data: driverAssignments } = useQuery<any[]>({
     queryKey: ["/api/driver/my-assignments"],
   });
 
+  // Find the currently active assignment for today
+  // Use local date for comparison to match how shifts are stored
+  const getLocalDate = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  };
+  
+  const localToday = getLocalDate();
   const currentRoute = driverAssignments?.find(
-    (a: any) => a.date === today && a.isActive
+    (a: any) => a.date === localToday && a.isActive
   );
+  
+  // Use the shift date from the route assignment for consistency
+  // This ensures attendance queries use the same date as the shift
+  const shiftDate = currentRoute?.date || localToday;
 
   const { data: students = [], isLoading } = useQuery<Student[]>({
     queryKey: ["/api/driver/route-students", currentRoute?.routeId],
@@ -43,7 +61,7 @@ export default function DriverAttendance() {
     mutationFn: async (data: { studentId: string; status: "riding" | "absent" }) => {
       return await apiRequest("POST", "/api/attendance", {
         studentId: data.studentId,
-        date: today,
+        date: shiftDate,
         status: data.status,
       });
     },
@@ -94,7 +112,7 @@ export default function DriverAttendance() {
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === "attendance_update" && data.routeId === currentRoute.routeId && data.date === today) {
+        if (data.type === "attendance_update" && data.routeId === currentRoute.routeId && data.date === shiftDate) {
           // Show toast notification (no student identity leaked from server)
           toast({
             title: "Attendance Updated",
@@ -113,7 +131,7 @@ export default function DriverAttendance() {
     return () => {
       socket.removeEventListener("message", handleMessage);
     };
-  }, [socket, currentRoute, toast]);
+  }, [socket, currentRoute, toast, shiftDate]);
 
   const ridingCount = students.filter(s => s.attendance?.status === "riding").length;
   const absentCount = students.filter(s => s.attendance?.status === "absent").length;
@@ -161,6 +179,17 @@ export default function DriverAttendance() {
         </Card>
       </div>
 
+      {/* Info alert for non-lead drivers */}
+      {!canMarkAttendance && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            You can view student attendance status here. To record when students board or leave the bus, 
+            use the route dashboard during your active shift.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {isLoading ? (
         <Card>
           <CardContent className="p-6">
@@ -203,42 +232,51 @@ export default function DriverAttendance() {
                         >
                           {student.attendance.status === "riding" ? "Riding" : "Absent"}
                         </Badge>
-                        <Button
-                          size="touch"
-                          variant="outline"
-                          onClick={() =>
-                            handleAttendance(
-                              student.id,
-                              student.attendance!.status === "riding" ? "absent" : "riding"
-                            )
-                          }
-                          disabled={setAttendanceMutation.isPending}
-                          data-testid={`button-toggle-${student.id}`}
-                        >
-                          Toggle
-                        </Button>
+                        {canMarkAttendance && (
+                          <Button
+                            size="touch"
+                            variant="outline"
+                            onClick={() =>
+                              handleAttendance(
+                                student.id,
+                                student.attendance!.status === "riding" ? "absent" : "riding"
+                              )
+                            }
+                            disabled={setAttendanceMutation.isPending}
+                            data-testid={`button-toggle-${student.id}`}
+                          >
+                            Toggle
+                          </Button>
+                        )}
                       </>
                     ) : (
                       <>
-                        <Button
-                          size="touch"
-                          onClick={() => handleAttendance(student.id, "riding")}
-                          disabled={setAttendanceMutation.isPending}
-                          data-testid={`button-riding-${student.id}`}
-                        >
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          Riding
-                        </Button>
-                        <Button
-                          size="touch"
-                          variant="destructive"
-                          onClick={() => handleAttendance(student.id, "absent")}
-                          disabled={setAttendanceMutation.isPending}
-                          data-testid={`button-absent-${student.id}`}
-                        >
-                          <XCircle className="w-4 h-4 mr-1" />
-                          Absent
-                        </Button>
+                        <Badge variant="outline" className="text-muted-foreground">
+                          Pending
+                        </Badge>
+                        {canMarkAttendance && (
+                          <>
+                            <Button
+                              size="touch"
+                              onClick={() => handleAttendance(student.id, "riding")}
+                              disabled={setAttendanceMutation.isPending}
+                              data-testid={`button-riding-${student.id}`}
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Riding
+                            </Button>
+                            <Button
+                              size="touch"
+                              variant="destructive"
+                              onClick={() => handleAttendance(student.id, "absent")}
+                              disabled={setAttendanceMutation.isPending}
+                              data-testid={`button-absent-${student.id}`}
+                            >
+                              <XCircle className="w-4 h-4 mr-1" />
+                              Absent
+                            </Button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
