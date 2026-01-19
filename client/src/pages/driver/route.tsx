@@ -127,10 +127,11 @@ export default function DriverRoutePage() {
         description: "Student attendance has been recorded",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
+      const message = error?.message || "Failed to update attendance";
       toast({
-        title: "Error",
-        description: "Failed to update attendance",
+        title: "Cannot Update Attendance",
+        description: message,
         variant: "destructive",
       });
     },
@@ -165,9 +166,10 @@ export default function DriverRoutePage() {
       setSelectedStopId("");
     },
     onError: (error: any) => {
+      const message = error?.message || "Failed to record ride event";
       toast({
-        title: "Error",
-        description: error.message || "Failed to record ride event",
+        title: "Cannot Record Ride Event",
+        description: message,
         variant: "destructive",
       });
     },
@@ -383,8 +385,35 @@ export default function DriverRoutePage() {
         </CardHeader>
       </Card>
 
+      {/* Route Completed Notice */}
+      {routeCompleted && (
+        <Alert className="border-green-600 dark:border-green-400 bg-green-50 dark:bg-green-950" data-testid="alert-route-completed">
+          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertDescription>
+            <div className="flex flex-col gap-2">
+              <div>
+                <h3 className="font-semibold text-green-800 dark:text-green-200">Route Completed</h3>
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  This route was finished at {new Date(shift.routeCompletedAt!).toLocaleTimeString()}. 
+                  Attendance and ride events can no longer be modified.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-fit"
+                onClick={() => setLocation("/driver")}
+                data-testid="button-back-to-dashboard"
+              >
+                Back to Dashboard
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Inspection Warning */}
-      {inspectionBlocked && (
+      {inspectionBlocked && !routeCompleted && (
         <Alert className="border-destructive" data-testid="alert-inspection-required">
           <AlertCircle className="h-4 w-4 text-destructive" />
           <AlertDescription>
@@ -589,6 +618,13 @@ export default function DriverRoutePage() {
                             )}
                             Deboard
                           </Button>
+                        )}
+                        {/* Locked indicator when route is completed */}
+                        {routeCompleted && (
+                          <Badge variant="outline" className="text-muted-foreground" data-testid={`badge-locked-${student.id}`}>
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Locked
+                          </Badge>
                         )}
                       </div>
                     </div>

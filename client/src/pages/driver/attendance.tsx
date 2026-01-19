@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { CheckCircle, XCircle, Users, Clock, Bell, Info } from "lucide-react";
+import { CheckCircle, XCircle, Users, Clock, Bell, Info, AlertCircle, Lock, Play, ClipboardCheck } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { Link } from "wouter";
 
 type Student = {
   id: string;
@@ -23,6 +24,17 @@ type Student = {
   } | null;
 };
 
+interface TodayShift {
+  id: string;
+  routeId: string | null;
+  routeName: string;
+  shiftType: string;
+  routeStartedAt: string | null;
+  routeCompletedAt: string | null;
+  inspectionCompletedAt: string | null;
+  status: string;
+}
+
 export default function DriverAttendance() {
   const { toast } = useToast();
   const { socket } = useWebSocket();
@@ -31,6 +43,11 @@ export default function DriverAttendance() {
   // Only lead drivers can mark attendance (absent/riding)
   // Regular drivers can only record board/deboard events on the route page
   const canMarkAttendance = user?.isLeadDriver === true;
+
+  // Get today's shifts for better state feedback
+  const { data: todayShifts } = useQuery<TodayShift[]>({
+    queryKey: ["/api/driver/today-shifts"],
+  });
 
   const { data: driverAssignments } = useQuery<any[]>({
     queryKey: ["/api/driver/my-assignments"],
@@ -47,6 +64,16 @@ export default function DriverAttendance() {
   const currentRoute = driverAssignments?.find(
     (a: any) => a.date === localToday && a.isActive
   );
+  
+  // Find matching shift for more status details
+  const currentShift = todayShifts?.find(
+    (s) => s.routeId === currentRoute?.routeId
+  );
+  
+  // Determine route state
+  const isRouteCompleted = !!currentShift?.routeCompletedAt;
+  const isRouteStarted = !!currentShift?.routeStartedAt;
+  const isInspectionComplete = !!currentShift?.inspectionCompletedAt;
   
   // Use the shift date from the route assignment for consistency
   // This ensures attendance queries use the same date as the shift
@@ -76,10 +103,11 @@ export default function DriverAttendance() {
         description: "Attendance updated successfully",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
+      const message = error?.message || "Failed to update attendance";
       toast({
-        title: "Error",
-        description: "Failed to update attendance",
+        title: "Cannot Update Attendance",
+        description: message,
         variant: "destructive",
       });
     },
@@ -142,7 +170,7 @@ export default function DriverAttendance() {
   const pendingCount = students.filter(s => !s.attendance || s.attendance.status === "PENDING").length;
 
   return (
-    <PullToRefresh queryKeys={[["/api/driver/my-assignments"], ["/api/driver/route-students"]]}>
+    <PullToRefresh queryKeys={[["/api/driver/my-assignments"], ["/api/driver/route-students"], ["/api/driver/today-shifts"]]}>
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Student Attendance</h1>
@@ -183,8 +211,51 @@ export default function DriverAttendance() {
         </Card>
       </div>
 
+      {/* Route Completed Notice */}
+      {isRouteCompleted && (
+        <Alert className="border-green-600 dark:border-green-400 bg-green-50 dark:bg-green-950" data-testid="alert-route-completed">
+          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertDescription>
+            <div className="flex flex-col gap-2">
+              <div>
+                <h3 className="font-semibold text-green-800 dark:text-green-200">Route Completed</h3>
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  This route has been completed. Attendance records are now locked and cannot be modified.
+                </p>
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Route Not Started Notice */}
+      {currentShift && !isRouteStarted && !isRouteCompleted && (
+        <Alert className="border-amber-500 dark:border-amber-400" data-testid="alert-route-not-started">
+          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">Route Not Started</h3>
+                <p className="text-sm text-muted-foreground">
+                  {!isInspectionComplete 
+                    ? "Complete vehicle inspection and start your route to modify attendance."
+                    : "Start your route from the dashboard to modify attendance."
+                  }
+                </p>
+              </div>
+              <Link href="/driver">
+                <Button variant="outline" size="sm" data-testid="button-go-to-dashboard">
+                  <Play className="h-4 w-4 mr-2" />
+                  Go to Dashboard
+                </Button>
+              </Link>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Info alert for non-lead drivers */}
-      {!canMarkAttendance && (
+      {!canMarkAttendance && !isRouteCompleted && (
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
