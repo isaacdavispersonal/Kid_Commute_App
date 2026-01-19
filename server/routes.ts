@@ -4599,7 +4599,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const driverId = req.user.id;
         const { shiftId, studentId, actualStopId, eventType, notes } = req.body;
 
-        // Verify shift belongs to this driver and route is started
+        // Verify shift belongs to this driver and route is currently running
         const shift = await storage.getShift(shiftId);
         if (!shift) {
           return res.status(404).json({ message: "Shift not found" });
@@ -4610,6 +4610,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         if (!shift.routeStartedAt) {
           return res.status(400).json({ 
             message: "Route must be started before recording ride events" 
+          });
+        }
+        if (shift.routeCompletedAt) {
+          return res.status(400).json({ 
+            message: "Route has already been completed. Ride events cannot be recorded after route completion." 
           });
         }
 
@@ -7537,35 +7542,71 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           // Find driver's shift for the student's route on the given date
           const shifts = await storage.getShiftsByDriver(userId, date, date);
           
-          // Check if driver has a shift for any of the student's assigned routes
-          let activeShift: any = null;
-          
-          // Check studentRoutes (multi-route assignments)
-          const studentRouteAssignments = await storage.getStudentRouteAssignments(studentId);
-          for (const sr of studentRouteAssignments) {
-            const shift = shifts.find(s => s.routeId === sr.routeId && s.date === date);
-            if (shift?.routeStartedAt) {
-              activeShift = shift;
-              break;
+          // If a specific shiftId was provided, validate it belongs to this driver
+          // This allows modifying attendance for a specific shift (AM or PM)
+          if (shiftId) {
+            const targetShift = shifts.find(s => s.id === shiftId);
+            if (!targetShift) {
+              return res.status(403).json({ 
+                message: "You don't have access to this shift" 
+              });
             }
-          }
-          
-          // Also check legacy assignedRouteId
-          if (!activeShift && student.assignedRouteId) {
-            const shift = shifts.find(s => s.routeId === student.assignedRouteId && s.date === date);
-            if (shift?.routeStartedAt) {
-              activeShift = shift;
+            if (!targetShift.routeStartedAt) {
+              return res.status(400).json({ 
+                message: "Route has not been started for this shift" 
+              });
             }
+            effectiveShiftId = shiftId;
+          } else {
+            // No shiftId provided - find the currently active (running) shift
+            // Active means: routeStartedAt is set AND routeCompletedAt is NOT set
+            let activeShift: any = null;
+            
+            // Check studentRoutes (multi-route assignments)
+            const studentRouteAssignments = await storage.getStudentRouteAssignments(studentId);
+            for (const sr of studentRouteAssignments) {
+              // Find shift for this route that is currently running (started but not completed)
+              const shift = shifts.find(s => 
+                s.routeId === sr.routeId && 
+                s.date === date && 
+                s.routeStartedAt && 
+                !s.routeCompletedAt  // Only if route is still running
+              );
+              if (shift) {
+                activeShift = shift;
+                break;
+              }
+            }
+            
+            // Also check legacy assignedRouteId
+            if (!activeShift && student.assignedRouteId) {
+              const shift = shifts.find(s => 
+                s.routeId === student.assignedRouteId && 
+                s.date === date && 
+                s.routeStartedAt && 
+                !s.routeCompletedAt  // Only if route is still running
+              );
+              if (shift) {
+                activeShift = shift;
+              }
+            }
+            
+            if (!activeShift) {
+              // Check if there's a started but completed shift (route finished)
+              const completedShift = shifts.find(s => s.routeStartedAt && s.routeCompletedAt);
+              if (completedShift) {
+                return res.status(400).json({ 
+                  message: "Route has already been completed. Attendance cannot be modified after route completion." 
+                });
+              }
+              return res.status(400).json({ 
+                message: "Route has not been started. Please start the route from the dashboard first." 
+              });
+            }
+            
+            // Use the active shift's ID to track AM/PM attendance separately
+            effectiveShiftId = activeShift.id;
           }
-          
-          if (!activeShift) {
-            return res.status(400).json({ 
-              message: "Route has not been started. Please start the route from the dashboard first." 
-            });
-          }
-          
-          // Use the active shift's ID to track AM/PM attendance separately
-          effectiveShiftId = shiftId || activeShift.id;
         }
 
         // Authorization check for parents
