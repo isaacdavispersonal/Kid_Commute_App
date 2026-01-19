@@ -17,13 +17,15 @@ import { format } from "date-fns";
 interface RouteHealth {
   routeId: string;
   routeName: string;
-  isActive: boolean;
+  isEnabled: boolean; // Configuration: route is enabled in system
+  isRunning: boolean; // Operational: driver is actively running this route right now
+  activeShiftId: string | null;
   assignedDriver: {
     id: string;
     firstName: string;
     lastName: string;
   } | null;
-  driverStatus: "ON_TIME" | "LATE" | "NOT_STARTED" | "NO_DRIVER";
+  driverStatus: "ON_TIME" | "LATE" | "NOT_STARTED" | "NO_DRIVER" | "COMPLETED" | "CLOCKED_IN";
   studentCount: number;
   unresolvedIncidents: number;
   lastActivity: string | null;
@@ -34,16 +36,24 @@ export default function RouteHealthSection() {
     queryKey: ["/api/admin/route-health"],
   });
 
-  const activeRoutes = routes?.filter(r => r.isActive) || [];
-  const inactiveRoutes = routes?.filter(r => !r.isActive) || [];
+  // Running routes = driver has clocked in AND started the route
+  const runningRoutes = routes?.filter(r => r.isRunning) || [];
+  // Idle routes = enabled but not currently running
+  const idleRoutes = routes?.filter(r => r.isEnabled && !r.isRunning) || [];
+  // Disabled routes = not enabled in system
+  const disabledRoutes = routes?.filter(r => !r.isEnabled) || [];
   const routesWithIssues = routes?.filter(r => r.unresolvedIncidents > 0 || r.driverStatus === "LATE" || r.driverStatus === "NO_DRIVER") || [];
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "ON_TIME":
-        return <Badge variant="outline" className="bg-success/10 text-success border-success"><CheckCircle2 className="w-3 h-3 mr-1" />On Time</Badge>;
+        return <Badge variant="outline" className="bg-success/10 text-success border-success"><CheckCircle2 className="w-3 h-3 mr-1" />Running</Badge>;
       case "LATE":
         return <Badge variant="outline" className="bg-warning/10 text-warning border-warning"><Clock className="w-3 h-3 mr-1" />Late</Badge>;
+      case "CLOCKED_IN":
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500"><Clock className="w-3 h-3 mr-1" />Clocked In</Badge>;
+      case "COMPLETED":
+        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500"><CheckCircle2 className="w-3 h-3 mr-1" />Completed</Badge>;
       case "NOT_STARTED":
         return <Badge variant="outline" className="bg-secondary/10 text-secondary border-secondary"><Clock className="w-3 h-3 mr-1" />Not Started</Badge>;
       case "NO_DRIVER":
@@ -51,6 +61,16 @@ export default function RouteHealthSection() {
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
+  };
+
+  const getOperationalBadge = (route: RouteHealth) => {
+    if (route.isRunning) {
+      return <Badge variant="outline" className="bg-success/10 text-success border-success"><Activity className="w-3 h-3 mr-1" />Running</Badge>;
+    }
+    if (!route.isEnabled) {
+      return <Badge variant="outline" className="bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500">Disabled</Badge>;
+    }
+    return <Badge variant="outline" className="bg-secondary/10 text-secondary border-secondary">Idle</Badge>;
   };
 
   if (isLoading) {
@@ -70,13 +90,13 @@ export default function RouteHealthSection() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Routes</CardTitle>
-            <Activity className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Running Routes</CardTitle>
+            <Activity className="w-4 h-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeRoutes.length}</div>
+            <div className="text-2xl font-bold text-success">{runningRoutes.length}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {inactiveRoutes.length} inactive
+              {idleRoutes.length} idle, {disabledRoutes.length} disabled
             </p>
           </CardContent>
         </Card>
@@ -123,19 +143,15 @@ export default function RouteHealthSection() {
               {routes.map((route) => (
                 <div
                   key={route.routeId}
-                  className="flex items-center justify-between p-4 border rounded-lg hover-elevate"
+                  className="flex items-center justify-between gap-4 p-4 border rounded-lg hover-elevate"
                   data-testid={`route-health-${route.routeId}`}
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-medium">{route.routeName}</h3>
-                      {route.isActive ? (
-                        <Badge variant="outline" className="bg-success/10 text-success">Active</Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-gray-500/10 text-gray-700">Inactive</Badge>
-                      )}
+                      {getOperationalBadge(route)}
                     </div>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
                       {route.assignedDriver ? (
                         <div className="flex items-center gap-1">
                           <Users className="w-3 h-3" />
@@ -159,7 +175,7 @@ export default function RouteHealthSection() {
                       )}
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     {getStatusBadge(route.driverStatus)}
                     {route.lastActivity && (
                       <p className="text-xs text-muted-foreground mt-1">

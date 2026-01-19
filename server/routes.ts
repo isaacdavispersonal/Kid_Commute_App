@@ -776,8 +776,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             const incidents = await storage.getIncidentsByRoute(route.id);
             const unresolvedIncidents = incidents.filter(i => i.status === "REPORTED").length;
 
-            // Determine driver status
+            // Determine driver status and operational running status
             let driverStatus = "NOT_STARTED";
+            let isRunning = false; // Operational status: driver clocked in + route explicitly started
+            let activeShiftId = null;
+            
             if (!assignedDriver) {
               driverStatus = "NO_DRIVER";
             } else {
@@ -785,14 +788,33 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               const shifts = await storage.getShiftsByDate(today, today);
               const driverShift = shifts.find(s => s.driverId === assignedDriver.id && s.routeId === route.id);
               if (driverShift) {
-                driverStatus = driverShift.status === "ACTIVE" ? "ON_TIME" : "NOT_STARTED";
+                activeShiftId = driverShift.id;
+                
+                // Route is operationally running only when routeStartedAt is set
+                // This means: driver clocked in + completed inspection + explicitly started route
+                // Just checking status === "ACTIVE" is not enough since clock-in also sets ACTIVE
+                const routeStarted = !!driverShift.routeStartedAt;
+                isRunning = routeStarted && driverShift.status === "ACTIVE";
+                
+                if (driverShift.status === "COMPLETED") {
+                  driverStatus = "COMPLETED";
+                } else if (routeStarted) {
+                  driverStatus = "ON_TIME";
+                } else if (driverShift.status === "ACTIVE" && !routeStarted) {
+                  // Driver clocked in but hasn't started route yet
+                  driverStatus = "CLOCKED_IN";
+                } else {
+                  driverStatus = "NOT_STARTED";
+                }
               }
             }
 
             return {
               routeId: route.id,
               routeName: route.name,
-              isActive: route.isActive,
+              isEnabled: route.isActive, // Configuration: route is enabled in system
+              isRunning, // Operational: driver is actively running this route right now
+              activeShiftId,
               assignedDriver: assignedDriver ? {
                 id: assignedDriver.id,
                 firstName: assignedDriver.firstName,
