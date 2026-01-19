@@ -57,12 +57,16 @@ export default function DriverAttendance() {
     enabled: !!currentRoute?.routeId,
   });
 
+  // Get shiftId from current route assignment for per-shift attendance tracking
+  const currentShiftId = currentRoute?.shiftId || currentRoute?.id;
+  
   const setAttendanceMutation = useMutation({
     mutationFn: async (data: { studentId: string; status: "riding" | "absent" }) => {
       return await apiRequest("POST", "/api/attendance", {
         studentId: data.studentId,
         date: shiftDate,
         status: data.status,
+        shiftId: currentShiftId, // Track AM/PM attendance separately
       });
     },
     onSuccess: () => {

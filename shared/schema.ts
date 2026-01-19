@@ -734,13 +734,16 @@ export interface ImportStudentsCommitResponse {
 // Attendance status enum (for type safety only - stored as varchar in DB)
 export const attendanceStatusEnum = pgEnum("attendance_status", ["PENDING", "riding", "absent"]);
 
-// Student attendance table - Daily attendance tracking
+// Student attendance table - Per-shift attendance tracking
+// Keyed by studentId + date + shiftId to support AM/PM routes without overwrites
 export const studentAttendance = pgTable("student_attendance", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   studentId: varchar("student_id")
     .notNull()
     .references(() => students.id, { onDelete: "cascade" }),
   date: varchar("date").notNull(), // Format: YYYY-MM-DD
+  shiftId: varchar("shift_id")
+    .references(() => shifts.id, { onDelete: "cascade" }), // Links attendance to specific shift (AM/PM)
   status: varchar("status").notNull().default("PENDING"), // PENDING | riding | absent
   markedByUserId: varchar("marked_by_user_id")
     .references(() => users.id, { onDelete: "cascade" }),

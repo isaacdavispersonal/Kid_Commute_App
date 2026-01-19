@@ -121,7 +121,7 @@ import {
   type PasswordResetToken,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray, isNotNull, isNull } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "./errors";
 
 export interface IStorage {
@@ -295,8 +295,13 @@ export interface IStorage {
   // Vehicle inspection operations
   createVehicleInspection(inspection: InsertVehicleInspection): Promise<VehicleInspection>;
 
-  // Student attendance operations
-  getStudentAttendance(studentId: string, date: string): Promise<StudentAttendance | undefined>;
+  // Student attendance operations (per-shift attendance tracking)
+  // shiftId = string for per-shift attendance, null for date-level attendance
+  getStudentAttendance(studentId: string, date: string, shiftId: string | null): Promise<StudentAttendance | undefined>;
+  // Get per-shift attendance, falling back to date-level if no per-shift record exists
+  getStudentAttendanceWithFallback(studentId: string, date: string, shiftId: string): Promise<StudentAttendance | undefined>;
+  // Get all attendance records for a student on a date (all shifts)
+  getStudentAttendanceForDate(studentId: string, date: string): Promise<StudentAttendance[]>;
   setStudentAttendance(attendance: InsertStudentAttendance): Promise<StudentAttendance>;
   updateStudentAttendance(id: string, updates: UpdateStudentAttendance): Promise<StudentAttendance>;
   getAttendanceForDate(date: string): Promise<any[]>;
@@ -3360,8 +3365,46 @@ export class DatabaseStorage implements IStorage {
 
   // ============ Student Attendance Operations ============
 
-  async getStudentAttendance(studentId: string, date: string): Promise<StudentAttendance | undefined> {
+  // Get attendance for a student on a specific date, with explicit shiftId matching
+  // shiftId = string: returns the per-shift attendance record for that exact shift
+  // shiftId = null: returns date-level attendance (null shiftId records only)
+  // This ensures AM/PM per-shift records are never confused with date-level records
+  async getStudentAttendance(studentId: string, date: string, shiftId: string | null): Promise<StudentAttendance | undefined> {
+    // Build query conditions
+    const conditions: any[] = [
+      eq(studentAttendance.studentId, studentId),
+      eq(studentAttendance.date, date),
+    ];
+    
+    // Explicitly match shiftId - either exact match or null-only
+    if (shiftId) {
+      conditions.push(eq(studentAttendance.shiftId, shiftId));
+    } else {
+      // Only match records with null shiftId (date-level attendance)
+      conditions.push(isNull(studentAttendance.shiftId));
+    }
+    
     const [attendance] = await db
+      .select()
+      .from(studentAttendance)
+      .where(and(...conditions))
+      .limit(1);
+    return attendance;
+  }
+
+  // Get attendance for a specific shift - returns per-shift record or falls back to date-level
+  async getStudentAttendanceWithFallback(studentId: string, date: string, shiftId: string): Promise<StudentAttendance | undefined> {
+    // First try to find per-shift attendance
+    const perShift = await this.getStudentAttendance(studentId, date, shiftId);
+    if (perShift) return perShift;
+    
+    // Fall back to date-level attendance if no per-shift record exists
+    return await this.getStudentAttendance(studentId, date, null);
+  }
+
+  // Get all attendance records for a student on a date (across all shifts)
+  async getStudentAttendanceForDate(studentId: string, date: string): Promise<StudentAttendance[]> {
+    return await db
       .select()
       .from(studentAttendance)
       .where(
@@ -3369,31 +3412,36 @@ export class DatabaseStorage implements IStorage {
           eq(studentAttendance.studentId, studentId),
           eq(studentAttendance.date, date)
         )
-      )
-      .limit(1);
-    return attendance;
+      );
   }
 
   async setStudentAttendance(attendance: InsertStudentAttendance): Promise<StudentAttendance> {
-    // Check if attendance already exists for this student and date
-    const existing = await this.getStudentAttendance(attendance.studentId, attendance.date);
+    // Check if attendance already exists for this exact student + date + shiftId combo
+    // This ensures AM and PM per-shift records are kept completely separate
+    // Date-level records (null shiftId) are also kept separate from per-shift records
+    const existing = await this.getStudentAttendance(
+      attendance.studentId, 
+      attendance.date,
+      attendance.shiftId ?? null  // Pass null explicitly to match null-only records
+    );
     
     let result: StudentAttendance;
     if (existing) {
-      // Update existing attendance
+      // Update existing attendance for this specific shift
       const [updated] = await db
         .update(studentAttendance)
         .set({
           status: attendance.status,
           markedByUserId: attendance.markedByUserId,
           notes: attendance.notes,
+          shiftId: attendance.shiftId, // Ensure shiftId is set if updating legacy record
           updatedAt: new Date(),
         })
         .where(eq(studentAttendance.id, existing.id))
         .returning();
       result = updated;
     } else {
-      // Create new attendance record
+      // Create new attendance record with shiftId
       const [newAttendance] = await db
         .insert(studentAttendance)
         .values(attendance)
@@ -3406,16 +3454,19 @@ export class DatabaseStorage implements IStorage {
       const markedBy = await this.getUser(attendance.markedByUserId);
       if (markedBy && (markedBy.role === "driver" || markedBy.role === "parent")) {
         const student = await this.getStudent(attendance.studentId);
+        const shift = attendance.shiftId ? await this.getShift(attendance.shiftId) : null;
+        const shiftLabel = shift?.shiftType === "AM" ? " (AM)" : shift?.shiftType === "PM" ? " (PM)" : "";
         await this.createAuditLog({
           userId: markedBy.id,
           userRole: markedBy.role,
           action: "created",
           entityType: "attendance",
           entityId: result.id,
-          description: `Marked ${student?.firstName} ${student?.lastName} as ${attendance.status} for ${attendance.date}`,
+          description: `Marked ${student?.firstName} ${student?.lastName} as ${attendance.status} for ${attendance.date}${shiftLabel}`,
           changes: {
             status: attendance.status,
             date: attendance.date,
+            shiftId: attendance.shiftId,
           },
         });
       }

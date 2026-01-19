@@ -2534,8 +2534,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               }
             }
 
-            // Get today's attendance
-            const attendance = await storage.getStudentAttendance(student.id, today);
+            // Get today's attendance (all shifts for admin overview)
+            const attendanceRecords = await storage.getStudentAttendanceForDate(student.id, today);
+            // Return all records, or single record for backward compatibility
+            const attendance = attendanceRecords.length > 0 ? attendanceRecords[0] : null;
 
             return {
               ...student,
@@ -2546,6 +2548,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               dropoffStop,
               assignedRoutes, // New multi-route assignments
               attendance,
+              attendanceRecords, // All AM/PM attendance records
             };
           })
         );
@@ -5790,8 +5793,15 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               dropoffStop = stops.find((s) => s.id === effectiveDropoffStopId);
             }
 
-            // Get today's attendance
-            const attendance = await storage.getStudentAttendance(student.id, today);
+            // Get today's attendance - prioritize per-shift if activeShiftId exists
+            let attendance = null;
+            if (activeShiftId) {
+              // Get attendance specific to the active shift (AM or PM)
+              attendance = await storage.getStudentAttendanceWithFallback(student.id, today, activeShiftId);
+            } else {
+              // No active shift, get date-level attendance
+              attendance = await storage.getStudentAttendance(student.id, today, null);
+            }
 
             return {
               ...student,
@@ -7487,13 +7497,14 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   );
 
   // Set student attendance (all roles) - supports single date or date range
+  // Now includes shiftId to properly track AM/PM attendance separately
   app.post(
     "/api/attendance",
     requireAuth,
     async (req: any, res) => {
       try {
         const userId = req.user.id;
-        const { studentId, date, endDate, status, notes } = req.body;
+        const { studentId, date, endDate, status, notes, shiftId } = req.body;
         
         // Validate request
         if (!studentId || !date || !status) {
@@ -7504,6 +7515,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         if (!user) {
           return res.status(401).json({ message: "User not found" });
         }
+
+        // Determine the shiftId to use for attendance tracking
+        let effectiveShiftId = shiftId || null;
 
         // Authorization check for drivers - ONLY lead drivers can mark attendance
         // Regular drivers can only record board/deboard events via ride-events endpoint
@@ -7524,31 +7538,34 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           const shifts = await storage.getShiftsByDriver(userId, date, date);
           
           // Check if driver has a shift for any of the student's assigned routes
-          let hasActiveStartedShift = false;
+          let activeShift: any = null;
           
           // Check studentRoutes (multi-route assignments)
           const studentRouteAssignments = await storage.getStudentRouteAssignments(studentId);
           for (const sr of studentRouteAssignments) {
             const shift = shifts.find(s => s.routeId === sr.routeId && s.date === date);
             if (shift?.routeStartedAt) {
-              hasActiveStartedShift = true;
+              activeShift = shift;
               break;
             }
           }
           
           // Also check legacy assignedRouteId
-          if (!hasActiveStartedShift && student.assignedRouteId) {
+          if (!activeShift && student.assignedRouteId) {
             const shift = shifts.find(s => s.routeId === student.assignedRouteId && s.date === date);
             if (shift?.routeStartedAt) {
-              hasActiveStartedShift = true;
+              activeShift = shift;
             }
           }
           
-          if (!hasActiveStartedShift) {
+          if (!activeShift) {
             return res.status(400).json({ 
               message: "Route has not been started. Please start the route from the dashboard first." 
             });
           }
+          
+          // Use the active shift's ID to track AM/PM attendance separately
+          effectiveShiftId = shiftId || activeShift.id;
         }
 
         // Authorization check for parents
@@ -7571,6 +7588,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
 
         // If endDate is provided, set attendance for date range
+        // Note: Date range attendance doesn't use shiftId (typically for advance scheduling)
         if (endDate) {
           const startDate = new Date(date);
           const finalDate = new Date(endDate);
@@ -7590,6 +7608,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               status,
               markedByUserId: userId,
               notes: notes || null,
+              shiftId: null, // Date range attendance is date-level, not shift-specific
             });
             attendanceRecords.push(record);
             currentDate.setDate(currentDate.getDate() + 1);
@@ -7601,13 +7620,14 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           });
         }
 
-        // Single date attendance
+        // Single date attendance - uses shiftId to track AM/PM separately
         const attendance = await storage.setStudentAttendance({
           studentId,
           date,
           status,
           markedByUserId: userId,
           notes: notes || null,
+          shiftId: effectiveShiftId, // Track attendance per-shift to avoid AM/PM overwrites
         });
         
         // Broadcast WebSocket notification if parent updated attendance
@@ -7773,8 +7793,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(403).json({ message: "Not authorized to view this student's attendance" });
         }
 
-        const attendance = await storage.getStudentAttendance(studentId, date);
-        res.json(attendance || null);
+        // Return all attendance records for the date (AM and PM)
+        const attendanceRecords = await storage.getStudentAttendanceForDate(studentId, date);
+        // Return array of all records, or single record for backward compatibility
+        res.json(attendanceRecords.length > 0 ? attendanceRecords : null);
       } catch (error) {
         console.error("Error fetching student attendance:", error);
         res.status(500).json({ message: "Failed to fetch student attendance" });

@@ -117,6 +117,7 @@ export default function DriverRoutePage() {
         studentId,
         date: routeContext.shift.date,
         status,
+        shiftId, // Track AM/PM attendance separately
       });
     },
     onSuccess: () => {

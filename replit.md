@@ -39,7 +39,7 @@ Preferred communication style: Simple, everyday language.
     - **Driver Assignment System**: Admins assign drivers to routes with optional vehicle assignment.
     - **Parent Student Management**: Parents can edit children's information.
     - **Multi-Route Student Assignment**: Students can be assigned to multiple routes (e.g., morning, afternoon) via a junction table, with admin dialog management and visual route type indicators.
-    - **Student Attendance Tracking**: Comprehensive system (PENDING, riding, absent) with live admin overview.
+    - **Student Attendance Tracking**: Per-shift attendance system (PENDING, riding, absent) with `shiftId` column to prevent AM/PM route overwrites. Live admin overview included.
     - **Parent Dashboard Enhancements**: Live ETA countdown, quick contact actions, driver info, and account management.
     - **Payment Portal Configuration**: Environment-driven billing portal system (QuickBooks, ClassWallet) for parent payments.
     - **Admin Audit Log**: Tracks driver and parent actions.
