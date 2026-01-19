@@ -305,7 +305,8 @@ export interface IStorage {
   setStudentAttendance(attendance: InsertStudentAttendance): Promise<StudentAttendance>;
   updateStudentAttendance(id: string, updates: UpdateStudentAttendance): Promise<StudentAttendance>;
   getAttendanceForDate(date: string): Promise<any[]>;
-  getStudentsByRouteForDate(routeId: string, date: string): Promise<any[]>;
+  // Get students for a route with attendance data for a specific date and optionally shift
+  getStudentsByRouteForDate(routeId: string, date: string, shiftId?: string): Promise<any[]>;
   getAttendanceOverview(date: string): Promise<{ pending: number; riding: number; absent: number; total: number }>;
   getStudentAbsenceReport(studentId: string, startDate: string, endDate: string): Promise<any[]>;
   getAttendanceAnalytics(startDate: string, endDate: string): Promise<any[]>;
@@ -1827,8 +1828,9 @@ export class DatabaseStorage implements IStorage {
     // Get ordered route stops
     const routeStopsData = await this.getRouteStops(route.id);
 
-    // Get all students for this route
-    const allStudents = await this.getStudentsByRouteForDate(route.id, shift.date);
+    // Get all students for this route with attendance specific to this shift
+    // This ensures AM and PM attendance are properly separated
+    const allStudents = await this.getStudentsByRouteForDate(route.id, shift.date, shiftId);
 
     // Get ride events for this shift
     const rideEvents = await this.getRideEventsByShift(shiftId);
@@ -3538,7 +3540,10 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getStudentsByRouteForDate(routeId: string, date: string): Promise<any[]> {
+  // Get students for a route with attendance data for a specific date and optionally shift
+  // When shiftId is provided, returns attendance for that specific shift (AM or PM)
+  // When shiftId is null/undefined, returns per-shift attendance with fallback to date-level
+  async getStudentsByRouteForDate(routeId: string, date: string, shiftId?: string): Promise<any[]> {
     // Get students from direct assignment
     const directStudents = await db
       .select()
@@ -3568,22 +3573,47 @@ export class DatabaseStorage implements IStorage {
     let attendanceRecords: StudentAttendance[] = [];
     
     if (studentIds.length > 0) {
+      // Build query conditions for attendance
+      const attendanceConditions: any[] = [
+        eq(studentAttendance.date, date),
+        or(...studentIds.map(id => eq(studentAttendance.studentId, id)))
+      ];
+      
+      // If shiftId is provided, filter by that specific shift
+      // This ensures AM and PM attendance are properly separated
+      if (shiftId) {
+        attendanceConditions.push(eq(studentAttendance.shiftId, shiftId));
+      }
+      
       attendanceRecords = await db
         .select()
         .from(studentAttendance)
-        .where(
-          and(
-            eq(studentAttendance.date, date),
-            or(...studentIds.map(id => eq(studentAttendance.studentId, id)))
-          )
-        );
+        .where(and(...attendanceConditions));
     }
     
-    const attendanceMap = new Map(attendanceRecords.map(a => [a.studentId, a]));
+    // Create attendance map - for each student, use the per-shift record if available
+    const attendanceMap = new Map<string, StudentAttendance>();
+    
+    if (shiftId) {
+      // When shiftId is specified, only use matching records
+      attendanceRecords.forEach(a => {
+        if (a.shiftId === shiftId) {
+          attendanceMap.set(a.studentId, a);
+        }
+      });
+    } else {
+      // No shiftId specified - use first matching record per student
+      // This is for backward compatibility with callers that don't have shift context
+      attendanceRecords.forEach(a => {
+        if (!attendanceMap.has(a.studentId)) {
+          attendanceMap.set(a.studentId, a);
+        }
+      });
+    }
     
     return routeStudents.map(student => ({
       ...student,
-      attendance: attendanceMap.get(student.id) || null,
+      attendance: attendanceMap.get(student.id)?.status || null,
     }));
   }
 

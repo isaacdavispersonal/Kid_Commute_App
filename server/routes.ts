@@ -4754,7 +4754,8 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
 
         // Verify all non-absent students have deboarded
         if (shift.routeId) {
-          const students = await storage.getStudentsByRouteForDate(shift.routeId, shift.date);
+          // Get students with attendance specific to this shift to avoid AM/PM confusion
+          const students = await storage.getStudentsByRouteForDate(shift.routeId, shift.date, shiftId);
           const nonAbsentStudents = students.filter(s => s.attendance !== "absent");
           
           for (const student of nonAbsentStudents) {
@@ -7434,20 +7435,21 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         // Get unique route IDs from shifts
         const routeIds = [...new Set(todayShifts.map(s => s.routeId).filter(Boolean))];
         
-        // Get students from all routes, using each shift's actual date for consistency
+        // Get students from all routes, using each shift's actual date and shiftId for consistency
         const allStudents: any[] = [];
         for (const routeId of routeIds) {
           if (routeId) {
             const shift = todayShifts.find(s => s.routeId === routeId);
-            // Use the shift's date for querying to ensure consistency
+            // Use the shift's date and shiftId to get per-shift attendance
             const queryDate = shift?.date || localToday;
-            const students = await storage.getStudentsByRouteForDate(routeId, queryDate);
+            const students = await storage.getStudentsByRouteForDate(routeId, queryDate, shift?.id);
             const route = await storage.getRoute(routeId);
             
             allStudents.push(...students.map(s => ({ 
               ...s, 
               routeName: route?.name || "Unknown Route",
               routeId,
+              shiftId: shift?.id,
               shiftType: shift?.shiftType
             })));
           }
@@ -7490,9 +7492,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           });
         }
         
-        // Use the shift date to query students for consistency
+        // Use the shift date and shiftId to query students with per-shift attendance
         const shiftDate = activeShift.date;
-        const students = await storage.getStudentsByRouteForDate(routeId, shiftDate);
+        const students = await storage.getStudentsByRouteForDate(routeId, shiftDate, activeShift.id);
         res.json(students);
       } catch (error) {
         console.error("Error fetching route students:", error);
@@ -7752,12 +7754,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         // Get driver's shifts for date
         const shifts = await storage.getShiftsByDriver(driverId, date, date);
         
-        // Get students for each route
+        // Get students for each route with per-shift attendance
         const routeStudentData = [];
         for (const shift of shifts) {
           if (shift.routeId) {
             const route = await storage.getRoute(shift.routeId);
-            const students = await storage.getStudentsByRouteForDate(shift.routeId, date);
+            // Pass shiftId to get attendance specific to this shift (AM vs PM)
+            const students = await storage.getStudentsByRouteForDate(shift.routeId, date, shift.id);
             const studentRouteAssignments = await Promise.all(
               students.map(async (s) => {
                 const assignments = await storage.getStudentRouteAssignments(s.id);
