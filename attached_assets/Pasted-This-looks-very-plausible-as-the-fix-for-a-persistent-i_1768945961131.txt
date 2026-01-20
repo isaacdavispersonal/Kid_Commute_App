@@ -1,0 +1,114 @@
+This looks **very plausible** as the fix for a persistent iOS “white bar,” and it’s addressing the two most common root causes:
+
+* ✅ **`h-screen` / `100vh` on iOS** causing layout gaps when the viewport height changes.
+* ✅ **`html` background being white (`--card`) inside the safe-area support block**, so the notch/home-indicator area shows white even if your app body is a different color.
+
+So yes: **these changes should fix the white bar** *if* the bar was coming from safe-area background bleed or 100vh sizing issues (which is what your inspector screenshot hinted at).
+
+That said, there are **two gotchas** in their CSS change that you should watch, because they can create new issues if you’re not careful.
+
+---
+
+## 1) The changes that are definitely good
+
+### ✅ Replacing `h-screen` with `min-h-svh`
+
+Great call. `100vh` on iOS has long been problematic; `svh/dvh` are the correct modern fix.
+
+### ✅ Removing `hsl(var(--card))` from `html` in the safe-area block
+
+Also great. If `html` was white and your app background is not, the safe-area region will look like a “white bar.”
+
+### ✅ Adding `bg-background` on the top-level wrappers
+
+This makes sure your top container paints the background color instead of relying on `body`/`html`.
+
+---
+
+## 2) The two things I’d double-check before calling it “done”
+
+### ⚠️ A) `overflow: hidden` on `html` and `body`
+
+They set:
+
+```css
+html { overflow: hidden; }
+body { overflow: hidden; }
+```
+
+This can be OK **if** your app intentionally uses an internal scroll container (like your `<main class="overflow-y-auto">`), but it can also:
+
+* break scroll on some screens if the scroll container isn’t set up correctly
+* break pull-to-refresh behaviors
+* mess with keyboard + input focus scrolling on iOS
+
+**If scrolling still works everywhere, fine.**
+If scroll breaks, change to:
+
+```css
+html, body { overflow: hidden; }
+#root { overflow: hidden; }
+```
+
+…and make sure your actual content area is the only element with `overflow-y-auto`.
+
+(You already *intended* single-scroll-container, so this may be consistent with your architecture.)
+
+### ⚠️ B) `min-height: 100dvh` support/fallback
+
+Their “single source of truth” block includes both `100svh` and `100dvh`. That’s fine. But you also used Tailwind `min-h-svh` in React. Make sure you’re not creating conflicting expectations like:
+
+* CSS sets `min-height: 100dvh`
+* layout container sets `min-h-svh`
+  This usually won’t cause issues, but if anything feels “too tall” or clipped, pick one strategy.
+
+---
+
+## 3) The *real* test: verify the white bar source disappears
+
+After you pull/build/sync/run, do this in Safari Web Inspector again:
+
+* Select `html`, `body`, `#root`
+* Confirm **computed background-color is the same** on all three.
+* Confirm the bar is gone on:
+
+  * login screen
+  * dashboard
+  * a scroll-heavy page
+
+If it’s fixed in one screen but not another, then one screen likely has a container with a different background or `h-screen`.
+
+---
+
+## 4) Exactly how to apply & test (so you don’t test stale code)
+
+From repo root:
+
+```bash
+git pull
+npm run build:native
+npx cap sync ios
+open ./ios/App/App.xcworkspace
+```
+
+Then in Xcode:
+
+* **Product → Clean Build Folder**
+* Run on device
+
+---
+
+## 5) If the bar remains after these changes
+
+Then it’s probably **StatusBar overlay style** rather than HTML background.
+
+In that case, we’d adjust:
+
+* iOS `Info.plist` status bar appearance
+* Capacitor `@capacitor/status-bar` settings (if installed)
+
+But I would **100% try this patch first**—it’s aimed at the most likely causes and it’s logically consistent with what you saw.
+
+---
+
+If you want, paste the *current* top-level layout in `App.tsx` (just the outer wrappers), and I’ll sanity-check that your scroll container + backgrounds are consistent with the new CSS so you don’t trade the white bar for “scroll feels broken.”
