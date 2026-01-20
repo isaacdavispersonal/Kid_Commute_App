@@ -98,25 +98,29 @@ export function PullToRefresh({
   }, [scrollContainerRef, isPulling, pullDistance, isRefreshing, onRefresh, disabled, isDialogOpen]);
 
   const showIndicator = pullDistance > 0 || isRefreshing;
-  const indicatorHeight = isRefreshing ? 48 : pullDistance;
   const progress = Math.min(pullDistance / PULL_THRESHOLD, 1);
   const rotation = progress * 180;
+  
+  // Calculate translateY based on pull distance or fixed position when refreshing
+  const translateY = isRefreshing ? 16 : Math.max(pullDistance - 40, -40);
 
   if (!showIndicator) return null;
 
   return (
     <div 
-      className="absolute left-0 right-0 top-0 z-50 flex items-center justify-center overflow-hidden pointer-events-none"
-      style={{ height: indicatorHeight }}
+      className="fixed left-0 right-0 top-0 z-[100] flex items-start justify-center pointer-events-none"
+      style={{ 
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 4.5rem + 1rem)'
+      }}
     >
       <div 
         className={cn(
-          "flex items-center justify-center rounded-full bg-background border shadow-sm transition-transform",
+          "flex items-center justify-center rounded-full bg-background border shadow-lg transition-all duration-200",
           isRefreshing ? "w-10 h-10" : "w-8 h-8"
         )}
         style={{ 
-          transform: isRefreshing ? 'none' : `rotate(${rotation}deg)`,
-          opacity: isRefreshing ? 1 : progress
+          transform: `translateY(${translateY}px) rotate(${isRefreshing ? 0 : rotation}deg)`,
+          opacity: isRefreshing ? 1 : Math.max(0.3, progress)
         }}
       >
         <Loader2 
