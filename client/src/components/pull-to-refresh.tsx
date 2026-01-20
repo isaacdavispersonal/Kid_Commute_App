@@ -108,10 +108,7 @@ export function PullToRefresh({
 
   return (
     <div 
-      className="fixed left-0 right-0 top-0 z-[100] flex items-start justify-center pointer-events-none"
-      style={{ 
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 4.5rem + 1rem)'
-      }}
+      className="absolute left-0 right-0 top-0 z-[100] flex items-start justify-center pointer-events-none"
     >
       <div 
         className={cn(

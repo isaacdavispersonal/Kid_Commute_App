@@ -436,28 +436,3 @@ button, a, [role="button"] {
   -webkit-overflow-scrolling: touch;
 }
 
-/* iOS fixed header - prevent dragging/pulling from header area but allow taps/clicks */
-.ios-fixed-header {
-  /* Use fixed positioning so header never moves with overscroll */
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 50;
-  /* Prevent touch gestures from moving the header */
-  touch-action: none;
-  -webkit-touch-callout: none;
-  user-select: none;
-  -webkit-user-select: none;
-  /* Prevent overscroll chaining */
-  overscroll-behavior: none;
-}
-
-/* Ensure interactive elements inside the header can still receive all touch events */
-.ios-fixed-header button,
-.ios-fixed-header [role="button"],
-.ios-fixed-header [data-state],
-.ios-fixed-header a {
-  touch-action: auto;
-  pointer-events: auto;
-}
