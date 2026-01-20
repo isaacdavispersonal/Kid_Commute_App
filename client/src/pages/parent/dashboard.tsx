@@ -12,9 +12,10 @@ import { NoChildrenBanner } from "@/components/no-children-banner";
 import { ParentTutorialBanner } from "@/components/parent-tutorial-banner";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useRegisterRefresh } from "@/contexts/RefreshContext";
 
 interface PaymentPortal {
   id: string;
@@ -86,17 +87,24 @@ export default function ParentDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const { socket, isConnected } = useWebSocket();
   
-  const { data: students, isLoading } = useQuery<StudentData[]>({
+  const { data: students, isLoading, refetch: refetchStudents } = useQuery<StudentData[]>({
     queryKey: ["/api/parent/students"],
     refetchInterval: 120000, // Fallback refetch every 2 minutes (WebSocket is primary)
     refetchIntervalInBackground: true,
   });
 
   // Fetch configured payment portals
-  const { data: paymentPortals } = useQuery<PaymentPortal[]>({
+  const { data: paymentPortals, refetch: refetchPortals } = useQuery<PaymentPortal[]>({
     queryKey: ["/api/billing/portals"],
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
+
+  // Pull-to-refresh support
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([refetchStudents(), refetchPortals()]);
+  }, [refetchStudents, refetchPortals]);
+  
+  useRegisterRefresh("parent-dashboard", handleRefresh);
 
   // Listen for WebSocket route progress updates
   useEffect(() => {

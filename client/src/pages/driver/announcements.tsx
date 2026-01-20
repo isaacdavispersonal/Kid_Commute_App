@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Megaphone, Bell, CheckCircle } from "lucide-react";
@@ -7,6 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistance } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useRegisterRefresh } from "@/contexts/RefreshContext";
 
 interface Announcement {
   id: string;
@@ -27,13 +29,20 @@ interface RouteAnnouncement {
 }
 
 export default function DriverAnnouncements() {
-  const { data: globalAnnouncements, isLoading: loadingGlobal } = useQuery<Announcement[]>({
+  const { data: globalAnnouncements, isLoading: loadingGlobal, refetch: refetchGlobal } = useQuery<Announcement[]>({
     queryKey: ["/api/announcements"],
   });
 
-  const { data: routeAnnouncements, isLoading: loadingRoute } = useQuery<RouteAnnouncement[]>({
+  const { data: routeAnnouncements, isLoading: loadingRoute, refetch: refetchRoute } = useQuery<RouteAnnouncement[]>({
     queryKey: ["/api/driver/route-announcements"],
   });
+
+  // Pull-to-refresh support
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([refetchGlobal(), refetchRoute()]);
+  }, [refetchGlobal, refetchRoute]);
+  
+  useRegisterRefresh("driver-announcements", handleRefresh);
 
   const handleDismiss = async (announcementId: string) => {
     await apiRequest("POST", "/api/announcements/dismiss", { announcementId });

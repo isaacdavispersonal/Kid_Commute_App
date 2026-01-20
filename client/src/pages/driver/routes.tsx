@@ -9,7 +9,8 @@ import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRegisterRefresh } from "@/contexts/RefreshContext";
 
 interface TodayRouteData {
   routeName: string;
@@ -38,12 +39,12 @@ export default function DriverRoutes() {
   const { toast } = useToast();
   const [shiftId, setShiftId] = useState<string | null>(null);
   
-  const { data: todayRoute, isLoading } = useQuery<TodayRouteData | null>({
+  const { data: todayRoute, isLoading, refetch: refetchRoute } = useQuery<TodayRouteData | null>({
     queryKey: ["/api/driver/today-route"],
   });
 
   // Fetch today's shift to get the shift ID
-  const { data: todayShift } = useQuery<TodayShift[]>({
+  const { data: todayShift, refetch: refetchShift } = useQuery<TodayShift[]>({
     queryKey: ["/api/driver/shifts/today"],
     enabled: !!todayRoute,
   });
@@ -56,10 +57,17 @@ export default function DriverRoutes() {
   }, [todayShift]);
 
   // Fetch route progress
-  const { data: routeProgress, isLoading: progressLoading } = useQuery<RouteProgress[]>({
+  const { data: routeProgress, isLoading: progressLoading, refetch: refetchProgress } = useQuery<RouteProgress[]>({
     queryKey: ["/api/driver/route-progress", shiftId],
     enabled: !!shiftId,
   });
+
+  // Pull-to-refresh support
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([refetchRoute(), refetchShift(), refetchProgress()]);
+  }, [refetchRoute, refetchShift, refetchProgress]);
+  
+  useRegisterRefresh("driver-routes", handleRefresh);
 
   // Initialize route progress if not exists
   const initializeMutation = useMutation({

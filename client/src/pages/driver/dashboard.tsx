@@ -1,6 +1,7 @@
 // Driver dashboard with simple clock-in/out and separate route starting
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useRegisterRefresh } from "@/contexts/RefreshContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -587,20 +588,31 @@ export default function DriverDashboard() {
   const [showClockOutDialog, setShowClockOutDialog] = useState(false);
   const [clockOutNotes, setClockOutNotes] = useState("");
   
-  const { data: clockStatus, isLoading: clockStatusLoading } = useQuery<ClockStatus>({
+  const { data: clockStatus, isLoading: clockStatusLoading, refetch: refetchClockStatus } = useQuery<ClockStatus>({
     queryKey: ["/api/driver/clock-status"],
     refetchInterval: 5000, // Refresh every 5 seconds
   });
 
-  const { data: todayShifts, isLoading: shiftsLoading, error } = useQuery<EnrichedShift[]>({
+  const { data: todayShifts, isLoading: shiftsLoading, error, refetch: refetchShifts } = useQuery<EnrichedShift[]>({
     queryKey: ["/api/driver/today-shifts"],
   });
 
-  const { data: breakStatus } = useQuery<{ activeBreak: any }>({
+  const { data: breakStatus, refetch: refetchBreakStatus } = useQuery<{ activeBreak: any }>({
     queryKey: ["/api/driver/break/status"],
     enabled: clockStatus?.isClockedIn,
     refetchInterval: 5000,
   });
+
+  // Pull-to-refresh support
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([
+      refetchClockStatus(),
+      refetchShifts(),
+      refetchBreakStatus()
+    ]);
+  }, [refetchClockStatus, refetchShifts, refetchBreakStatus]);
+  
+  useRegisterRefresh("driver-dashboard", handleRefresh);
 
   const isOnBreak = breakStatus?.activeBreak !== null;
   const elapsedTime = useElapsedTime(clockStatus?.isClockedIn ? clockStatus.clockInTime : null);

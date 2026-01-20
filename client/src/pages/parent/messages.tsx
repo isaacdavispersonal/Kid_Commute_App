@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, MessageSquare, AlertCircle, User, Megaphone, X } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { getLoginUrl } from "@/lib/config";
+import { useRegisterRefresh } from "@/contexts/RefreshContext";
 
 export default function ParentMessagesPage() {
   const { toast } = useToast();
@@ -23,19 +24,19 @@ export default function ParentMessagesPage() {
   const { socket } = useWebSocket();
 
   // Get announcements from admin
-  const { data: announcements = [] } = useQuery<any[]>({
+  const { data: announcements = [], refetch: refetchAnnouncements } = useQuery<any[]>({
     queryKey: ["/api/parent/announcements"],
     refetchInterval: 10000,
   });
 
   // Get dismissed announcements
-  const { data: dismissedAnnouncements = [] } = useQuery<any[]>({
+  const { data: dismissedAnnouncements = [], refetch: refetchDismissed } = useQuery<any[]>({
     queryKey: ["/api/parent/announcements/dismissed"],
     refetchInterval: 10000,
   });
 
   // Get unread announcement IDs
-  const { data: unreadAnnouncementData } = useQuery<{ unreadIds: string[] }>({
+  const { data: unreadAnnouncementData, refetch: refetchUnread } = useQuery<{ unreadIds: string[] }>({
     queryKey: ["/api/user/unread-announcements"],
     refetchInterval: 5000,
   });
@@ -44,19 +45,19 @@ export default function ParentMessagesPage() {
   const [showDismissedAnnouncements, setShowDismissedAnnouncements] = useState(false);
 
   // Get drivers currently assigned to parent's children's routes
-  const { data: assignedDrivers = [], isLoading: driversLoading } = useQuery<any[]>({
+  const { data: assignedDrivers = [], isLoading: driversLoading, refetch: refetchDrivers } = useQuery<any[]>({
     queryKey: ["/api/parent/assigned-drivers"],
     refetchInterval: 10000,
   });
 
   // Get admin contacts (admins who have messaged this parent)
-  const { data: adminContacts = [], isLoading: adminsLoading } = useQuery<any[]>({
+  const { data: adminContacts = [], isLoading: adminsLoading, refetch: refetchAdminContacts } = useQuery<any[]>({
     queryKey: ["/api/parent/admin-contacts"],
     refetchInterval: 10000,
   });
 
   // Get unread counts by sender
-  const { data: unreadCounts } = useQuery<{
+  const { data: unreadCounts, refetch: refetchCounts } = useQuery<{
     messages: number;
     announcements: number;
     messageBySender: { [senderId: string]: number };
@@ -66,11 +67,26 @@ export default function ParentMessagesPage() {
   });
 
   // Get messages between parent and selected driver
-  const { data: messages, isLoading: messagesLoading } = useQuery<any[]>({
+  const { data: messages, isLoading: messagesLoading, refetch: refetchMessages } = useQuery<any[]>({
     queryKey: ["/api/parent/messages", selectedDriver],
     enabled: !!selectedDriver,
     refetchInterval: 3000,
   });
+
+  // Pull-to-refresh support
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([
+      refetchAnnouncements(),
+      refetchDismissed(),
+      refetchUnread(),
+      refetchDrivers(),
+      refetchAdminContacts(),
+      refetchCounts(),
+      refetchMessages()
+    ]);
+  }, [refetchAnnouncements, refetchDismissed, refetchUnread, refetchDrivers, refetchAdminContacts, refetchCounts, refetchMessages]);
+  
+  useRegisterRefresh("parent-messages", handleRefresh);
 
   // Merge admin contacts with drivers for unified contact list
   const allContacts = useMemo(() => {

@@ -4,16 +4,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MapPin, Navigation } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
+import { useRegisterRefresh } from "@/contexts/RefreshContext";
 
 export default function ParentTracking() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
-  const { data: vehicleLocation, isLoading } = useQuery({
+  const { data: vehicleLocation, isLoading, refetch } = useQuery({
     queryKey: ["/api/parent/vehicle-location"],
     refetchInterval: 10000,
   });
+
+  // Pull-to-refresh support
+  const handleRefresh = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
+  
+  useRegisterRefresh("parent-tracking", handleRefresh);
 
   useEffect(() => {
     if (!mapRef.current || !window.L) return;
