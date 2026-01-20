@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Car, Loader2, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { isNative, getApiUrl } from "@/lib/config";
@@ -184,25 +183,26 @@ function LoginForm() {
           </button>
         </div>
       </div>
-      <div className="flex items-center space-x-3 p-3 rounded-md border bg-muted/30">
-        <Checkbox 
+      <label 
+        htmlFor="rememberMe"
+        className="flex items-center space-x-3 p-3 rounded-md border bg-muted/30 cursor-pointer"
+      >
+        <input 
+          type="checkbox"
           id="rememberMe" 
           checked={rememberMe}
-          onCheckedChange={(checked) => setRememberMe(checked === true)}
+          onChange={(e) => setRememberMe(e.target.checked)}
           disabled={isLoading}
-          className="h-5 w-5 border-2 border-foreground/50 data-[state=checked]:border-primary"
+          className="h-5 w-5 rounded border-2 border-foreground/50 accent-primary"
           data-testid="checkbox-remember-me"
         />
-        <Label 
-          htmlFor="rememberMe" 
-          className="text-sm cursor-pointer flex-1"
-        >
+        <span className="text-sm flex-1">
           Keep me logged in
           <span className="block text-xs text-muted-foreground mt-0.5">
             Stay signed in for 30 days on this device
           </span>
-        </Label>
-      </div>
+        </span>
+      </label>
       <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-login">
         {isLoading ? (
           <>
