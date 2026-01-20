@@ -190,7 +190,7 @@ function LoginForm() {
           checked={rememberMe}
           onCheckedChange={(checked) => setRememberMe(checked === true)}
           disabled={isLoading}
-          className="h-5 w-5 border-2"
+          className="h-5 w-5 border-2 border-foreground/50 data-[state=checked]:border-primary"
           data-testid="checkbox-remember-me"
         />
         <Label 
