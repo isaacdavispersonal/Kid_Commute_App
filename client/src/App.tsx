@@ -77,6 +77,23 @@ function Router() {
   // Unified auth hook works for both web and mobile platforms
   const { user, isAuthenticated, isLoading, logout } = useUnifiedAuth();
   const [, setLocation] = useLocation();
+  
+  // ALL hooks must be called before any early returns to follow React's rules of hooks
+  const mainRef = useRef<HTMLElement>(null);
+  const { triggerRefresh, isRefreshing } = useRefresh();
+
+  // Unified logout handler for both web and mobile
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Navigate to landing page after logout
+      setLocation("/");
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Even on error, navigate to landing page
+      setLocation("/");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -103,27 +120,11 @@ function Router() {
 
   const userRole = user.role || "parent";
   const isLeadDriver = userRole === "driver" && user.isLeadDriver === true;
-  
-  // Unified logout handler for both web and mobile
-  const handleLogout = async () => {
-    try {
-      await logout();
-      // Navigate to landing page after logout
-      setLocation("/");
-    } catch (error) {
-      console.error("Logout error:", error);
-      // Even on error, navigate to landing page
-      setLocation("/");
-    }
-  };
 
   const sidebarStyle = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   } as React.CSSProperties;
-
-  const mainRef = useRef<HTMLElement>(null);
-  const { triggerRefresh, isRefreshing } = useRefresh();
 
   return (
     <SidebarProvider style={sidebarStyle}>

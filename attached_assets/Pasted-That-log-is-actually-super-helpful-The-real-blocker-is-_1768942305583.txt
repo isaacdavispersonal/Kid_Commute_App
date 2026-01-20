@@ -1,0 +1,171 @@
+That log is actually super helpful. The **real blocker** is this:
+
+**Minified React error #310** → the full error is: **“Rendered more hooks than during the previous render.”** ([React][1])
+
+That means **some component is calling hooks (`useState`, `useEffect`, `useMemo`, etc.) conditionally** (inside an `if`, loop, or after an early `return`) so the number/order of hooks changes between renders. In production builds (like your Capacitor bundle), React throws this and you get a blank screen.
+
+The iOS warnings (`UIScene lifecycle…`, Firebase swizzling, sandbox extension) are **noise** here — they’re not why your UI went blank.
+
+---
+
+## What usually causes this in your kind of app
+
+Given your logs show `MobileAuth getAuthToken called, isNative: true` and then immediately React #310, the bug is likely in one of these places:
+
+* `App.tsx` or your root router: “if token exists render X else render Y” **with hooks after the conditional**
+* An auth gate component where hooks are only called when `isNative === true`
+* A component that returns early when `loading` or `token` is missing, but hooks are defined after that return
+* A screen that only exists in native builds and was recently edited
+
+---
+
+## Fast way to find it (do this first)
+
+### 1) Add sourcemaps so the stack points to your real file
+
+In `vite.config.ts`:
+
+```ts
+export default defineConfig({
+  build: {
+    sourcemap: true,
+  },
+});
+```
+
+Then rebuild & sync:
+
+```bash
+npm run build:native
+npx cap sync ios
+```
+
+Re-run in Xcode and your error will be much easier to trace.
+
+---
+
+## Even faster: run a DEV build inside Capacitor to get the full React error + stack
+
+This avoids minified errors entirely.
+
+1. Start Vite dev server:
+
+```bash
+npm run dev -- --host
+```
+
+2. Temporarily point Capacitor to it in `capacitor.config.ts`:
+
+```ts
+server: {
+  url: "http://YOUR_MAC_IP:5173",
+  cleartext: true
+}
+```
+
+(Replace `YOUR_MAC_IP` with your Mac’s LAN IP, like `192.168.1.20`)
+
+3. Sync + run:
+
+```bash
+npx cap sync ios
+npx cap run ios
+```
+
+Now you’ll get the **full unminified** error and a proper file/line stack.
+
+---
+
+## How to fix “Rendered more hooks than during the previous render”
+
+### ✅ Rule: hooks must run in the same order on every render
+
+Bad (common pattern):
+
+```ts
+function MyScreen() {
+  if (!token) return <Login />;   // ❌ early return before hooks
+
+  const [x, setX] = useState(0);  // hooks called only sometimes
+  useEffect(() => {}, []);
+  ...
+}
+```
+
+Good:
+
+```ts
+function MyScreen() {
+  const [x, setX] = useState(0);
+  useEffect(() => {}, []);
+
+  if (!token) return <Login />;   // ✅ return AFTER hooks
+  ...
+}
+```
+
+Bad:
+
+```ts
+if (isNative) {
+  useEffect(() => { ... }, []);   // ❌ hook inside condition
+}
+```
+
+Good:
+
+```ts
+useEffect(() => {
+  if (!isNative) return;
+  // native-only behavior
+}, [isNative]);
+```
+
+---
+
+## What to tell Replit AI (copy/paste)
+
+Use this to make Replit AI hunt the exact file:
+
+```text
+We’re getting a blank screen in the iOS Capacitor build with:
+“Minified React error #310”
+This decodes to: “Rendered more hooks than during the previous render.”
+
+Please debug and fix the hook-order violation.
+
+Steps:
+1) Search for hook calls inside conditionals/loops/early returns:
+   - useState/useEffect/useMemo/useCallback/useContext/useRef
+   - patterns: `if (...) { useEffect(...) }`, `return ...` before hooks, hooks after `if (!token) return ...`
+2) Focus first on auth gating and mobile-specific logic:
+   - App.tsx, router/layout components, auth provider, MobileAuth usage
+   - anything checking isNative / Capacitor
+3) Fix by moving ALL hooks to the top-level of the component and putting conditions inside the hook bodies.
+4) Provide the exact file path(s), before/after code, and why it only breaks in the native build.
+```
+
+---
+
+## One last practical tip
+
+You logged two empty errors:
+
+```
+⚡️  [error] - {}
+⚡️  [error] - {}
+```
+
+That usually means you’re catching errors but not printing them well. Once you’re back in dev mode, improve logging like:
+
+```ts
+catch (err) {
+  console.error("AUTH ERROR", err);
+}
+```
+
+---
+
+If you paste your `App.tsx` (or the component where `MobileAuth` is used), I can point out the exact likely hook-order bug immediately.
+
+[1]: https://react.dev/errors/310?utm_source=chatgpt.com "Minified React error #310"
