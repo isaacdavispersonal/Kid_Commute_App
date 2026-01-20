@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Bus, Loader2, ArrowLeft, CheckCircle, XCircle, Mail, RefreshCw } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle, XCircle, Mail, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
 import { getApiUrl } from "@/lib/config";
 
@@ -16,11 +16,36 @@ export default function VerifyEmail() {
   const [errorMessage, setErrorMessage] = useState("");
   const [email, setEmail] = useState("");
   const [resendSuccess, setResendSuccess] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   
   const urlParams = new URLSearchParams(window.location.search);
   const token = urlParams.get("token");
   const error = urlParams.get("error");
   const success = urlParams.get("success");
+
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const response = await fetch(getApiUrl("/api/auth/user"), {
+          credentials: "include",
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setIsAuthenticated(true);
+          setUserEmail(data.email || null);
+          if (data.email) {
+            setEmail(data.email);
+          }
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch {
+        setIsAuthenticated(false);
+      }
+    };
+    checkAuthStatus();
+  }, []);
 
   useEffect(() => {
     if (success === "true") {
@@ -109,16 +134,22 @@ export default function VerifyEmail() {
     setResendSuccess(false);
     
     try {
+      const body: { email?: string } = {};
+      const emailToUse = email.trim() || userEmail;
+      if (emailToUse) {
+        body.email = emailToUse;
+      }
+
       const response = await fetch(getApiUrl("/api/auth/resend-verification"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify(body),
         credentials: "include",
       });
 
       const data = await response.json();
 
-      if (!response.ok && response.status !== 200) {
+      if (!response.ok && response.status >= 400) {
         throw new Error(data.message || "Failed to resend verification");
       }
 
@@ -207,52 +238,62 @@ export default function VerifyEmail() {
     );
   }
 
-  const ResendForm = () => (
-    <form onSubmit={handleResendVerification} className="space-y-4">
-      {resendSuccess ? (
-        <div className="p-4 bg-green-500/10 rounded-lg text-center">
-          <CheckCircle className="h-6 w-6 text-green-500 mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground">
-            Check your inbox for the verification link.
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={isResending}
-              data-testid="input-resend-email"
-            />
+  const ResendForm = () => {
+    const showEmailInput = !isAuthenticated || !userEmail;
+    
+    return (
+      <form onSubmit={handleResendVerification} className="space-y-4">
+        {resendSuccess ? (
+          <div className="p-4 bg-green-500/10 rounded-lg text-center">
+            <CheckCircle className="h-6 w-6 text-green-500 mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">
+              Check your inbox for the verification link.
+            </p>
           </div>
-          <Button 
-            type="submit"
-            className="w-full" 
-            disabled={isResending || !email.trim()}
-            data-testid="button-resend-verification"
-          >
-            {isResending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending...
-              </>
+        ) : (
+          <>
+            {showEmailInput ? (
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isResending}
+                  data-testid="input-resend-email"
+                />
+              </div>
             ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Send Verification Email
-              </>
+              <p className="text-sm text-muted-foreground text-center">
+                We'll send a new verification link to <span className="font-medium">{userEmail}</span>
+              </p>
             )}
-          </Button>
-        </>
-      )}
-    </form>
-  );
+            <Button 
+              type="submit"
+              className="w-full" 
+              disabled={isResending || (showEmailInput && !email.trim())}
+              data-testid="button-resend-verification"
+            >
+              {isResending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Send Verification Email
+                </>
+              )}
+            </Button>
+          </>
+        )}
+      </form>
+    );
+  };
 
   if (status === "expired") {
     return (
@@ -269,7 +310,7 @@ export default function VerifyEmail() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-center text-muted-foreground">
-              Verification links expire after 24 hours. Enter your email to request a new one.
+              Verification links expire after 24 hours. Request a new one below.
             </p>
             <ResendForm />
             <Link href="/">
@@ -295,18 +336,15 @@ export default function VerifyEmail() {
               </div>
             </div>
             <CardTitle className="text-2xl">Verify Your Email</CardTitle>
-            <CardDescription>Check your inbox for a verification link</CardDescription>
+            <CardDescription>Email verification is required</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-center text-muted-foreground">
-              We've sent a verification email to your inbox. Click the link in the email to verify your account.
+              {isAuthenticated 
+                ? "Your email address needs to be verified. Request a verification link below."
+                : "Please check your inbox for a verification link, or request a new one below."}
             </p>
-            <div className="space-y-2 pt-2 border-t">
-              <p className="text-sm text-center text-muted-foreground pt-2">
-                Didn't receive the email? Enter your email to resend.
-              </p>
-              <ResendForm />
-            </div>
+            <ResendForm />
             <Link href="/">
               <Button variant="ghost" className="w-full" data-testid="button-back-home">
                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -333,7 +371,7 @@ export default function VerifyEmail() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-center text-muted-foreground">
-            We couldn't verify your email address. Enter your email below to request a new verification link.
+            We couldn't verify your email address. Request a new verification link below.
           </p>
           <ResendForm />
           <Link href="/">

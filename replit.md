@@ -23,7 +23,7 @@ Preferred communication style: Simple, everyday language.
   - **Email Verification**: New accounts with email addresses receive verification emails. Tokens expire after 24 hours.
     - `POST /api/auth/verify-email` - Verify email with token
     - `GET /api/auth/verify-email` - Redirects from email link to verification page
-    - `POST /api/auth/resend-verification` - Resend verification email (requires auth)
+    - `POST /api/auth/resend-verification` - Resend verification email (supports both authenticated and unauthenticated users)
     - `GET /api/auth/verification-status` - Check verification status (requires auth)
   - **Password Reset**: Email-based password reset flow with 1-hour token expiry.
     - `POST /api/auth/forgot-password` - Request password reset email
