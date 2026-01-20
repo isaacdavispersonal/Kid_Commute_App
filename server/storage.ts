@@ -40,6 +40,7 @@ import {
   payrollExportEntries,
   authCredentials,
   passwordResetTokens,
+  emailVerificationTokens,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -119,6 +120,7 @@ import {
   type AuthCredentials,
   type InsertAuthCredentials,
   type PasswordResetToken,
+  type EmailVerificationToken,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray, isNotNull, isNull } from "drizzle-orm";
@@ -425,6 +427,13 @@ export interface IStorage {
   getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
   markPasswordResetTokenUsed(token: string): Promise<void>;
   deleteExpiredPasswordResetTokens(): Promise<number>;
+
+  // Email verification token operations
+  createEmailVerificationToken(userId: string, email: string, token: string, expiresAt: Date): Promise<EmailVerificationToken>;
+  getEmailVerificationToken(token: string): Promise<EmailVerificationToken | undefined>;
+  markEmailVerificationTokenUsed(token: string): Promise<void>;
+  deleteExpiredEmailVerificationTokens(): Promise<number>;
+  setEmailVerified(userId: string, verified: boolean): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5076,6 +5085,62 @@ export class DatabaseStorage implements IStorage {
       .delete(passwordResetTokens)
       .where(lt(passwordResetTokens.expiresAt, new Date()));
     return result.rowCount || 0;
+  }
+
+  // ============ Email Verification Token operations ============
+
+  async createEmailVerificationToken(userId: string, email: string, token: string, expiresAt: Date): Promise<EmailVerificationToken> {
+    // First, invalidate any existing unused tokens for this user
+    await db
+      .delete(emailVerificationTokens)
+      .where(and(
+        eq(emailVerificationTokens.userId, userId),
+        sql`${emailVerificationTokens.usedAt} IS NULL`
+      ));
+    
+    // Create new token
+    const [result] = await db
+      .insert(emailVerificationTokens)
+      .values({
+        userId,
+        email,
+        token,
+        expiresAt,
+      })
+      .returning();
+    return result;
+  }
+
+  async getEmailVerificationToken(token: string): Promise<EmailVerificationToken | undefined> {
+    const [result] = await db
+      .select()
+      .from(emailVerificationTokens)
+      .where(eq(emailVerificationTokens.token, token));
+    return result;
+  }
+
+  async markEmailVerificationTokenUsed(token: string): Promise<void> {
+    await db
+      .update(emailVerificationTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(emailVerificationTokens.token, token));
+  }
+
+  async deleteExpiredEmailVerificationTokens(): Promise<number> {
+    const result = await db
+      .delete(emailVerificationTokens)
+      .where(lt(emailVerificationTokens.expiresAt, new Date()));
+    return result.rowCount || 0;
+  }
+
+  async setEmailVerified(userId: string, verified: boolean): Promise<void> {
+    await db
+      .update(authCredentials)
+      .set({ 
+        emailVerified: verified,
+        emailVerifiedAt: verified ? new Date() : null,
+      })
+      .where(eq(authCredentials.userId, userId));
   }
 }
 

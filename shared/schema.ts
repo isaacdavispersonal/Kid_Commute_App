@@ -126,6 +126,8 @@ export const authCredentials = pgTable("auth_credentials", {
   phone: varchar("phone").unique(), // Can login with phone (normalized, digits only)
   passwordHash: text("password_hash").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  emailVerified: boolean("email_verified").notNull().default(false), // Email verification status
+  emailVerifiedAt: timestamp("email_verified_at"), // When email was verified
   lastLoginAt: timestamp("last_login_at"),
   passwordUpdatedAt: timestamp("password_updated_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -207,6 +209,38 @@ export const resetPasswordSchema = z.object({
 });
 
 export type ResetPasswordRequest = z.infer<typeof resetPasswordSchema>;
+
+// ============ Email Verification Tokens ============
+
+// Email verification tokens table for account activation
+export const emailVerificationTokens = pgTable("email_verification_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  email: varchar("email").notNull(), // The email being verified
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_email_verification_tokens_token").on(table.token),
+  index("idx_email_verification_tokens_user").on(table.userId),
+]);
+
+export const insertEmailVerificationTokenSchema = createInsertSchema(emailVerificationTokens).omit({
+  id: true,
+  createdAt: true,
+  usedAt: true,
+});
+
+export type InsertEmailVerificationToken = z.infer<typeof insertEmailVerificationTokenSchema>;
+export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect;
+
+// Resend verification email request schema
+export const resendVerificationSchema = z.object({
+  email: z.string().email("Valid email is required"),
+});
+
+export type ResendVerificationRequest = z.infer<typeof resendVerificationSchema>;
 
 // ============ Billing Portal Configuration ============
 
