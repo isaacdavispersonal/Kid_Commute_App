@@ -1,0 +1,115 @@
+1) The “top bar expands and bottom gets cut off” causes
+A. You accidentally have two scroll containers
+
+Example: IonContent + inside it a <div className="h-full overflow-auto"> ...
+
+That can cause Ionic to apply padding/scroll math weirdly → header area gets extra space and the bottom becomes unreachable.
+
+Fix: Only let IonContent scroll.
+
+Remove overflow: auto/scroll, h-screen, 100vh, position: fixed wrappers inside the page.
+
+Let content naturally flow inside IonContent.
+
+B. Wrong placement of the refresher slot
+
+Use:
+
+<IonRefresher slot="fixed" ...>
+
+
+If you don’t use slot="fixed" (or it’s placed outside IonContent), iOS can treat it like part of layout flow, pushing everything down.
+
+C. Safe area + fullscreen mismatch
+
+If you’re using a header (IonHeader) and also IonContent fullscreen, the padding rules matter.
+
+Typical stable structure:
+
+<IonPage>
+  <IonHeader>
+    <IonToolbar>
+      <IonTitle>Title</IonTitle>
+    </IonToolbar>
+  </IonHeader>
+
+  <IonContent fullscreen>
+    <IonRefresher slot="fixed" onIonRefresh={...}>
+      <IonRefresherContent />
+    </IonRefresher>
+
+    {/* page content */}
+  </IonContent>
+</IonPage>
+
+
+If you’re missing IonPage, or using a custom top bar outside IonHeader, it’s easy to get the “top expands / bottom clipped” issue.
+
+2) Why pull-to-refresh “doesn’t work” on the main stage
+A. The main stage isn’t the scroll container
+
+If the main stage is a custom div that scrolls, the refresher won’t trigger because it only listens to the container it’s mounted on.
+
+Fix: Make the page scroll be owned by IonContent, and remove inner scrolling.
+
+B. The content can’t scroll (or bounce is disabled)
+
+If the page content is shorter than the viewport and you’ve disabled iOS bounce / overscroll, the gesture can fail.
+
+Fix: avoid overscroll-behavior: none, avoid overflow: hidden on parents, and keep the standard Ionic structure.
+
+C. The refresher is never completing (or errors)
+
+This wouldn’t stop the gesture from starting, but it can make it feel broken or stuck.
+
+Always:
+
+const onRefresh = async (ev: CustomEvent) => {
+  try { await reload(); }
+  finally { (ev as any).detail.complete(); }
+};
+
+3) The fastest “decision rule”
+
+Keep it if:
+
+drivers benefit from a manual “force sync” (they usually do)
+
+you can implement it only on a few key screens safely (Routes, Attendance)
+
+Remove it if:
+
+you can’t fix the layout without destabilizing other UI
+
+you already have a reliable auto-refresh strategy (polling / websocket / background fetch) AND a manual refresh button
+
+A good compromise: replace pull-to-refresh with a small “Refresh” button in the header for now. It gives the same function with none of the gesture/layout risk.
+
+4) Practical fallback: “Refresh” button that won’t break layout
+
+Put this in your top toolbar:
+
+<IonButtons slot="end">
+  <IonButton onClick={reloadEverything}>
+    Refresh
+  </IonButton>
+</IonButtons>
+
+
+This is often the cleanest for driver apps (less accidental refreshes while scrolling).
+
+5) What to do right now (no waiting, no guessing)
+
+Temporarily remove the refresher from the worst-bugging screen to restore usability.
+
+On one screen only (like the main dashboard), refactor to the canonical Ionic structure:
+
+IonPage → IonHeader → IonContent
+
+no nested overflow scroll divs
+
+IonRefresher slot="fixed" directly under IonContent
+
+If that works, apply the same wrapper pattern to the other 1–2 key screens.
+
+If it still breaks layout even in the canonical structure, switch to the “Refresh” button approach.
