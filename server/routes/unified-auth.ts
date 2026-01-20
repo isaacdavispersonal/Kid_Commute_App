@@ -125,6 +125,8 @@ router.post("/login", async (req, res) => {
     res.json({
       token,
       user: formatUserResponse(user),
+      emailVerified: credentials.emailVerified || false,
+      emailVerificationRequired: !!user.email && !credentials.emailVerified,
     });
   } catch (error) {
     console.error("[Auth] Login error:", error);

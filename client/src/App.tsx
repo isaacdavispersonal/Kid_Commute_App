@@ -174,6 +174,7 @@ function Router() {
             <Switch>
               {/* Common routes for all roles */}
               <Route path="/profile" component={Profile} />
+              <Route path="/verify-email" component={VerifyEmail} />
               <Route path="/privacy-policy" component={PrivacyPolicy} />
               <Route path="/terms-of-service" component={TermsOfService} />
               
