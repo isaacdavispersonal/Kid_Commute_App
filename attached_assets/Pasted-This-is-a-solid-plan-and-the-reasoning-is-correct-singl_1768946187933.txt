@@ -1,0 +1,108 @@
+This is a solid plan, and the reasoning is correct: **single scroll container + overflow hidden on html/body + scroll on `<main>`** is a valid iOS-friendly architecture *as long as* every screen actually renders inside that `<main>` (and you don’t have “full-screen” overlays that accidentally escape it).
+
+A couple of important caveats before you lock it in:
+
+---
+
+## ✅ 1) Yes — unifying on `dvh` is fine (with one small adjustment)
+
+Using `dvh` everywhere is good on modern iOS. The only risk is **older iOS versions** that don’t fully support `dvh`.
+
+So instead of *only* dvh, the safest “single source of truth” is:
+
+```css
+html, body, #root {
+  min-height: 100vh;   /* fallback */
+  min-height: 100svh;  /* stable */
+  min-height: 100dvh;  /* dynamic */
+  background-color: hsl(var(--background));
+}
+```
+
+That still “unifies” to dvh for devices that support it, while preventing regressions on older devices.
+
+If you truly only test on modern iPhones, you can keep dvh-only, but for TestFlight drivers, you’ll likely hit mixed iOS versions.
+
+---
+
+## ✅ 2) The architecture is correct *if and only if* these are true
+
+### A) Every page lives inside `<main class="overflow-y-auto">`
+
+The “white bar” often comes back when you have a route/page that does:
+
+* `position: fixed` fullscreen overlay
+* or `h-screen` container
+* or `min-h-screen` container
+  outside your normal layout flow
+
+After this change, **search your codebase for these**:
+
+```bash
+grep -R "h-screen\|min-h-screen\|100vh\|position: fixed\|fixed inset-0" -n client/src | head -n 50
+```
+
+Fix any “full-screen” layouts to use dvh/svh and the correct background.
+
+### B) You don’t rely on body scrolling anywhere
+
+With `html/body overflow: hidden`, any component that assumed body scroll will feel “stuck” unless it’s inside `<main>`.
+
+If anything feels broken, it’s because that component isn’t inside `<main>` or it’s using `position: fixed` incorrectly.
+
+---
+
+## ✅ 3) Why the white bar may still appear even after these changes
+
+If the bar is at the very top and looks like a **status bar area**, the remaining cause could be:
+
+* status bar overlay style / translucent effect
+* mismatch between status bar and webview background
+
+If that happens, the fix is usually:
+
+* explicitly set the status bar style and background via Capacitor StatusBar plugin
+  (or configure in native)
+
+But don’t jump there unless the CSS/background fix fails.
+
+---
+
+## ✅ 4) How to confirm it’s actually fixed
+
+After pulling + rebuilding + syncing (your steps are correct), confirm in Safari Web Inspector:
+
+1. Select `html`, check computed:
+
+* `background-color` = your app background
+* `min-height` = 100dvh (and/or fallback chain)
+
+2. Same for `body` and `#root`
+3. Then check the top-most wrapper div has `bg-background`
+
+Also check on:
+
+* login screen
+* dashboard
+* any screen with long scroll content
+* any modal/sheet open state (sidebar sheet / dialogs)
+
+---
+
+## My recommendation
+
+**Let Replit AI apply this** — it’s addressing the right root cause and the layout description is consistent.
+
+I’d only request **one tweak**:
+
+> Keep `100vh` + `100svh` + `100dvh` as fallbacks, instead of dvh-only, unless you’re sure all testers are on iOS versions that support dvh well.
+
+---
+
+## One-liner you can send to Replit AI
+
+```text
+Looks good. Please keep vh/svh/dvh fallbacks in index.css (100vh → 100svh → 100dvh) to avoid issues on older iOS. Also grep for any remaining h-screen/min-h-screen/fixed inset-0 in client/src that might reintroduce the white bar on specific routes.
+```
+
+If you tell me **where** the white bar was (top notch area vs bottom home indicator vs inside content), I can tell you whether status bar config is the next likely step if it persists.

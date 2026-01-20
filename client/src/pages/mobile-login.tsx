@@ -124,7 +124,7 @@ export default function MobileLogin({ onLoginSuccess }: MobileLoginProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-dvh flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">

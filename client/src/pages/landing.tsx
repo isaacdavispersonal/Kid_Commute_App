@@ -12,7 +12,7 @@ import type { User } from "@shared/schema";
 
 export default function Landing() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5">
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col items-center justify-center gap-8">
           <div className="flex items-center gap-3">

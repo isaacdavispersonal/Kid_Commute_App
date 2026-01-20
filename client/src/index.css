@@ -377,7 +377,9 @@
 html, body, #root {
   /* Use the app's background color everywhere - no white */
   background-color: hsl(var(--background));
-  /* Use dynamic viewport height for iOS (dvh is most accurate) */
+  /* Progressive enhancement: fallback for older iOS, then svh, then dvh */
+  min-height: 100vh;
+  min-height: 100svh;
   min-height: 100dvh;
 }
 
