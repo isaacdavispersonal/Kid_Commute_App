@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Package, Plus, Clock } from "lucide-react";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -110,6 +111,7 @@ export default function DriverSupplies() {
   const pendingCount = requests?.filter(r => r.status === "PENDING").length || 0;
 
   return (
+    <PullToRefresh queryKeys={[["/api/driver/supplies-requests"]]}>
     <div className="container mx-auto p-6 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -280,5 +282,6 @@ export default function DriverSupplies() {
         </DialogContent>
       </Dialog>
     </div>
+    </PullToRefresh>
   );
 }
