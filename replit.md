@@ -69,6 +69,7 @@ Preferred communication style: Simple, everyday language.
     - **Push Notifications**: Mobile app support for iOS/Android via Firebase Cloud Messaging, with device token management.
     - **Automated Data Retention**: Scheduled cleanup service for old data (Messages, GPS/geofence events, audit logs, announcements, device tokens) with configurable retention periods.
     - **BambooHR Payroll Integration**: Automated driver clock-in/out data export with federal/Arizona overtime rules, including employee mapping, pay period selection, preview, batch submission, and audit trail.
+    - **Pull-to-Refresh**: Mobile-optimized gesture for manual data refresh on driver and parent pages. Uses single scroll container architecture with RefreshContext for callback management. Integrated pages: driver dashboard/routes/announcements, parent dashboard/tracking/messages.
 
 ## Backlog / Future Features
 
