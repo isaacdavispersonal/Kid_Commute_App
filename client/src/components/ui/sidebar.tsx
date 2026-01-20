@@ -141,7 +141,7 @@ function SidebarProvider({
     const MIN_VELOCITY = 0.4 // minimum px/ms velocity for quick swipes
     const QUICK_SWIPE_DISTANCE = 50 // shorter distance allowed for fast swipes
     const HORIZONTAL_RATIO = 2.5 // horizontal movement must be this many times greater than vertical
-    const LEFT_EDGE_ZONE = 0.5 // swipe-to-open only works from left 50% of screen
+    const LEFT_EDGE_ZONE = 0.65 // swipe-to-open only works from left 65% of screen
 
     const handleTouchStart = (e: TouchEvent) => {
       // Don't track swipes when dialogs/modals are open
