@@ -45,3 +45,4 @@ integrations = ["javascript_database:1.0.0", "javascript_websocket:1.0.0", "java
 
 [userenv.shared]
 VITE_API_URL = "https://kid-commute.replit.app"
+RESEND_FROM_EMAIL = "noreply@updates.kidcommute.org"
