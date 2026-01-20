@@ -184,19 +184,23 @@ function LoginForm() {
           </button>
         </div>
       </div>
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-3 p-3 rounded-md border bg-muted/30">
         <Checkbox 
           id="rememberMe" 
           checked={rememberMe}
           onCheckedChange={(checked) => setRememberMe(checked === true)}
           disabled={isLoading}
+          className="h-5 w-5 border-2"
           data-testid="checkbox-remember-me"
         />
         <Label 
           htmlFor="rememberMe" 
-          className="text-sm font-normal cursor-pointer"
+          className="text-sm cursor-pointer flex-1"
         >
           Keep me logged in
+          <span className="block text-xs text-muted-foreground mt-0.5">
+            Stay signed in for 30 days on this device
+          </span>
         </Label>
       </div>
       <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-login">
