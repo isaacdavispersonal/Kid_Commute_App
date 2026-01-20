@@ -1,4 +1,5 @@
 // Main App component with role-based routing - Unified JWT authentication
+import { useRef } from "react";
 import { Switch, Route, Link, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -9,6 +10,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { useUnifiedAuth } from "@/hooks/useUnifiedAuth";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, UserCog } from "lucide-react";
+import { RefreshProvider, useRefresh } from "@/contexts/RefreshContext";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -119,6 +122,9 @@ function Router() {
     "--sidebar-width-icon": "3rem",
   } as React.CSSProperties;
 
+  const mainRef = useRef<HTMLElement>(null);
+  const { triggerRefresh, isRefreshing } = useRefresh();
+
   return (
     <SidebarProvider style={sidebarStyle}>
       <div className="flex h-screen w-full">
@@ -170,7 +176,12 @@ function Router() {
           </header>
           {/* Spacer for fixed header - matches header height including safe area */}
           <div className="shrink-0 h-[calc(4.5rem+env(safe-area-inset-top,0px))]" />
-          <main className="flex-1 overflow-y-auto p-6 pt-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <main ref={mainRef} className="relative flex-1 overflow-y-auto p-6 pt-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+            <PullToRefresh 
+              onRefresh={triggerRefresh} 
+              isRefreshing={isRefreshing} 
+              scrollContainerRef={mainRef}
+            />
             <Switch>
               {/* Common routes for all roles */}
               <Route path="/profile" component={Profile} />
@@ -291,8 +302,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Router />
+        <RefreshProvider>
+          <Toaster />
+          <Router />
+        </RefreshProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
