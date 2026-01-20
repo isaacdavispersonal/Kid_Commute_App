@@ -373,40 +373,13 @@
   isolation: isolate;
 }
 
-/* iOS Safe Area Inset Support for notch/Dynamic Island devices */
-@supports (padding-top: env(safe-area-inset-top)) {
-  html {
-    /* Ensure the html extends behind the status bar */
-    min-height: 100%;
-    background-color: hsl(var(--card));
-  }
-  
-  body {
-    /* Background color extends into safe area */
-    background-color: hsl(var(--background));
-  }
-}
-
-/* iOS WebView Overscroll Prevention - Prevents black borders during pull */
+/* iOS Safe Area and Viewport - SINGLE SOURCE OF TRUTH */
 html, body, #root {
-  /* Ensure background extends through any overscroll area */
+  /* Use the app's background color everywhere - no white */
   background-color: hsl(var(--background));
-}
-
-/* Prevent iOS rubber-banding/overscroll bounce to avoid black bar during pull.
-   This approach preserves normal scrolling while preventing the overscroll effect */
-html, body {
-  overscroll-behavior-y: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-body {
-  /* Ensure body takes full height for proper background coverage */
-  min-height: 100vh;
+  /* Use dynamic viewport height for iOS */
+  min-height: 100svh;
   min-height: 100dvh;
-  /* Prevent iOS overscroll/rubber-banding on the whole page */
-  overscroll-behavior: none;
-  overflow: hidden;
 }
 
 html {
@@ -415,9 +388,11 @@ html {
   overflow: hidden;
 }
 
-#root {
-  min-height: 100vh;
-  min-height: 100dvh;
+body {
+  /* Prevent iOS overscroll/rubber-banding on the whole page */
+  overscroll-behavior: none;
+  overflow: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* iOS-specific input fixes */

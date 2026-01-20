@@ -97,7 +97,7 @@ function Router() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center">
+      <div className="flex min-h-svh w-full items-center justify-center bg-background">
         <div className="text-muted-foreground">Loading...</div>
       </div>
     );
@@ -128,7 +128,7 @@ function Router() {
 
   return (
     <SidebarProvider style={sidebarStyle}>
-      <div className="flex h-screen w-full">
+      <div className="flex min-h-svh w-full bg-background">
         <AppSidebar userRole={userRole} isLeadDriver={isLeadDriver} />
         <div className="flex flex-col flex-1 overflow-hidden">
           <header className="border-b bg-card shrink-0 z-20">
