@@ -68,6 +68,7 @@ import AdminMessages from "@/pages/admin/messages";
 
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
+import VerifyEmail from "@/pages/verify-email";
 
 function Router() {
   // Unified auth hook works for both web and mobile platforms
@@ -91,6 +92,7 @@ function Router() {
         <Route path="/terms-of-service" component={TermsOfService} />
         <Route path="/forgot-password" component={ForgotPassword} />
         <Route path="/reset-password" component={ResetPassword} />
+        <Route path="/verify-email" component={VerifyEmail} />
         <Route component={NotFound} />
       </Switch>
     );
