@@ -116,3 +116,112 @@ If you didn't request a password reset, you can safely ignore this email.
 ${APP_NAME} Transportation Services
   `.trim();
 }
+
+export async function sendVerificationEmail(
+  to: string,
+  verificationUrl: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!resend) {
+    console.log("[email] Resend not configured - RESEND_API_KEY missing");
+    console.log(`[email] Would send verification to: ${to}`);
+    console.log(`[email] Verification URL: ${verificationUrl}`);
+    return { success: false, error: "Email service not configured" };
+  }
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: `${APP_NAME} <${FROM_EMAIL}>`,
+      to: [to],
+      subject: `Verify Your ${APP_NAME} Account`,
+      html: getVerificationEmailHtml(verificationUrl),
+      text: getVerificationEmailText(verificationUrl),
+    });
+
+    if (error) {
+      console.error("[email] Resend error:", error);
+      return { success: false, error: error.message };
+    }
+
+    console.log(`[email] Verification email sent to ${to}, id: ${data?.id}`);
+    return { success: true };
+  } catch (error) {
+    console.error("[email] Failed to send verification email:", error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error" 
+    };
+  }
+}
+
+function getVerificationEmailHtml(verificationUrl: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify Your Email</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" style="width: 100%; max-width: 480px; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="padding: 40px 40px 20px;">
+              <h1 style="margin: 0 0 24px; font-size: 24px; font-weight: 600; color: #18181b; text-align: center;">
+                Welcome to ${APP_NAME}!
+              </h1>
+              <p style="margin: 0 0 24px; font-size: 16px; line-height: 24px; color: #3f3f46;">
+                Thanks for signing up! Please verify your email address by clicking the button below.
+              </p>
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td align="center" style="padding: 16px 0;">
+                    <a href="${verificationUrl}" style="display: inline-block; padding: 14px 32px; font-size: 16px; font-weight: 600; color: #ffffff; background-color: #16a34a; text-decoration: none; border-radius: 6px;">
+                      Verify Email Address
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 24px 0 0; font-size: 14px; line-height: 20px; color: #71717a;">
+                This link will expire in 24 hours. If you didn't create an account, you can safely ignore this email.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 20px 40px; border-top: 1px solid #e4e4e7;">
+              <p style="margin: 0; font-size: 12px; line-height: 18px; color: #a1a1aa; text-align: center;">
+                If the button doesn't work, copy and paste this link into your browser:<br>
+                <a href="${verificationUrl}" style="color: #16a34a; text-decoration: underline; word-break: break-all;">${verificationUrl}</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+        <p style="margin: 24px 0 0; font-size: 12px; color: #a1a1aa; text-align: center;">
+          ${APP_NAME} Transportation Services
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
+function getVerificationEmailText(verificationUrl: string): string {
+  return `
+Welcome to ${APP_NAME}!
+
+Thanks for signing up! Please verify your email address by visiting the link below:
+
+${verificationUrl}
+
+This link will expire in 24 hours.
+
+If you didn't create an account, you can safely ignore this email.
+
+---
+${APP_NAME} Transportation Services
+  `.trim();
+}
