@@ -213,7 +213,7 @@ router.post("/register", async (req, res) => {
       }
     }
 
-    // Hash password and create credentials
+    // Hash password and create credentials (unverified by default)
     const passwordHash = await hashPassword(password);
     await storage.createAuthCredentials({
       userId,
@@ -221,12 +221,35 @@ router.post("/register", async (req, res) => {
       phone: normalizedPhone,
       passwordHash,
       isActive: true,
+      emailVerified: false,
     });
 
     // Get full user details
     const user = await storage.getUser(userId);
     if (!user) {
       return res.status(500).json({ message: "Failed to create user" });
+    }
+
+    // Send verification email if email provided
+    let verificationSent = false;
+    if (normalizedEmail) {
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY_MS);
+      
+      await storage.createEmailVerificationToken(userId, normalizedEmail, verificationToken, expiresAt);
+      
+      const baseUrl = process.env.APP_URL || `https://${req.get("host")}`;
+      const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
+      
+      const { sendVerificationEmail } = await import("../services/email");
+      const emailResult = await sendVerificationEmail(normalizedEmail, verificationUrl);
+      verificationSent = emailResult.success;
+      
+      if (emailResult.success) {
+        console.log(`[Auth] Verification email sent to ${normalizedEmail.substring(0, 3)}***`);
+      } else {
+        console.log(`[Auth] Verification email failed: ${emailResult.error}`);
+      }
     }
 
     // Generate JWT token
@@ -238,6 +261,8 @@ router.post("/register", async (req, res) => {
     res.status(201).json({
       token,
       user: formatUserResponse(user),
+      emailVerificationRequired: !!normalizedEmail && !verificationSent ? false : !!normalizedEmail,
+      message: normalizedEmail ? "Please check your email to verify your account." : undefined,
     });
   } catch (error) {
     console.error("[Auth] Registration error:", error);
@@ -507,8 +532,9 @@ const resetPasswordSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-// Token expiration: 1 hour
+// Token expiration: 1 hour for password reset, 24 hours for email verification
 const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000;
+const EMAIL_VERIFICATION_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * POST /api/auth/forgot-password
@@ -670,6 +696,205 @@ router.get("/validate-reset-token", async (req, res) => {
   } catch (error) {
     console.error("[Password Reset] Validate token error:", error);
     res.status(500).json({ valid: false, message: "Failed to validate token" });
+  }
+});
+
+// =========================
+// Email Verification Endpoints
+// =========================
+
+/**
+ * POST /api/auth/verify-email
+ * Verify email address using token
+ */
+router.post("/verify-email", async (req, res) => {
+  try {
+    const schema = z.object({
+      token: z.string().min(1, "Verification token is required"),
+    });
+    
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        message: "Invalid request", 
+        errors: parsed.error.flatten().fieldErrors 
+      });
+    }
+
+    const { token } = parsed.data;
+
+    // Look up the token
+    const verificationToken = await storage.getEmailVerificationToken(token);
+    
+    if (!verificationToken) {
+      return res.status(400).json({ message: "Invalid verification token" });
+    }
+
+    // Check if already used
+    if (verificationToken.usedAt) {
+      return res.status(400).json({ message: "This verification link has already been used" });
+    }
+
+    // Check if expired
+    if (new Date() > verificationToken.expiresAt) {
+      return res.status(400).json({ message: "This verification link has expired. Please request a new one." });
+    }
+
+    // Mark email as verified
+    await storage.setEmailVerified(verificationToken.userId, true);
+
+    // Mark token as used
+    await storage.markEmailVerificationTokenUsed(token);
+
+    // Get user for logging
+    const user = await storage.getUser(verificationToken.userId);
+    console.log(`[Email Verification] Email verified for user: ${user?.email || verificationToken.userId.substring(0, 8)}...`);
+
+    res.json({ 
+      success: true,
+      message: "Email verified successfully! You can now access all features." 
+    });
+  } catch (error) {
+    console.error("[Email Verification] Error:", error);
+    res.status(500).json({ message: "Failed to verify email" });
+  }
+});
+
+/**
+ * GET /api/auth/verify-email
+ * Verify email via GET request (for clicking link in email)
+ */
+router.get("/verify-email", async (req, res) => {
+  try {
+    const token = req.query.token as string;
+    
+    if (!token) {
+      return res.redirect("/verify-email?error=missing_token");
+    }
+
+    // Look up the token
+    const verificationToken = await storage.getEmailVerificationToken(token);
+    
+    if (!verificationToken) {
+      return res.redirect("/verify-email?error=invalid_token");
+    }
+
+    // Check if already used
+    if (verificationToken.usedAt) {
+      return res.redirect("/verify-email?error=already_used");
+    }
+
+    // Check if expired
+    if (new Date() > verificationToken.expiresAt) {
+      return res.redirect("/verify-email?error=expired");
+    }
+
+    // Mark email as verified
+    await storage.setEmailVerified(verificationToken.userId, true);
+
+    // Mark token as used
+    await storage.markEmailVerificationTokenUsed(token);
+
+    // Get user for logging
+    const user = await storage.getUser(verificationToken.userId);
+    console.log(`[Email Verification] Email verified for user: ${user?.email || verificationToken.userId.substring(0, 8)}...`);
+
+    res.redirect("/verify-email?success=true");
+  } catch (error) {
+    console.error("[Email Verification] Error:", error);
+    res.redirect("/verify-email?error=server_error");
+  }
+});
+
+/**
+ * POST /api/auth/resend-verification
+ * Resend verification email to authenticated user
+ */
+router.post("/resend-verification", async (req, res) => {
+  try {
+    const token = extractToken(req);
+    if (!token) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const payload = verifyToken(token);
+    if (!payload) {
+      return res.status(401).json({ message: "Invalid or expired token" });
+    }
+
+    // Get user credentials
+    const credentials = await storage.getAuthCredentialsByUserId(payload.userId);
+    if (!credentials) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    // Check if already verified
+    if (credentials.emailVerified) {
+      return res.status(400).json({ message: "Email is already verified" });
+    }
+
+    // Check if user has an email address
+    const user = await storage.getUser(payload.userId);
+    if (!user?.email) {
+      return res.status(400).json({ message: "No email address associated with this account" });
+    }
+
+    // Generate new verification token
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY_MS);
+    
+    await storage.createEmailVerificationToken(payload.userId, user.email, verificationToken, expiresAt);
+    
+    const baseUrl = process.env.APP_URL || `https://${req.get("host")}`;
+    const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
+    
+    const { sendVerificationEmail } = await import("../services/email");
+    const emailResult = await sendVerificationEmail(user.email, verificationUrl);
+    
+    if (emailResult.success) {
+      console.log(`[Email Verification] Verification email resent to ${user.email.substring(0, 3)}***`);
+      res.json({ message: "Verification email sent. Please check your inbox." });
+    } else {
+      console.log(`[Email Verification] Email failed: ${emailResult.error}`);
+      res.status(500).json({ message: "Failed to send verification email. Please try again later." });
+    }
+  } catch (error) {
+    console.error("[Email Verification] Resend error:", error);
+    res.status(500).json({ message: "Failed to resend verification email" });
+  }
+});
+
+/**
+ * GET /api/auth/verification-status
+ * Check email verification status for authenticated user
+ */
+router.get("/verification-status", async (req, res) => {
+  try {
+    const token = extractToken(req);
+    if (!token) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const payload = verifyToken(token);
+    if (!payload) {
+      return res.status(401).json({ message: "Invalid or expired token" });
+    }
+
+    const credentials = await storage.getAuthCredentialsByUserId(payload.userId);
+    if (!credentials) {
+      return res.json({ emailVerified: false, hasEmail: false });
+    }
+
+    const user = await storage.getUser(payload.userId);
+    
+    res.json({
+      emailVerified: credentials.emailVerified || false,
+      hasEmail: !!user?.email,
+      emailVerifiedAt: credentials.emailVerifiedAt || null,
+    });
+  } catch (error) {
+    console.error("[Email Verification] Status check error:", error);
+    res.status(500).json({ message: "Failed to check verification status" });
   }
 });
 
