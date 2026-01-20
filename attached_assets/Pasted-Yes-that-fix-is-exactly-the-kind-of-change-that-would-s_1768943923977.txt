@@ -1,0 +1,62 @@
+Yes — that fix is exactly the kind of change that would solve React error #310 (hooks being called after early returns). React #310 happens when the number/order of hooks changes between renders, and “hooks after early returns” is a classic trigger.
+
+Why it matches your symptom
+
+On first render you might be loading / not authenticated → your Router() returns early → those hooks never run.
+
+Later, once a token is loaded / auth flips to “authenticated” → the early return doesn’t happen → now useRef and useRefresh do run.
+
+That changes the hook sequence → React throws → blank screen in the native build (and sometimes only there depending on timing).
+
+So moving all hooks to the top before any return is the correct fix pattern.
+
+2 things to verify so you don’t get fooled by a “partial fix”
+1) Make sure there are no other conditional hooks in that component
+
+Tell Replit AI to double-check:
+
+any useEffect, useMemo, useState, useCallback, custom hooks
+
+inside if, switch, loops
+
+after any early return
+
+Even one more conditional hook can keep #310 happening.
+
+2) Make sure you’re actually running the updated code on-device
+
+Because you’re in Capacitor, you need to ensure the new build is inside the iOS app:
+
+From repo root:
+
+git pull
+npm run build:native
+npx cap sync ios
+open ./ios/App/App.xcworkspace
+
+
+Then in Xcode:
+
+Clean build folder: Product → Clean Build Folder
+
+Run again
+
+(If you skip build/sync, you can accidentally run an old bundle and think it didn’t work.)
+
+Quick “pass/fail” test after you rebuild
+
+If it’s fixed:
+
+The app will no longer blank-screen at launch
+
+Console will no longer show React error #310
+
+If it still shows #310:
+
+There’s another hook-order violation elsewhere (often another auth/layout component)
+
+What I’d reply to Replit AI (short + effective)
+Yes, please apply that fix. After moving useRef/useRefresh to the top, re-scan Router() for any other hooks that might be called conditionally or after early returns. Then tell me the exact files changed and run/build instructions for Capacitor (npm run build:native + npx cap sync ios) so the device uses the updated bundle.
+
+
+If you paste the Router() component (even just the top ~160 lines around those returns), I can sanity-check the hook order in 30 seconds and tell you if there are any other landmines.
