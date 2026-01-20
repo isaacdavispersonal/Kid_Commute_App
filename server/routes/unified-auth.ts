@@ -19,15 +19,19 @@ const router = Router();
 // Cookie settings for web browsers
 const COOKIE_NAME = "auth_token";
 
+// Session durations
+const SESSION_DURATION_DEFAULT = 24 * 60 * 60 * 1000; // 1 day (session-based login)
+const SESSION_DURATION_REMEMBER = 30 * 24 * 60 * 60 * 1000; // 30 days (remember me)
+
 // Helper to get cookie options based on request
-function getCookieOptions(req: Request) {
+function getCookieOptions(req: Request, rememberMe: boolean = false) {
   // Always use secure cookies on HTTPS (Replit always serves over HTTPS)
   const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
     secure: isSecure,
     sameSite: "lax" as const,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: rememberMe ? SESSION_DURATION_REMEMBER : SESSION_DURATION_DEFAULT,
     path: "/",
   };
 }
@@ -84,6 +88,7 @@ router.post("/login", async (req, res) => {
     }
 
     const { identifier, password } = parsed.data;
+    const rememberMe = req.body.rememberMe === true;
     
     // Look up credentials by email or phone
     let credentials;
@@ -116,11 +121,11 @@ router.post("/login", async (req, res) => {
     // Update last login time
     await storage.updateAuthCredentialsLastLogin(credentials.userId);
 
-    // Generate JWT token
-    const token = generateToken(user.id, user.role);
+    // Generate JWT token (with extended expiry if remember me is checked)
+    const token = generateToken(user.id, user.role, rememberMe);
 
-    // Set cookie for web browsers
-    res.cookie(COOKIE_NAME, token, getCookieOptions(req));
+    // Set cookie for web browsers (longer duration if remember me is checked)
+    res.cookie(COOKIE_NAME, token, getCookieOptions(req, rememberMe));
 
     res.json({
       token,

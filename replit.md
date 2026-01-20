@@ -17,8 +17,9 @@ Preferred communication style: Simple, everyday language.
 ### Technical Implementations
 - **Backend**: Express.js on Node.js with TypeScript and ESM.
 - **Authentication**: Unified JWT-based authentication for all platforms (web and mobile).
-  - **Web**: Email/phone + password login, JWT stored in HTTP-only Secure cookies (SameSite=Lax, 7-day expiry).
+  - **Web**: Email/phone + password login, JWT stored in HTTP-only Secure cookies (SameSite=Lax).
   - **Mobile**: Same credentials, JWT stored via Capacitor Preferences.
+  - **Remember Me**: "Keep me logged in" checkbox on login extends session from 1 day to 30 days.
   - **Endpoints**: `/api/auth/login`, `/api/auth/register`, `/api/auth/logout`, `/api/auth/user`.
   - **Email Verification**: New accounts with email addresses receive verification emails. Tokens expire after 24 hours.
     - `POST /api/auth/verify-email` - Verify email with token

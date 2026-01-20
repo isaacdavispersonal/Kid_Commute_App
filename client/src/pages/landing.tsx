@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Car, Loader2, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { isNative, getApiUrl } from "@/lib/config";
@@ -64,6 +65,7 @@ function LoginForm() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +82,7 @@ function LoginForm() {
     setIsLoading(true);
     try {
       const url = getApiUrl("/api/auth/login");
-      const requestBody = { identifier, password };
+      const requestBody = { identifier, password, rememberMe };
       
       const response = await fetch(url, {
         method: "POST",
@@ -181,6 +183,21 @@ function LoginForm() {
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
+      </div>
+      <div className="flex items-center space-x-2">
+        <Checkbox 
+          id="rememberMe" 
+          checked={rememberMe}
+          onCheckedChange={(checked) => setRememberMe(checked === true)}
+          disabled={isLoading}
+          data-testid="checkbox-remember-me"
+        />
+        <Label 
+          htmlFor="rememberMe" 
+          className="text-sm font-normal cursor-pointer"
+        >
+          Keep me logged in
+        </Label>
       </div>
       <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-login">
         {isLoading ? (

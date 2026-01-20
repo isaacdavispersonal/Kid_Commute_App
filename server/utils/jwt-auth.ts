@@ -16,7 +16,8 @@ if (!JWT_SECRET) {
   console.warn("[JWT] WARNING: Using development secret - set JWT_SECRET for production");
 }
 
-const JWT_EXPIRES_IN = "7d"; // Token valid for 7 days
+const JWT_EXPIRES_DEFAULT = "1d"; // Token valid for 1 day (session-based login)
+const JWT_EXPIRES_REMEMBER = "30d"; // Token valid for 30 days (remember me)
 
 export interface JwtPayload {
   userId: string;
@@ -42,13 +43,17 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 /**
  * Generate a JWT token for a user
+ * @param userId - User's unique identifier
+ * @param role - User's role
+ * @param rememberMe - If true, token has extended expiry (30 days vs 1 day)
  */
-export function generateToken(userId: string, role: string): string {
+export function generateToken(userId: string, role: string, rememberMe: boolean = false): string {
   const payload: JwtPayload = {
     userId,
     role,
   };
-  return jwt.sign(payload, effectiveSecret, { expiresIn: JWT_EXPIRES_IN });
+  const expiresIn = rememberMe ? JWT_EXPIRES_REMEMBER : JWT_EXPIRES_DEFAULT;
+  return jwt.sign(payload, effectiveSecret, { expiresIn });
 }
 
 /**
