@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { PullToRefresh } from "@/components/pull-to-refresh";
 import { MedicalBadge } from "@/components/medical-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -992,7 +991,7 @@ export default function ConnectChildrenPage() {
   }
 
   return (
-    <PullToRefresh queryKeys={[["/api/parent/students"], ["/api/auth/user"]]}>
+    
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Connect Children</h1>
@@ -1139,6 +1138,6 @@ export default function ConnectChildrenPage() {
         </Alert>
       )}
       </div>
-    </PullToRefresh>
+    
   );
 }

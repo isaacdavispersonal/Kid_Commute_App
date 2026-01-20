@@ -10,7 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { PullToRefresh } from "@/components/pull-to-refresh";
 
 interface TodayRouteData {
   routeName: string;
@@ -107,7 +106,7 @@ export default function DriverRoutes() {
   }
 
   return (
-    <PullToRefresh queryKeys={[["/api/driver/today-route"], ["/api/driver/shifts/today"], ["/api/driver/route-progress"]]}>
+    
     <div className="space-y-6 overflow-x-hidden w-full max-w-full">
       <div>
         <h1 className="text-2xl font-semibold mb-1">My Routes</h1>
@@ -281,7 +280,7 @@ export default function DriverRoutes() {
         </Card>
       )}
     </div>
-    </PullToRefresh>
+    
   );
 }
 

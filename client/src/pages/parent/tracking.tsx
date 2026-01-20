@@ -5,7 +5,6 @@ import { MapPin, Navigation } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef } from "react";
-import { PullToRefresh } from "@/components/pull-to-refresh";
 
 export default function ParentTracking() {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -60,7 +59,7 @@ export default function ParentTracking() {
   }
 
   return (
-    <PullToRefresh queryKeys={[["/api/parent/vehicle-location"]]}>
+    
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold mb-1">Live Vehicle Tracking</h1>
@@ -112,6 +111,6 @@ export default function ParentTracking() {
         </Card>
       )}
     </div>
-    </PullToRefresh>
+    
   );
 }

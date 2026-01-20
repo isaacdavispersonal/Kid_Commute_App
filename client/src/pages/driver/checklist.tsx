@@ -3,7 +3,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ClipboardCheck, CheckCircle2, AlertTriangle, Car } from "lucide-react";
-import { PullToRefresh } from "@/components/pull-to-refresh";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -173,7 +172,6 @@ export default function DriverChecklist() {
   };
 
   return (
-    <PullToRefresh queryKeys={[["/api/driver/vehicle-checklists"], ["/api/vehicles"]]}>
     <div className="container mx-auto p-6 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -406,6 +404,6 @@ export default function DriverChecklist() {
         </DialogContent>
       </Dialog>
     </div>
-    </PullToRefresh>
+
   );
 }

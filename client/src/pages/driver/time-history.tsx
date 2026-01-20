@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
-import { PullToRefresh } from "@/components/pull-to-refresh";
 
 interface ClockEvent {
   id: string;
@@ -184,7 +183,6 @@ export default function DriverTimeHistory() {
   }
 
   return (
-    <PullToRefresh onRefresh={async () => { await refetch(); }}>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -508,6 +506,6 @@ export default function DriverTimeHistory() {
         </DialogContent>
       </Dialog>
     </div>
-    </PullToRefresh>
+    
   );
 }

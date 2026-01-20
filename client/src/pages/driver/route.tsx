@@ -51,7 +51,6 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PullToRefresh } from "@/components/pull-to-refresh";
 
 const POST_TRIP_INSPECTION_ITEMS = [
   { key: 'cameraUnplugged', label: 'Camera Unplugged' },
@@ -347,7 +346,7 @@ export default function DriverRoutePage() {
   };
 
   return (
-    <PullToRefresh queryKeys={[["/api/driver/shift-route-context", shiftId!]]}>
+    
     <div className="space-y-6 p-4 overflow-x-hidden w-full max-w-full">
       {/* Route Header */}
       <Card>
@@ -997,7 +996,7 @@ export default function DriverRoutePage() {
         </DialogContent>
       </Dialog>
     </div>
-    </PullToRefresh>
+    
   );
 }
 

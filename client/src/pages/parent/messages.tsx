@@ -15,7 +15,6 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { getLoginUrl } from "@/lib/config";
-import { PullToRefresh } from "@/components/pull-to-refresh";
 
 export default function ParentMessagesPage() {
   const { toast } = useToast();
@@ -263,7 +262,7 @@ export default function ParentMessagesPage() {
   const selectedContactData = allContacts.find((c: any) => c.id === selectedDriver);
 
   return (
-    <PullToRefresh queryKeys={[["/api/parent/assigned-drivers"], ["/api/parent/admin-contacts"], ["/api/user/unread-counts"], ["/api/parent/announcements"], ["/api/parent/announcements/dismissed"], ["/api/user/unread-announcements"], ["/api/parent/messages"]]}>
+    
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold mb-1">Messages</h1>
@@ -605,7 +604,7 @@ export default function ParentMessagesPage() {
         </Card>
       </div>
     </div>
-    </PullToRefresh>
+    
   );
 }
 

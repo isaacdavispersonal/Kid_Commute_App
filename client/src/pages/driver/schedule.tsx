@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar as CalendarIcon, Clock, Route as RouteIcon, Car } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/status-badge";
-import { PullToRefresh } from "@/components/pull-to-refresh";
 
 interface ScheduleAssignment {
   id: string;
@@ -63,7 +62,7 @@ export default function DriverSchedule() {
   const today = new Date().toISOString().split('T')[0];
 
   return (
-    <PullToRefresh queryKeys={[["/api/driver/schedule"]]}>
+    
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold mb-1" data-testid="title-schedule">
@@ -176,6 +175,6 @@ export default function DriverSchedule() {
         })}
       </div>
     </div>
-    </PullToRefresh>
+    
   );
 }

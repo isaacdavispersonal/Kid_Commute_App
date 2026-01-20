@@ -27,7 +27,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmergencyButton } from "@/components/emergency-button";
-import { PullToRefresh } from "@/components/pull-to-refresh";
 
 function useElapsedTime(startTime: string | Date | null): string {
   const [elapsed, setElapsed] = useState<string>("00:00:00");
@@ -750,7 +749,7 @@ export default function DriverDashboard() {
   }) || [];
 
   return (
-    <PullToRefresh queryKeys={[["/api/driver/shifts/today"], ["/api/driver/clock-status"]]}>
+    
     <div className="space-y-6">
       <div>
         <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -958,6 +957,6 @@ export default function DriverDashboard() {
         </DialogContent>
       </Dialog>
     </div>
-    </PullToRefresh>
+    
   );
 }

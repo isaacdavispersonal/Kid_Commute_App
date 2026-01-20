@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PullToRefresh } from "@/components/pull-to-refresh";
 import { MedicalBadge } from "@/components/medical-badge";
 import { 
   Users, 
@@ -222,7 +221,7 @@ export default function DriverStudents() {
   const medicalCount = (students || []).filter(s => s.allergies?.trim() || s.medicalNotes?.trim()).length;
 
   return (
-    <PullToRefresh onRefresh={handleRefresh} className="h-full">
+    
       <div className="p-4 space-y-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -294,6 +293,6 @@ export default function DriverStudents() {
           </Card>
         )}
       </div>
-    </PullToRefresh>
+    
   );
 }
