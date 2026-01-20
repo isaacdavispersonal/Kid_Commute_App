@@ -20,6 +20,15 @@ Preferred communication style: Simple, everyday language.
   - **Web**: Email/phone + password login, JWT stored in HTTP-only Secure cookies (SameSite=Lax, 7-day expiry).
   - **Mobile**: Same credentials, JWT stored via Capacitor Preferences.
   - **Endpoints**: `/api/auth/login`, `/api/auth/register`, `/api/auth/logout`, `/api/auth/user`.
+  - **Email Verification**: New accounts with email addresses receive verification emails. Tokens expire after 24 hours.
+    - `POST /api/auth/verify-email` - Verify email with token
+    - `GET /api/auth/verify-email` - Redirects from email link to verification page
+    - `POST /api/auth/resend-verification` - Resend verification email (requires auth)
+    - `GET /api/auth/verification-status` - Check verification status (requires auth)
+  - **Password Reset**: Email-based password reset flow with 1-hour token expiry.
+    - `POST /api/auth/forgot-password` - Request password reset email
+    - `POST /api/auth/reset-password` - Reset password with token
+    - `GET /api/auth/validate-reset-token` - Check if reset token is valid
   - **Security**: bcrypt password hashing, JWT_SECRET for token signing, role-based middleware (`requireAuth`, `requireRole`).
   - **Testing Bypass (Development Only)**: 
     - `GET /api/auth/test-users` - Returns sample users for each role (admin, driver, parent).

@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Bus, Loader2, ArrowLeft, CheckCircle, XCircle, Mail, RefreshCw } from "lucide-react";
@@ -12,6 +14,8 @@ export default function VerifyEmail() {
   const [isResending, setIsResending] = useState(false);
   const [status, setStatus] = useState<"loading" | "success" | "error" | "already_used" | "expired" | "missing_token">("loading");
   const [errorMessage, setErrorMessage] = useState("");
+  const [email, setEmail] = useState("");
+  const [resendSuccess, setResendSuccess] = useState(false);
   
   const urlParams = new URLSearchParams(window.location.search);
   const token = urlParams.get("token");
@@ -98,23 +102,30 @@ export default function VerifyEmail() {
     verifyEmail();
   }, [token, error, success, toast]);
 
-  const handleResendVerification = async () => {
+  const handleResendVerification = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    
     setIsResending(true);
+    setResendSuccess(false);
+    
     try {
       const response = await fetch(getApiUrl("/api/auth/resend-verification"), {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
         credentials: "include",
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
+      if (!response.ok && response.status !== 200) {
         throw new Error(data.message || "Failed to resend verification");
       }
 
+      setResendSuccess(true);
       toast({
-        title: "Verification Email Sent",
-        description: "Please check your inbox for a new verification link.",
+        title: "Check Your Email",
+        description: data.message || "If an account exists, you'll receive a verification link.",
       });
     } catch (err: any) {
       toast({
@@ -196,6 +207,53 @@ export default function VerifyEmail() {
     );
   }
 
+  const ResendForm = () => (
+    <form onSubmit={handleResendVerification} className="space-y-4">
+      {resendSuccess ? (
+        <div className="p-4 bg-green-500/10 rounded-lg text-center">
+          <CheckCircle className="h-6 w-6 text-green-500 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">
+            Check your inbox for the verification link.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email Address</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={isResending}
+              data-testid="input-resend-email"
+            />
+          </div>
+          <Button 
+            type="submit"
+            className="w-full" 
+            disabled={isResending || !email.trim()}
+            data-testid="button-resend-verification"
+          >
+            {isResending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Send Verification Email
+              </>
+            )}
+          </Button>
+        </>
+      )}
+    </form>
+  );
+
   if (status === "expired") {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
@@ -211,26 +269,9 @@ export default function VerifyEmail() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-center text-muted-foreground">
-              Verification links expire after 24 hours. Request a new one below.
+              Verification links expire after 24 hours. Enter your email to request a new one.
             </p>
-            <Button 
-              className="w-full" 
-              onClick={handleResendVerification}
-              disabled={isResending}
-              data-testid="button-resend-verification"
-            >
-              {isResending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Resend Verification Email
-                </>
-              )}
-            </Button>
+            <ResendForm />
             <Link href="/">
               <Button variant="outline" className="w-full" data-testid="button-back-home">
                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -260,29 +301,11 @@ export default function VerifyEmail() {
             <p className="text-center text-muted-foreground">
               We've sent a verification email to your inbox. Click the link in the email to verify your account.
             </p>
-            <div className="space-y-2">
-              <p className="text-sm text-center text-muted-foreground">
-                Didn't receive the email?
+            <div className="space-y-2 pt-2 border-t">
+              <p className="text-sm text-center text-muted-foreground pt-2">
+                Didn't receive the email? Enter your email to resend.
               </p>
-              <Button 
-                variant="outline"
-                className="w-full" 
-                onClick={handleResendVerification}
-                disabled={isResending}
-                data-testid="button-resend-verification"
-              >
-                {isResending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Resend Verification Email
-                  </>
-                )}
-              </Button>
+              <ResendForm />
             </div>
             <Link href="/">
               <Button variant="ghost" className="w-full" data-testid="button-back-home">
@@ -310,26 +333,9 @@ export default function VerifyEmail() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-center text-muted-foreground">
-            We couldn't verify your email address. Please try again or request a new verification link.
+            We couldn't verify your email address. Enter your email below to request a new verification link.
           </p>
-          <Button 
-            className="w-full" 
-            onClick={handleResendVerification}
-            disabled={isResending}
-            data-testid="button-resend-verification"
-          >
-            {isResending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Request New Verification Link
-              </>
-            )}
-          </Button>
+          <ResendForm />
           <Link href="/">
             <Button variant="outline" className="w-full" data-testid="button-back-home">
               <ArrowLeft className="mr-2 h-4 w-4" />

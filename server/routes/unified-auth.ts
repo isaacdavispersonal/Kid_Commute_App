@@ -810,51 +810,81 @@ router.get("/verify-email", async (req, res) => {
 
 /**
  * POST /api/auth/resend-verification
- * Resend verification email to authenticated user
+ * Resend verification email - works for both authenticated and unauthenticated users
+ * For unauthenticated: requires email in request body
+ * For authenticated: uses user's email from token
  */
 router.post("/resend-verification", async (req, res) => {
   try {
+    let userId: string | null = null;
+    let userEmail: string | null = null;
+
+    // Check if authenticated
     const token = extractToken(req);
-    if (!token) {
-      return res.status(401).json({ message: "Authentication required" });
+    if (token) {
+      const payload = verifyToken(token);
+      if (payload) {
+        const user = await storage.getUser(payload.userId);
+        if (user) {
+          userId = user.id;
+          userEmail = user.email || null;
+        }
+      }
     }
 
-    const payload = verifyToken(token);
-    if (!payload) {
-      return res.status(401).json({ message: "Invalid or expired token" });
-    }
+    // If not authenticated, check for email in request body
+    if (!userId) {
+      const { email } = req.body;
+      if (!email || !isEmail(email)) {
+        return res.status(400).json({ message: "Please provide a valid email address" });
+      }
+      
+      const normalizedEmail = email.toLowerCase().trim();
+      const credentials = await storage.getAuthCredentialsByEmail(normalizedEmail);
+      
+      if (!credentials) {
+        // Don't reveal if email exists - just say we sent it
+        return res.json({ message: "If an account exists with this email, you will receive a verification link." });
+      }
 
-    // Get user credentials
-    const credentials = await storage.getAuthCredentialsByUserId(payload.userId);
-    if (!credentials) {
-      return res.status(404).json({ message: "Account not found" });
-    }
+      // Check if already verified
+      if (credentials.emailVerified) {
+        return res.json({ message: "If an account exists with this email, you will receive a verification link." });
+      }
 
-    // Check if already verified
-    if (credentials.emailVerified) {
-      return res.status(400).json({ message: "Email is already verified" });
-    }
+      userId = credentials.userId;
+      userEmail = normalizedEmail;
+    } else {
+      // Authenticated user
+      const credentials = await storage.getAuthCredentialsByUserId(userId);
+      if (!credentials) {
+        return res.status(404).json({ message: "Account not found" });
+      }
 
-    // Check if user has an email address
-    const user = await storage.getUser(payload.userId);
-    if (!user?.email) {
-      return res.status(400).json({ message: "No email address associated with this account" });
+      // Check if already verified
+      if (credentials.emailVerified) {
+        return res.status(400).json({ message: "Email is already verified" });
+      }
+
+      if (!userEmail) {
+        return res.status(400).json({ message: "No email address associated with this account" });
+      }
     }
 
     // Generate new verification token
     const verificationToken = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY_MS);
     
-    await storage.createEmailVerificationToken(payload.userId, user.email, verificationToken, expiresAt);
+    await storage.createEmailVerificationToken(userId, userEmail, verificationToken, expiresAt);
     
     const baseUrl = process.env.APP_URL || `https://${req.get("host")}`;
     const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
     
     const { sendVerificationEmail } = await import("../services/email");
-    const emailResult = await sendVerificationEmail(user.email, verificationUrl);
+    const emailResult = await sendVerificationEmail(userEmail, verificationUrl);
     
     if (emailResult.success) {
-      console.log(`[Email Verification] Verification email resent to ${user.email.substring(0, 3)}***`);
+      console.log(`[Email Verification] Verification email resent to ${userEmail.substring(0, 3)}***`);
       res.json({ message: "Verification email sent. Please check your inbox." });
     } else {
       console.log(`[Email Verification] Email failed: ${emailResult.error}`);
