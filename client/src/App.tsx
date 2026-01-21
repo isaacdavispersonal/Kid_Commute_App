@@ -128,9 +128,9 @@ function Router() {
 
   return (
     <SidebarProvider style={sidebarStyle}>
-      <div className="flex min-h-dvh w-full bg-background">
+      <div className="flex h-dvh w-full bg-background">
         <AppSidebar userRole={userRole} isLeadDriver={isLeadDriver} />
-        <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 min-h-0">
           <header className="border-b bg-card shrink-0 z-20">
             {/* Safe area spacer - just visual padding for the notch */}
             <div className="h-[env(safe-area-inset-top,0px)]" />
