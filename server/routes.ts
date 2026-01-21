@@ -5235,6 +5235,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
 
         // Get comprehensive route context
         const routeContext = await storage.getShiftRouteContext(shiftId);
+        console.log("[route-context] Active stop:", routeContext.progress.activeStopId);
+        console.log("[route-context] Stops:", routeContext.stops.map(s => ({ 
+          id: s.id, 
+          routeStopId: s.routeStopId, 
+          status: s.progress.status,
+          stopOrder: s.stopOrder
+        })));
         res.json(routeContext);
       } catch (error: any) {
         console.error("Error fetching route context:", error);
@@ -5554,7 +5561,19 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           });
         }
 
+        console.log("[update-stop] Updating stop:", { shiftId, routeStopId, status });
         const updated = await storage.updateStopStatus(shiftId, routeStopId, status, notes);
+        console.log("[update-stop] Updated result:", { id: updated.id, status: updated.status, routeStopId: updated.routeStopId });
+        
+        // Log what the new active stop would be after this update
+        const newContext = await storage.getShiftRouteContext(shiftId);
+        console.log("[update-stop] After update - new activeStopId:", newContext.progress.activeStopId);
+        console.log("[update-stop] Stops status:", newContext.stops.map(s => ({ 
+          stopOrder: s.stopOrder, 
+          routeStopId: s.routeStopId, 
+          status: s.progress.status 
+        })));
+        
         res.json(updated);
       } catch (error: any) {
         console.error("Error updating stop status:", error);
