@@ -128,7 +128,13 @@ export default function DriverRoutePage() {
       });
     },
     onError: (error: any) => {
-      const message = error?.message || "Failed to update attendance";
+      console.error("[attendance] Error:", error);
+      let message = "Failed to update attendance";
+      if (error?.message) {
+        message = error.message;
+      } else if (typeof error === 'string') {
+        message = error;
+      }
       toast({
         title: "Cannot Update Attendance",
         description: message,
