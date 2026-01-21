@@ -7532,8 +7532,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const userId = req.user.id;
         const { studentId, date, endDate, status, notes, shiftId } = req.body;
         
+        console.log("[attendance] Request:", { userId, studentId, date, status, shiftId });
+        
         // Validate request
         if (!studentId || !date || !status) {
+          console.log("[attendance] Missing required fields");
           return res.status(400).json({ message: "Missing required fields" });
         }
 
@@ -7548,8 +7551,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         // Authorization check for drivers - ONLY lead drivers can mark attendance
         // Regular drivers can only record board/deboard events via ride-events endpoint
         if (user.role === "driver") {
+          console.log("[attendance] Driver check - isLeadDriver:", user.isLeadDriver);
           // Check if driver is a lead driver
           if (!user.isLeadDriver) {
+            console.log("[attendance] REJECTED: Not a lead driver");
             return res.status(403).json({ 
               message: "Only lead drivers can mark students as absent or riding. Regular drivers can record when students board or leave the bus during the route." 
             });
@@ -7613,13 +7618,16 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             }
             
             if (!activeShift) {
+              console.log("[attendance] No active shift found. Available shifts:", shifts.map(s => ({ id: s.id, routeId: s.routeId, routeStartedAt: s.routeStartedAt, routeCompletedAt: s.routeCompletedAt })));
               // Check if there's a started but completed shift (route finished)
               const completedShift = shifts.find(s => s.routeStartedAt && s.routeCompletedAt);
               if (completedShift) {
+                console.log("[attendance] REJECTED: Route already completed");
                 return res.status(400).json({ 
                   message: "Route has already been completed. Attendance cannot be modified after route completion." 
                 });
               }
+              console.log("[attendance] REJECTED: Route not started");
               return res.status(400).json({ 
                 message: "Route has not been started. Please start the route from the dashboard first." 
               });
@@ -7724,9 +7732,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
         
         res.json(attendance);
-      } catch (error) {
-        console.error("Error setting attendance:", error);
-        res.status(500).json({ message: "Failed to set attendance" });
+      } catch (error: any) {
+        console.error("[attendance] Error setting attendance:", error);
+        res.status(500).json({ message: error?.message || "Failed to set attendance" });
       }
     }
   );
