@@ -24,6 +24,7 @@ import {
   emitStopArrived,
   emitStopCompleted,
 } from "./socket-server";
+import { announcementRateLimiter } from "./middleware/rate-limit";
 
 // Webhook authentication middleware
 const verifyWebhookToken = (req: any, res: any, next: any) => {
@@ -8450,6 +8451,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     "/api/admin/create-announcement",
     requireAuth,
     requireRole("admin"),
+    announcementRateLimiter,
     async (req: any, res) => {
       try {
         const adminId = req.user.id;

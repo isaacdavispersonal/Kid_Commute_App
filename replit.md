@@ -31,6 +31,12 @@ Preferred communication style: Simple, everyday language.
     - `POST /api/auth/reset-password` - Reset password with token
     - `GET /api/auth/validate-reset-token` - Check if reset token is valid
   - **Security**: bcrypt password hashing, JWT_SECRET for token signing, role-based middleware (`requireAuth`, `requireRole`).
+  - **Rate Limiting**: express-rate-limit middleware protects against brute-force and abuse.
+    - Login: 10 requests per 15 minutes per IP
+    - Registration: 5 requests per hour per IP
+    - Password reset: 5 requests per 15 minutes per IP
+    - Announcements: 10 requests per minute per IP
+    - Returns 429 status with retry-after information when exceeded
   - **Testing Bypass (Development Only)**: 
     - `GET /api/auth/test-users` - Returns sample users for each role (admin, driver, parent).
     - `POST /api/auth/test-login` with `{"role": "admin"|"driver"|"parent"}` - Logs in as any role without password, sets auth cookie. Optional: `{"role": "admin", "userId": "specific-id"}` for specific user.

@@ -14,6 +14,11 @@ import {
 } from "../utils/jwt-auth";
 import { z } from "zod";
 import { config } from "../config";
+import { 
+  authRateLimiter, 
+  registrationRateLimiter, 
+  passwordResetRateLimiter 
+} from "../middleware/rate-limit";
 
 const router = Router();
 
@@ -78,7 +83,7 @@ function formatUserResponse(user: any) {
  * POST /api/auth/login
  * Authenticate with email/phone + password, return JWT token
  */
-router.post("/login", async (req, res) => {
+router.post("/login", authRateLimiter, async (req, res) => {
   try {
     const parsed = mobileLoginSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -144,7 +149,7 @@ router.post("/login", async (req, res) => {
  * POST /api/auth/register
  * Create a new account with email/phone + password
  */
-router.post("/register", async (req, res) => {
+router.post("/register", registrationRateLimiter, async (req, res) => {
   try {
     const parsed = mobileRegisterSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -548,7 +553,7 @@ const EMAIL_VERIFICATION_EXPIRY_MS = config.auth.emailVerificationExpiryMs;
  * POST /api/auth/forgot-password
  * Request a password reset link
  */
-router.post("/forgot-password", async (req, res) => {
+router.post("/forgot-password", passwordResetRateLimiter, async (req, res) => {
   try {
     const parsed = forgotPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -625,7 +630,7 @@ router.post("/forgot-password", async (req, res) => {
  * POST /api/auth/reset-password
  * Reset password using token
  */
-router.post("/reset-password", async (req, res) => {
+router.post("/reset-password", passwordResetRateLimiter, async (req, res) => {
   try {
     const parsed = resetPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
