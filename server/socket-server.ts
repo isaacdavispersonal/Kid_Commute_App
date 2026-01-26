@@ -4,6 +4,16 @@ import { verifyToken } from "./utils/jwt-auth";
 import { storage } from "./storage";
 import { createLogger } from "./logger";
 import { config } from "./config";
+import type { RouteRun, Announcement } from "@shared/schema";
+import type {
+  AttendanceUpdatePayload,
+  StopArrivedPayload,
+  StopCompletedPayload,
+  RouteRunEventPayload,
+  AnnouncementCreatedPayload,
+  ParticipantEventPayload,
+  SocketEventName,
+} from "@shared/socket-types";
 
 const logger = createLogger("socket.io");
 
@@ -174,78 +184,50 @@ export function initSocketServer({ httpServer }: SocketServerOptions): Server {
   return io;
 }
 
-export function emitToUser(userId: string, event: string, data: any) {
+export function emitToUser<T>(userId: string, event: SocketEventName | string, data: T): void {
   if (!io) return;
   io.to(`user:${userId}`).emit(event, data);
 }
 
-export function emitToOrg(event: string, data: any) {
+export function emitToOrg<T>(event: SocketEventName | string, data: T): void {
   if (!io) return;
   io.to("org:default").emit(event, data);
 }
 
-export function emitToRouteRun(routeRunId: string, event: string, data: any) {
+export function emitToRouteRun<T>(routeRunId: string, event: SocketEventName, data: T): void {
   if (!io) return;
   io.to(`route_run:${routeRunId}`).emit(event, data);
 }
 
-export function emitRouteRunStarted(routeRunId: string, data: {
-  routeRun: any;
-  primaryDriverId: string;
-}) {
+export function emitRouteRunStarted(routeRunId: string, data: RouteRunEventPayload): void {
   emitToRouteRun(routeRunId, "route_run.started", data);
 }
 
-export function emitRouteRunEndedPendingReview(routeRunId: string, data: {
-  routeRun: any;
-}) {
+export function emitRouteRunEndedPendingReview(routeRunId: string, data: { routeRun: RouteRun }): void {
   emitToRouteRun(routeRunId, "route_run.ended_pending_review", data);
 }
 
-export function emitRouteRunFinalized(routeRunId: string, data: {
-  routeRun: any;
-}) {
+export function emitRouteRunFinalized(routeRunId: string, data: { routeRun: RouteRun }): void {
   emitToRouteRun(routeRunId, "route_run.finalized", data);
 }
 
-export function emitRouteRunReopened(routeRunId: string, data: {
-  routeRun: any;
-}) {
+export function emitRouteRunReopened(routeRunId: string, data: { routeRun: RouteRun }): void {
   emitToRouteRun(routeRunId, "route_run.reopened", data);
 }
 
-export function emitStopArrived(routeRunId: string, data: {
-  stopId: string;
-  arrivedAt: string;
-  driverId: string;
-}) {
+export function emitStopArrived(routeRunId: string, data: StopArrivedPayload): void {
   emitToRouteRun(routeRunId, "stop.arrived", data);
 }
 
-export function emitStopCompleted(routeRunId: string, data: {
-  stopId: string;
-  completedAt: string;
-  driverId: string;
-}) {
+export function emitStopCompleted(routeRunId: string, data: StopCompletedPayload): void {
   emitToRouteRun(routeRunId, "stop.completed", data);
 }
 
-export function emitAttendanceUpdated(routeRunId: string, data: {
-  studentId: string;
-  status: string;
-  stopId?: string;
-  pickupTime?: string;
-  dropoffTime?: string;
-  updatedBy: string;
-}) {
+export function emitAttendanceUpdated(routeRunId: string, data: AttendanceUpdatePayload): void {
   emitToRouteRun(routeRunId, "attendance.updated", data);
 }
 
-export function emitAnnouncementCreated(data: {
-  announcement: any;
-  targetRouteId?: string;
-  audienceType?: string;
-}) {
+export function emitAnnouncementCreated(data: AnnouncementCreatedPayload): void {
   if (!io) {
     logger.warn("Cannot emit announcement.created - server not initialized");
     return;
@@ -273,16 +255,10 @@ export function emitAnnouncementCreated(data: {
   }
 }
 
-export function emitParticipantJoined(routeRunId: string, data: {
-  userId: string;
-  role: string;
-  userName?: string;
-}) {
+export function emitParticipantJoined(routeRunId: string, data: ParticipantEventPayload & { userName?: string }): void {
   emitToRouteRun(routeRunId, "participant.joined", data);
 }
 
-export function emitParticipantLeft(routeRunId: string, data: {
-  userId: string;
-}) {
+export function emitParticipantLeft(routeRunId: string, data: { userId: string; routeRunId: string }): void {
   emitToRouteRun(routeRunId, "participant.left", data);
 }
