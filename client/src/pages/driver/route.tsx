@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import RouteRunSummary from "@/components/route-run-summary";
+import ReportRouteIssueDialog from "@/components/report-route-issue-dialog";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/collapsible";
 import {
   AlertCircle,
+  AlertTriangle,
   Bus,
   CheckCircle2,
   ChevronDown,
@@ -86,6 +88,7 @@ export default function DriverRoutePage() {
 
   const [expandedStops, setExpandedStops] = useState<Set<string>>(new Set());
   const [rideEventDialog, setRideEventDialog] = useState<RideEventDialog>(null);
+  const [showReportIssueDialog, setShowReportIssueDialog] = useState(false);
   const [selectedStopId, setSelectedStopId] = useState<string>("");
   const [showPostTripDialog, setShowPostTripDialog] = useState(false);
   const [postTripChecks, setPostTripChecks] = useState<Record<string, boolean>>({});
@@ -804,6 +807,33 @@ export default function DriverRoutePage() {
         </div>
       )}
 
+      {/* Report Issue Button - always visible during active route */}
+      {activeRouteRunId && !showSummary && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0" />
+                <div>
+                  <h3 className="font-medium">Report Route Issue</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Missing student, wrong stop, or roster problem
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setShowReportIssueDialog(true)}
+                data-testid="button-report-issue"
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Report
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Finish Route Button */}
       {canFinishRoute && (
         <Card className="border-primary bg-primary/5">
@@ -1026,6 +1056,15 @@ export default function DriverRoutePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Report Route Issue Dialog */}
+      <ReportRouteIssueDialog
+        open={showReportIssueDialog}
+        onOpenChange={setShowReportIssueDialog}
+        routeRunId={activeRouteRunId || ""}
+        routeId={routeContext?.route?.id}
+        students={routeContext?.assignedStudents?.map((s) => ({ id: s.id, name: s.name })) || []}
+      />
     </div>
     
   );

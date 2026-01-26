@@ -42,10 +42,7 @@ export default function ActivityOperationsPage() {
   // Mutation to acknowledge a section
   const acknowledgeMutation = useMutation({
     mutationFn: async (section: string) => {
-      return apiRequest("/api/admin/acknowledge-section", {
-        method: "POST",
-        body: JSON.stringify({ section }),
-      });
+      return apiRequest("POST", "/api/admin/acknowledge-section", { section });
     },
     onSuccess: () => {
       // Refresh badge counts
