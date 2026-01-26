@@ -52,6 +52,7 @@ Preferred communication style: Simple, everyday language.
     - **Messaging System**: Route-based messaging between drivers and parents, with admin intervention.
     - **Announcement System**: Dismissible announcements for users, route-specific broadcasts, and enhanced admin broadcasts.
     - **Incident Management**: Drivers report incidents, admins review.
+    - **Route Request System**: Drivers can report route issues during active routes (missing students, unexpected students, wrong stops, roster clarifications). Admins review and resolve requests via Activity & Operations page. Real-time Socket.IO events for created/updated requests. Badge count for open requests.
     - **Driver Assignment System**: Admins assign drivers to routes with optional vehicle assignment.
     - **Parent Student Management**: Parents can edit children's information.
     - **Multi-Route Student Assignment**: Students can be assigned to multiple routes (e.g., morning, afternoon) via a junction table, with admin dialog management and visual route type indicators.
@@ -78,6 +79,7 @@ Preferred communication style: Simple, everyday language.
     - **BambooHR Payroll Integration**: Automated driver clock-in/out data export with federal/Arizona overtime rules, including employee mapping, pay period selection, preview, batch submission, and audit trail.
     - **Pull-to-Refresh**: Mobile-optimized gesture for manual data refresh on driver and parent pages. Uses single scroll container architecture with RefreshContext for callback management. Integrated pages: driver dashboard/routes/announcements, parent dashboard/tracking/messages.
     - **iOS Post-Auth Layout Fix**: Addresses WKWebView white bar issue after login/signup by re-applying StatusBar overlay settings and forcing viewport recalculation with double RAF + resize event. Ionic CSS backgrounds are overridden to match app theme.
+    - **iOS Debug Overlay**: Toggle with three-finger tap gesture. Shows platform info, current layout state (Auth/App/Loading), computed padding-top on root container, safe-area insets, viewport dimensions, and event log. Detects potentially doubled padding that causes white bar issues. Includes manual layout fix button to re-apply StatusBar settings.
     - **RouteRun System**: Multi-driver route execution tracking with real-time coordination.
       - **Data Model**: route_runs (execution instances), route_run_participants (multi-driver roles), route_run_events (audit trail)
       - **Status Flow**: SCHEDULED → ACTIVE → ENDED_PENDING_REVIEW → FINALIZED (or CANCELLED)

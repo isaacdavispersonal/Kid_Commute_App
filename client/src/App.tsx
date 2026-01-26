@@ -27,6 +27,7 @@ import { isConfigured, getConfigError } from "@/lib/config";
 import { ConfigErrorScreen } from "@/components/config-error-screen";
 import { useSocket, useAnnouncementSocket } from "@/hooks/use-socket";
 import { disconnectSocket } from "@/lib/socket";
+import { IOSDebugOverlay } from "@/components/ios-debug-overlay";
 
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
@@ -163,24 +164,30 @@ function Router() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-dvh w-full items-center justify-center bg-background">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
+      <>
+        <IOSDebugOverlay currentLayout="Loading" isAuthenticated={false} />
+        <div className="flex min-h-dvh w-full items-center justify-center bg-background">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      </>
     );
   }
 
   if (!isAuthenticated || !user) {
     // Show unified landing page for both web and mobile
     return (
-      <Switch>
-        <Route path="/" component={Landing} />
-        <Route path="/privacy-policy" component={PrivacyPolicy} />
-        <Route path="/terms-of-service" component={TermsOfService} />
-        <Route path="/forgot-password" component={ForgotPassword} />
-        <Route path="/reset-password" component={ResetPassword} />
-        <Route path="/verify-email" component={VerifyEmail} />
-        <Route component={NotFound} />
-      </Switch>
+      <>
+        <IOSDebugOverlay currentLayout="Auth" isAuthenticated={false} />
+        <Switch>
+          <Route path="/" component={Landing} />
+          <Route path="/privacy-policy" component={PrivacyPolicy} />
+          <Route path="/terms-of-service" component={TermsOfService} />
+          <Route path="/forgot-password" component={ForgotPassword} />
+          <Route path="/reset-password" component={ResetPassword} />
+          <Route path="/verify-email" component={VerifyEmail} />
+          <Route component={NotFound} />
+        </Switch>
+      </>
     );
   }
 
@@ -193,8 +200,10 @@ function Router() {
   } as React.CSSProperties;
 
   return (
-    <SidebarProvider style={sidebarStyle}>
-      <div className="flex h-dvh w-full bg-background">
+    <>
+      <IOSDebugOverlay currentLayout="App" isAuthenticated={true} />
+      <SidebarProvider style={sidebarStyle}>
+        <div className="flex h-dvh w-full bg-background">
         <AppSidebar userRole={userRole} isLeadDriver={isLeadDriver} />
         <div className="flex flex-col flex-1 min-h-0">
           <header className="border-b bg-card shrink-0 z-20">
@@ -365,6 +374,7 @@ function Router() {
         </div>
       </div>
     </SidebarProvider>
+    </>
   );
 }
 
