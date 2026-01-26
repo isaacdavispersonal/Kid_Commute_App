@@ -359,8 +359,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       const userId = req.user.id;
       const { insertDeviceTokenSchema } = await import("@shared/schema");
       
+      // Enhanced logging for troubleshooting (C5 requirement)
+      console.log(`[push-token] Registration request from user ${userId}`);
+      console.log(`[push-token] Platform: ${req.body?.platform}, Token prefix: ${req.body?.token?.substring(0, 20)}...`);
+      
       const result = insertDeviceTokenSchema.safeParse(req.body);
       if (!result.success) {
+        console.log(`[push-token] Validation failed for user ${userId}:`, result.error.errors);
         return res.status(400).json({
           message: "Invalid device token data",
           errors: result.error.errors
@@ -373,9 +378,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       };
 
       const deviceToken = await storage.upsertDeviceToken(tokenData);
+      console.log(`[push-token] Successfully registered token for user ${userId} on ${deviceToken.platform}`);
       res.json(deviceToken);
     } catch (error: any) {
-      console.error("Error registering device token:", error);
+      console.error(`[push-token] Error registering device token for user:`, error);
       res.status(500).json({ message: "Failed to register device token" });
     }
   });
@@ -419,7 +425,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       await pushNotificationService.sendToUsers([targetUserId], {
         title: title || "Test Notification",
         body: body || "This is a test push notification from Kid Commute",
-        data: { type: "test", timestamp: new Date().toISOString() }
+        data: { 
+          type: "test", 
+          timestamp: new Date().toISOString(),
+          deeplink: "/"
+        }
       });
 
       res.json({ 
@@ -4956,7 +4966,12 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
                 await pushNotificationService.sendToUsers(parentIds, {
                   title: "Route Started",
                   body: `${routeName} has begun. Live tracking is now available.`,
-                  data: { type: "route_started", routeId: shift.routeId, shiftId }
+                  data: { 
+                    type: "route_started", 
+                    routeId: shift.routeId, 
+                    shiftId,
+                    deeplink: "/tracking"
+                  }
                 });
               }
             }
@@ -8062,11 +8077,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           if (recipient?.role === "parent") {
             const sender = await storage.getUser(senderId);
             const senderName = sender ? `${sender.firstName} ${sender.lastName}` : "Driver";
-            await pushNotificationService.sendToUsers([recipientId], {
-              title: `Message from ${senderName}`,
-              body: content.length > 100 ? content.substring(0, 100) + "..." : content,
-              data: { type: "new_message", senderId, messageId: message.id }
-            });
+            await pushNotificationService.notifyNewMessage(
+              recipientId,
+              senderName,
+              content,
+              message.id,
+              senderId
+            );
           }
         } catch (pushError) {
           console.error("[push] Error sending message notification:", pushError);
@@ -8514,12 +8531,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               try {
                 const tokens = await storage.getActiveDeviceTokens(user.id);
                 if (tokens.length > 0) {
-                  await pushNotificationService.sendNotification(user.id, {
+                  await pushNotificationService.sendToUsers([user.id], {
                     title: title,
                     body: content.substring(0, 200),
                     data: {
                       type: "announcement",
                       announcementId: announcement.id,
+                      deeplink: `/announcements/${announcement.id}`,
                     },
                   });
                   successCount++;

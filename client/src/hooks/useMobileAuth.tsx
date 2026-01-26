@@ -1,5 +1,6 @@
 // Mobile authentication hook for Capacitor apps
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "wouter";
 import { isNative, getApiUrl } from "@/lib/config";
 import { 
   getAuthToken, 
@@ -10,6 +11,7 @@ import {
   type MobileUser 
 } from "@/lib/mobile-auth";
 import { usePushNotifications } from "./usePushNotifications";
+import { ActionPerformed } from "@capacitor/push-notifications";
 
 interface UseMobileAuthResult {
   user: MobileUser | null;
@@ -20,18 +22,92 @@ interface UseMobileAuthResult {
   refreshUser: () => Promise<void>;
 }
 
+interface NotificationData {
+  type?: string;
+  deeplink?: string;
+  thread_id?: string;
+  senderId?: string;
+  announcementId?: string;
+  routeId?: string;
+  messageId?: string;
+}
+
+function getRouteForNotification(data: NotificationData, userRole?: string): string {
+  const type = data.type;
+  
+  switch (type) {
+    case "new_message":
+    case "message":
+      if (userRole === "driver") return "/driver/messages";
+      if (userRole === "parent") return "/parent/messages";
+      if (userRole === "admin") return "/admin/messages";
+      break;
+    
+    case "announcement":
+      if (userRole === "driver") return "/driver/announcements";
+      if (userRole === "parent") return "/parent/messages";
+      if (userRole === "admin") return "/admin/announcements";
+      break;
+    
+    case "route_started":
+    case "route_run":
+      if (userRole === "driver") return "/driver/routes";
+      if (userRole === "parent") return "/parent/tracking";
+      if (userRole === "admin") return "/admin";
+      break;
+      
+    case "bus_approaching":
+    case "student_pickup":
+    case "route_delay":
+      if (userRole === "parent") return "/parent/tracking";
+      if (userRole === "driver") return "/driver/routes";
+      if (userRole === "admin") return "/admin";
+      break;
+    
+    case "test":
+      break;
+  }
+  
+  if (userRole === "driver") return "/driver";
+  if (userRole === "parent") return "/parent";
+  return "/admin";
+}
+
 export function useMobileAuth(): UseMobileAuthResult {
   const [user, setUser] = useState<MobileUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const pushNotificationsRegisteredRef = useRef(false);
+  const pendingNavigationRef = useRef<string | null>(null);
+  const userRef = useRef<MobileUser | null>(null);
+  const [, setLocation] = useLocation();
+  
+  userRef.current = user;
+  
+  const handleNotificationAction = useCallback((action: ActionPerformed) => {
+    console.log("[MobileAuth] Notification tapped:", action.actionId);
+    const data = action.notification.data as NotificationData;
+    console.log("[MobileAuth] Notification data:", JSON.stringify(data));
+    
+    if (!data) return;
+    
+    const currentUser = userRef.current;
+    const route = getRouteForNotification(data, currentUser?.role);
+    
+    if (!currentUser) {
+      console.log("[MobileAuth] Auth not ready, queuing navigation to:", route);
+      pendingNavigationRef.current = route;
+      return;
+    }
+    
+    console.log("[MobileAuth] Navigating to:", route);
+    setLocation(route);
+  }, [setLocation]);
   
   const { register: registerPush, unregister: unregisterPush } = usePushNotifications({
     onNotificationReceived: (notification) => {
       console.log("[MobileAuth] Push notification received:", notification.title);
     },
-    onNotificationAction: (action) => {
-      console.log("[MobileAuth] Push notification action:", action.actionId);
-    },
+    onNotificationAction: handleNotificationAction,
   });
 
   // Register for push notifications when user is authenticated
@@ -42,6 +118,15 @@ export function useMobileAuth(): UseMobileAuthResult {
       pushNotificationsRegisteredRef.current = true;
     }
   }, [user, registerPush]);
+
+  // Handle pending navigation from notification tap when auth becomes ready
+  useEffect(() => {
+    if (user && pendingNavigationRef.current) {
+      console.log("[MobileAuth] Auth ready, executing pending navigation to:", pendingNavigationRef.current);
+      setLocation(pendingNavigationRef.current);
+      pendingNavigationRef.current = null;
+    }
+  }, [user, setLocation]);
 
   // Check for existing auth on mount
   useEffect(() => {

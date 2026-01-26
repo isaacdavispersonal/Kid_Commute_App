@@ -11,6 +11,29 @@ interface PushNotification {
   imageUrl?: string;
 }
 
+/**
+ * Helper to build standard deep link paths
+ */
+function buildDeepLink(type: string, params: Record<string, string> = {}): string {
+  switch (type) {
+    case "message":
+    case "new_message":
+      return params.threadId ? `/messages/${params.threadId}` : "/messages";
+    case "announcement":
+      return params.announcementId ? `/announcements/${params.announcementId}` : "/announcements";
+    case "route_run":
+    case "route_started":
+      return params.routeId ? `/routes/${params.routeId}` : "/routes";
+    case "bus_approaching":
+    case "student_pickup":
+      return "/tracking";
+    case "route_delay":
+      return "/tracking";
+    default:
+      return "/";
+  }
+}
+
 class PushNotificationService {
   private initialized = false;
 
@@ -136,6 +159,7 @@ class PushNotificationService {
 
   /**
    * Update token failure count and deactivate if needed
+   * Enhanced logging for troubleshooting (C5 requirement)
    */
   private async handleFailedTokens(failedTokens: string[]) {
     if (failedTokens.length === 0) return;
@@ -152,10 +176,15 @@ class PushNotificationService {
           .where(eq(deviceTokens.token, token))
           .limit(1);
 
-        if (!existingToken) continue;
+        if (!existingToken) {
+          log(`[push] Failed token not found in database: ${token.substring(0, 20)}...`, "warn");
+          continue;
+        }
 
         const newFailureCount = existingToken.failureCount + 1;
         const shouldDeactivate = newFailureCount >= MAX_FAILURES;
+
+        log(`[push] Token ${token.substring(0, 20)}... failure count: ${newFailureCount}/${MAX_FAILURES} (user: ${existingToken.userId})`, "warn");
 
         await db
           .update(deviceTokens)
@@ -171,7 +200,7 @@ class PushNotificationService {
           .where(eq(deviceTokens.token, token));
 
         if (shouldDeactivate) {
-          log(`[push] Deactivated token after ${MAX_FAILURES} failures`, "info");
+          log(`[push] TOKEN REVOKED: Deactivated token for user ${existingToken.userId} after ${MAX_FAILURES} consecutive failures - token will no longer be used`, "warn");
         }
       } catch (error) {
         log(`[push] Error updating failed token: ${error}`, "error");
@@ -203,6 +232,7 @@ class PushNotificationService {
 
   /**
    * Send notification to specific user IDs
+   * Enhanced logging for troubleshooting (C5 requirement)
    */
   async sendToUsers(userIds: string[], notification: PushNotification): Promise<void> {
     if (!this.initialized) {
@@ -210,17 +240,34 @@ class PushNotificationService {
       return;
     }
 
+    // Enhanced logging: Log target user IDs
+    log(`[push] Attempting to send notification to ${userIds.length} user(s)`, "info");
+    log(`[push] Target user IDs: ${userIds.join(", ")}`, "info");
+    log(`[push] Notification title: "${notification.title}"`, "info");
+    
     const tokensByUser = await this.getActiveTokensForUsers(userIds);
+    
+    // Enhanced logging: Log token count per user
+    tokensByUser.forEach((tokens, userId) => {
+      log(`[push] User ${userId}: ${tokens.length} active device token(s)`, "info");
+    });
+    
     const allTokens = Array.from(tokensByUser.values()).flat();
 
     if (allTokens.length === 0) {
-      log(`[push] No active tokens found for ${userIds.length} user(s)`, "info");
+      log(`[push] No active tokens found for ${userIds.length} user(s) - notification not sent`, "warn");
       return;
     }
 
     log(`[push] Sending "${notification.title}" to ${allTokens.length} device(s)`, "info");
+    if (notification.data) {
+      log(`[push] Notification data: ${JSON.stringify(notification.data)}`, "info");
+    }
 
     const { success, failed } = await this.sendToFCM(allTokens, notification);
+
+    // Enhanced logging: Summary
+    log(`[push] Send complete - Success: ${success.length}, Failed: ${failed.length}`, "info");
 
     // Update token statuses
     await this.handleSuccessfulTokens(success);
@@ -245,15 +292,17 @@ class PushNotificationService {
    */
   async notifyBusApproaching(parentUserIds: string[], routeName: string, stopName: string, eta: number): Promise<void> {
     const etaMinutes = Math.round(eta / 60);
+    const data = {
+      type: "bus_approaching",
+      routeName,
+      stopName,
+      eta: eta.toString(),
+      deeplink: buildDeepLink("bus_approaching"),
+    };
     await this.sendToUsers(parentUserIds, {
       title: "Bus Approaching",
       body: `${routeName} will arrive at ${stopName} in ${etaMinutes} minute${etaMinutes !== 1 ? 's' : ''}`,
-      data: {
-        type: "bus_approaching",
-        routeName,
-        stopName,
-        eta: eta.toString(),
-      },
+      data,
     });
   }
 
@@ -261,14 +310,16 @@ class PushNotificationService {
    * Send notification about route delay
    */
   async notifyRouteDelay(parentUserIds: string[], routeName: string, delayMinutes: number): Promise<void> {
+    const data = {
+      type: "route_delay",
+      routeName,
+      delayMinutes: delayMinutes.toString(),
+      deeplink: buildDeepLink("route_delay"),
+    };
     await this.sendToUsers(parentUserIds, {
       title: "Route Delayed",
       body: `${routeName} is running approximately ${delayMinutes} minute${delayMinutes !== 1 ? 's' : ''} behind schedule`,
-      data: {
-        type: "route_delay",
-        routeName,
-        delayMinutes: delayMinutes.toString(),
-      },
+      data,
     });
   }
 
@@ -276,27 +327,52 @@ class PushNotificationService {
    * Send notification about student pickup confirmation
    */
   async notifyStudentPickup(parentUserIds: string[], studentName: string, stopName: string): Promise<void> {
+    const data = {
+      type: "student_pickup",
+      studentName,
+      stopName,
+      deeplink: buildDeepLink("student_pickup"),
+    };
     await this.sendToUsers(parentUserIds, {
       title: "Student Picked Up",
       body: `${studentName} has been picked up at ${stopName}`,
-      data: {
-        type: "student_pickup",
-        studentName,
-        stopName,
-      },
+      data,
     });
   }
 
   /**
    * Send notification about important announcement
    */
-  async notifyAnnouncement(userIds: string[], title: string, message: string): Promise<void> {
+  async notifyAnnouncement(userIds: string[], title: string, message: string, announcementId?: string): Promise<void> {
+    const data: Record<string, string> = {
+      type: "announcement",
+      deeplink: buildDeepLink("announcement", { announcementId: announcementId || "" }),
+    };
+    if (announcementId) {
+      data.announcementId = announcementId;
+    }
     await this.sendToUsers(userIds, {
       title: title,
       body: message,
-      data: {
-        type: "announcement",
-      },
+      data,
+    });
+  }
+
+  /**
+   * Send notification about new message
+   */
+  async notifyNewMessage(recipientId: string, senderName: string, content: string, messageId: string, senderId: string): Promise<void> {
+    const data = {
+      type: "new_message",
+      senderId,
+      messageId,
+      thread_id: senderId,
+      deeplink: buildDeepLink("new_message", { threadId: senderId }),
+    };
+    await this.sendToUsers([recipientId], {
+      title: `Message from ${senderName}`,
+      body: content.length > 100 ? content.substring(0, 100) + "..." : content,
+      data,
     });
   }
 

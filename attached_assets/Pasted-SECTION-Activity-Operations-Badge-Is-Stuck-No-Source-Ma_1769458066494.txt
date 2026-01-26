@@ -1,0 +1,146 @@
+SECTION — Activity & Operations Badge Is Stuck + No Source Mapping
+Problem Summary
+
+Left nav shows Activity & Operations badge = 30.
+
+Badge does not clear and does not explain what it represents.
+
+On the Activity Log page, only ~2 items appear “critical”, so the badge count is likely incorrect or stale.
+
+Admin cannot tell which tab/category the badge refers to (Route Health vs Driver Utilities vs Audit Log; or sub-filters like Time Exceptions, Attendance Updates, etc.)
+
+Goals
+
+Badge count must be accurate and derived from server truth (not cached indefinitely).
+
+Badge must be traceable: it should also appear on the relevant sub-tab/category so admins know what needs attention.
+
+Badge must clear when the admin reviews/acknowledges those items.
+
+Badge counts should reconcile even if realtime fails (fallback fetch on app open).
+
+A) Define what the badge represents (non-negotiable)
+
+Pick ONE of these approaches and implement consistently:
+
+Option 1 (recommended): “Needs Review” items
+
+Badge counts = total number of log/ops items that are needs_review = true and not_acknowledged_by_admin.
+
+Examples: flagged checklist items, time exceptions, critical attendance anomalies, incident reports.
+
+Option 2: “Unread new events”
+
+Badge counts = items created since admin last viewed that section (like inbox unread).
+
+Requires a “last_seen_at” for the section.
+
+Do not mix them or the badge will never feel correct.
+
+B) Data model for accurate + clearable badges
+Table: admin_acknowledgements (simple and flexible)
+
+id
+
+admin_user_id
+
+entity_type (enum/string: AUDIT_LOG, TIME_EXCEPTION, CHECKLIST_FLAG, INCIDENT, etc.)
+
+entity_id
+
+acknowledged_at
+
+Rule: A badge only counts items with no acknowledgement record for that admin.
+
+If you want shared clearing across all admins (global “resolved”), use resolved_at/resolved_by on the entity itself. But per-admin acknowledgement is often better UX.
+
+C) Backend: Badge summary endpoint (required)
+
+Create:
+
+GET /admin/badges/activity-operations
+
+Returns a structured breakdown:
+
+{
+  "total": 30,
+  "by_section": {
+    "route_health": 2,
+    "driver_utilities": 0,
+    "audit_log": 28
+  },
+  "by_audit_log_category": {
+    "time_exceptions": 2,
+    "attendance_updates": 1,
+    "route_messages": 25
+  }
+}
+
+
+Important: This is what powers both:
+
+left nav badge
+
+section/tab badges
+
+category filter badges
+
+D) Frontend: Where badges must appear
+
+Left nav: Activity & Operations shows total
+
+Top tabs: Route Health, Driver Utilities, Audit Log show by_section.*
+
+Inside Audit Log: category chips show by_audit_log_category.*
+
+This makes it obvious what the badge is referencing.
+
+E) Clearing behavior (required)
+
+When admin visits a section or clicks “Mark as reviewed”, create acknowledgements.
+
+Two ways:
+
+Auto-ack on view (fast UX)
+
+When admin opens Audit Log and is on “All Logs”, acknowledge all visible items in that scope.
+
+Manual “Mark reviewed” (safer)
+
+Add a button:
+
+“Mark visible as reviewed”
+
+or per-item “Resolve / Acknowledge”
+
+Either approach must:
+
+update backend
+
+refresh badges immediately
+
+update UI counts without needing a page refresh
+
+F) Bug likely causing “30 stuck” (Replit AI should diagnose)
+
+Ask them to check:
+
+Badge is computed from all-time logs instead of unacknowledged/unread
+
+Badge query missing org filter (org_id) and picking up other orgs
+
+Badge not invalidated after viewing due to missing “last seen” write
+
+Badge stored client-side and never refreshed on login/navigation
+
+Badge includes non-critical categories (e.g., every message log) but UI filter only shows “critical”
+
+G) Acceptance tests
+
+Seed 2 critical time exceptions + 0 others → nav badge shows 2 (not 30)
+
+Open Audit Log → badge breakdown shows chips with correct counts
+
+Click “Mark reviewed” → badge goes to 0 immediately
+
+Create new event → badge increments without refresh (realtime) AND with refresh fallback
