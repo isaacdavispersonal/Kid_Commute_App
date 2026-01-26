@@ -88,6 +88,11 @@ const adminMenuSections = [
         icon: MessageSquare,
       },
       {
+        title: "Announcements",
+        url: "/admin/announcements",
+        icon: Megaphone,
+      },
+      {
         title: "Activity & Operations",
         url: "/admin/activity-operations",
         icon: Activity,

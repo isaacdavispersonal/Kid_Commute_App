@@ -300,6 +300,9 @@ function CreateAnnouncementSection({ onSuccess }: { onSuccess?: () => void }) {
 function AnnouncementHistorySection() {
   const [searchQuery, setSearchQuery] = useState("");
   const [audienceFilter, setAudienceFilter] = useState<string>("all");
+  const [routeFilter, setRouteFilter] = useState<string>("all");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
   const [page, setPage] = useState(0);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<AnnouncementHistoryItem | null>(null);
   const pageSize = 20;
@@ -308,6 +311,9 @@ function AnnouncementHistorySection() {
     const params: string[] = [];
     if (searchQuery) params.push(`search=${encodeURIComponent(searchQuery)}`);
     if (audienceFilter !== "all") params.push(`audienceType=${audienceFilter}`);
+    if (routeFilter !== "all") params.push(`routeId=${routeFilter}`);
+    if (startDate) params.push(`startDate=${startDate}`);
+    if (endDate) params.push(`endDate=${endDate}`);
     params.push(`limit=${pageSize}`);
     params.push(`offset=${page * pageSize}`);
     return `/api/admin/announcement-history?${params.join("&")}`;
@@ -426,6 +432,72 @@ function AnnouncementHistorySection() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="min-w-[180px]">
+              <Select 
+                value={routeFilter} 
+                onValueChange={(v) => {
+                  setRouteFilter(v);
+                  setPage(0);
+                }}
+              >
+                <SelectTrigger data-testid="select-route-filter">
+                  <SelectValue placeholder="Filter by route" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Routes</SelectItem>
+                  {routes?.map((route) => (
+                    <SelectItem key={route.id} value={route.id}>
+                      {route.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-4 mt-4">
+            <div className="min-w-[150px]">
+              <label className="text-xs text-muted-foreground block mb-1">Start Date</label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setPage(0);
+                }}
+                data-testid="input-start-date"
+              />
+            </div>
+            <div className="min-w-[150px]">
+              <label className="text-xs text-muted-foreground block mb-1">End Date</label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setPage(0);
+                }}
+                data-testid="input-end-date"
+              />
+            </div>
+            {(searchQuery || audienceFilter !== "all" || routeFilter !== "all" || startDate || endDate) && (
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setAudienceFilter("all");
+                    setRouteFilter("all");
+                    setStartDate("");
+                    setEndDate("");
+                    setPage(0);
+                  }}
+                  data-testid="button-clear-filters"
+                >
+                  Clear Filters
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
