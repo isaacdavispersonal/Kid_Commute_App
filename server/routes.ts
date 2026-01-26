@@ -1205,7 +1205,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             // Acknowledge both supply requests and feedback
             const supplies = await storage.getSuppliesRequests();
             const supplyIds = supplies
-              .filter(s => s.status === "pending")
+              .filter(s => s.status === "PENDING")
               .map(s => s.id);
             await storage.createBulkAcknowledgements(adminId, "SUPPLY_REQUEST", supplyIds);
             
@@ -1219,7 +1219,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             entityType = "INCIDENT";
             const incidents = await storage.getAllIncidents();
             entityIds = incidents
-              .filter(i => i.status === "submitted")
+              .filter(i => i.status === "pending")
               .map(i => i.id);
             break;
           case "timeManagement":

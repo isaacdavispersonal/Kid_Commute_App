@@ -4569,7 +4569,7 @@ export class DatabaseStorage implements IStorage {
       )
       .where(
         and(
-          eq(suppliesRequests.status, "pending"),
+          eq(suppliesRequests.status, "PENDING"),
           sql`${adminAcknowledgements.id} IS NULL`
         )
       );
@@ -4609,7 +4609,7 @@ export class DatabaseStorage implements IStorage {
       )
       .where(
         and(
-          eq(incidents.status, "submitted"),
+          eq(incidents.status, "pending"),
           sql`${adminAcknowledgements.id} IS NULL`
         )
       );
