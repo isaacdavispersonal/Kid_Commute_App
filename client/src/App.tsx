@@ -28,6 +28,7 @@ import { ConfigErrorScreen } from "@/components/config-error-screen";
 import { useSocket, useAnnouncementSocket } from "@/hooks/use-socket";
 import { disconnectSocket } from "@/lib/socket";
 import { IOSDebugOverlay } from "@/components/ios-debug-overlay";
+import { ErrorBoundary, RouteErrorBoundary } from "@/components/error-boundary";
 
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
@@ -178,15 +179,17 @@ function Router() {
     return (
       <>
         <IOSDebugOverlay currentLayout="Auth" isAuthenticated={false} />
-        <Switch>
-          <Route path="/" component={Landing} />
-          <Route path="/privacy-policy" component={PrivacyPolicy} />
-          <Route path="/terms-of-service" component={TermsOfService} />
-          <Route path="/forgot-password" component={ForgotPassword} />
-          <Route path="/reset-password" component={ResetPassword} />
-          <Route path="/verify-email" component={VerifyEmail} />
-          <Route component={NotFound} />
-        </Switch>
+        <ErrorBoundary>
+          <Switch>
+            <Route path="/" component={Landing} />
+            <Route path="/privacy-policy" component={PrivacyPolicy} />
+            <Route path="/terms-of-service" component={TermsOfService} />
+            <Route path="/forgot-password" component={ForgotPassword} />
+            <Route path="/reset-password" component={ResetPassword} />
+            <Route path="/verify-email" component={VerifyEmail} />
+            <Route component={NotFound} />
+          </Switch>
+        </ErrorBoundary>
       </>
     );
   }
@@ -268,6 +271,7 @@ function Router() {
               isRefreshing={isRefreshing} 
               scrollContainerRef={mainRef}
             />
+            <RouteErrorBoundary>
             <Switch>
               {/* Common routes for all roles */}
               <Route path="/profile" component={Profile} />
@@ -370,6 +374,7 @@ function Router() {
               )}
               <Route component={NotFound} />
             </Switch>
+            </RouteErrorBoundary>
           </main>
         </div>
       </div>
@@ -390,8 +395,10 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <RefreshProvider>
-          <Toaster />
-          <Router />
+          <ErrorBoundary>
+            <Toaster />
+            <Router />
+          </ErrorBoundary>
         </RefreshProvider>
       </TooltipProvider>
     </QueryClientProvider>
