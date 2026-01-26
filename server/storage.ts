@@ -296,6 +296,26 @@ export interface IStorage {
   getUnreadAnnouncementCount(userId: string, role: "driver" | "parent"): Promise<number>;
   getUnreadAnnouncementIds(userId: string, role: "driver" | "parent"): Promise<string[]>;
   
+  // Announcement history operations
+  getAnnouncementHistory(filters?: {
+    startDate?: Date;
+    endDate?: Date;
+    audienceType?: string;
+    routeId?: string;
+    createdBy?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ announcements: any[]; total: number }>;
+  getAnnouncementById(id: string): Promise<Announcement | undefined>;
+  updateAnnouncementDeliveryStats(id: string, stats: {
+    targetCount?: number;
+    pushAttemptedAt?: Date;
+    pushSuccessCount?: number;
+    pushFailureCount?: number;
+    lastPushError?: string;
+  }): Promise<Announcement>;
+  
   // Route announcement operations
   isDriverAssignedToRoute(driverId: string, routeId: string): Promise<boolean>;
   createRouteAnnouncement(announcement: InsertRouteAnnouncement): Promise<RouteAnnouncement>;
@@ -3278,6 +3298,106 @@ export class DatabaseStorage implements IStorage {
 
     const readIds = new Set(readAnnouncements.map(r => r.announcementId));
     return nonDismissedIds.filter(id => !readIds.has(id));
+  }
+
+  async getAnnouncementHistory(filters?: {
+    startDate?: Date;
+    endDate?: Date;
+    audienceType?: string;
+    routeId?: string;
+    createdBy?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ announcements: any[]; total: number }> {
+    const conditions: any[] = [];
+
+    if (filters?.startDate) {
+      conditions.push(sql`${announcements.createdAt} >= ${filters.startDate}`);
+    }
+    if (filters?.endDate) {
+      conditions.push(sql`${announcements.createdAt} <= ${filters.endDate}`);
+    }
+    if (filters?.audienceType) {
+      conditions.push(sql`${announcements.audienceType} = ${filters.audienceType}`);
+    }
+    if (filters?.routeId) {
+      conditions.push(eq(announcements.routeId, filters.routeId));
+    }
+    if (filters?.createdBy) {
+      conditions.push(eq(announcements.adminId, filters.createdBy));
+    }
+    if (filters?.search) {
+      conditions.push(
+        sql`(${announcements.title} ILIKE ${'%' + filters.search + '%'} OR ${announcements.content} ILIKE ${'%' + filters.search + '%'})`
+      );
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    // Get total count
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(announcements)
+      .where(whereClause);
+    const total = Number(countResult[0]?.count || 0);
+
+    // Get announcements with admin info
+    const limit = filters?.limit || 50;
+    const offset = filters?.offset || 0;
+
+    const results = await db
+      .select({
+        id: announcements.id,
+        adminId: announcements.adminId,
+        targetRole: announcements.targetRole,
+        audienceType: announcements.audienceType,
+        routeId: announcements.routeId,
+        title: announcements.title,
+        content: announcements.content,
+        expiresAt: announcements.expiresAt,
+        targetCount: announcements.targetCount,
+        pushAttemptedAt: announcements.pushAttemptedAt,
+        pushSuccessCount: announcements.pushSuccessCount,
+        pushFailureCount: announcements.pushFailureCount,
+        lastPushError: announcements.lastPushError,
+        createdAt: announcements.createdAt,
+        adminName: users.name,
+        routeName: routes.name,
+      })
+      .from(announcements)
+      .leftJoin(users, eq(announcements.adminId, users.id))
+      .leftJoin(routes, eq(announcements.routeId, routes.id))
+      .where(whereClause)
+      .orderBy(desc(announcements.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return { announcements: results, total };
+  }
+
+  async getAnnouncementById(id: string): Promise<Announcement | undefined> {
+    const [result] = await db
+      .select()
+      .from(announcements)
+      .where(eq(announcements.id, id))
+      .limit(1);
+    return result;
+  }
+
+  async updateAnnouncementDeliveryStats(id: string, stats: {
+    targetCount?: number;
+    pushAttemptedAt?: Date;
+    pushSuccessCount?: number;
+    pushFailureCount?: number;
+    lastPushError?: string;
+  }): Promise<Announcement> {
+    const [updated] = await db
+      .update(announcements)
+      .set(stats)
+      .where(eq(announcements.id, id))
+      .returning();
+    return updated;
   }
 
   // Route Announcement Methods

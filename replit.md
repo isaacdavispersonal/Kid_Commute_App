@@ -50,7 +50,8 @@ Preferred communication style: Simple, everyday language.
     - **Time Tracking**: Drivers clock in/out for general timekeeping, separate from route operations which require active clock-in, vehicle inspection, and route start timestamp.
     - **Flexible Shift Scheduling**: Shifts require explicit start/end times and vehicle selection.
     - **Messaging System**: Route-based messaging between drivers and parents, with admin intervention.
-    - **Announcement System**: Dismissible announcements for users, route-specific broadcasts, and enhanced admin broadcasts.
+    - **Announcement System**: Dismissible announcements for users, route-specific broadcasts, enhanced admin broadcasts, and announcement history with delivery diagnostics.
+      - **Admin Announcement History**: Tabbed interface (Create/History) at `/admin/announcements` with filters (search, audience type), pagination, and detailed delivery diagnostics (target count, success/failure counts, push timing, error messages).
     - **Incident Management**: Drivers report incidents, admins review.
     - **Route Request System**: Drivers can report route issues during active routes (missing students, unexpected students, wrong stops, roster clarifications). Admins review and resolve requests via Activity & Operations page. Real-time Socket.IO events for created/updated requests. Badge count for open requests.
     - **Driver Assignment System**: Admins assign drivers to routes with optional vehicle assignment.

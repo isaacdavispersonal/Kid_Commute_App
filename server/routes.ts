@@ -8420,11 +8420,20 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(400).json({ message: "Target role must be 'driver' or 'parent'" });
         }
 
+        // Get target users count for delivery tracking
+        const targetUsers = await storage.getUsersByRole(targetRole);
+        const targetCount = targetUsers.length;
+
+        // Map targetRole to audienceType
+        const audienceType = targetRole === "driver" ? "ROLE_DRIVERS" : "ROLE_PARENTS";
+
         const announcement = await storage.createAnnouncement({
           adminId,
           title,
           content,
           targetRole,
+          audienceType,
+          targetCount,
         });
 
         // Broadcast via WebSocket (legacy)
@@ -8445,6 +8454,48 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         emitAnnouncementCreated({
           announcement,
         });
+
+        // Send push notifications to target users and track delivery
+        (async () => {
+          try {
+            let successCount = 0;
+            let failureCount = 0;
+            let lastError: string | null = null;
+
+            const pushAttemptedAt = new Date();
+
+            for (const user of targetUsers) {
+              try {
+                const tokens = await storage.getActiveDeviceTokens(user.id);
+                if (tokens.length > 0) {
+                  await pushNotificationService.sendNotification(user.id, {
+                    title: title,
+                    body: content.substring(0, 200),
+                    data: {
+                      type: "announcement",
+                      announcementId: announcement.id,
+                    },
+                  });
+                  successCount++;
+                }
+              } catch (pushError: any) {
+                failureCount++;
+                lastError = pushError.message || "Unknown push error";
+                console.error(`[push] Error sending announcement to user ${user.id}:`, pushError);
+              }
+            }
+
+            // Update announcement with delivery stats
+            await storage.updateAnnouncementDeliveryStats(announcement.id, {
+              pushAttemptedAt,
+              pushSuccessCount: successCount,
+              pushFailureCount: failureCount,
+              lastPushError: lastError,
+            });
+          } catch (statsError) {
+            console.error("[push] Error updating announcement delivery stats:", statsError);
+          }
+        })();
 
         res.json(announcement);
       } catch (error) {
@@ -8486,6 +8537,63 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       } catch (error) {
         console.error("Error creating route announcement:", error);
         res.status(500).json({ message: "Failed to create route announcement" });
+      }
+    }
+  );
+
+  // Admin: Get announcement history with filters
+  app.get(
+    "/api/admin/announcement-history",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { 
+          startDate, 
+          endDate, 
+          audienceType, 
+          routeId, 
+          createdBy, 
+          search,
+          limit,
+          offset 
+        } = req.query;
+
+        const filters: any = {};
+        if (startDate) filters.startDate = new Date(startDate);
+        if (endDate) filters.endDate = new Date(endDate);
+        if (audienceType) filters.audienceType = audienceType;
+        if (routeId) filters.routeId = routeId;
+        if (createdBy) filters.createdBy = createdBy;
+        if (search) filters.search = search;
+        if (limit) filters.limit = parseInt(limit as string, 10);
+        if (offset) filters.offset = parseInt(offset as string, 10);
+
+        const result = await storage.getAnnouncementHistory(filters);
+        res.json(result);
+      } catch (error) {
+        console.error("Error getting announcement history:", error);
+        res.status(500).json({ message: "Failed to get announcement history" });
+      }
+    }
+  );
+
+  // Admin: Get single announcement details
+  app.get(
+    "/api/admin/announcements/:id",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const announcement = await storage.getAnnouncementById(id);
+        if (!announcement) {
+          return res.status(404).json({ message: "Announcement not found" });
+        }
+        res.json(announcement);
+      } catch (error) {
+        console.error("Error getting announcement:", error);
+        res.status(500).json({ message: "Failed to get announcement" });
       }
     }
   );

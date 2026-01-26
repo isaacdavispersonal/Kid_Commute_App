@@ -1695,15 +1695,32 @@ export const insertDriverNotificationSchema = createInsertSchema(driverNotificat
 export type InsertDriverNotification = z.infer<typeof insertDriverNotificationSchema>;
 export type DriverNotification = typeof driverNotifications.$inferSelect;
 
+// Audience type for announcements
+export const announcementAudienceTypeEnum = pgEnum("announcement_audience_type", [
+  "ORG_ALL",
+  "ROLE_DRIVERS", 
+  "ROLE_PARENTS",
+  "ROUTE_DRIVERS",
+  "ROUTE_PARENTS",
+]);
+
 // Announcements table - broadcast messages from admins
 export const announcements = pgTable("announcements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   adminId: varchar("admin_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  targetRole: userRoleEnum("target_role").notNull(), // 'driver' or 'parent'
+  targetRole: userRoleEnum("target_role").notNull(), // 'driver' or 'parent' - kept for backwards compatibility
+  audienceType: announcementAudienceTypeEnum("audience_type").default("ROLE_DRIVERS"),
+  routeId: varchar("route_id").references(() => routes.id, { onDelete: "set null" }),
   title: varchar("title").notNull(),
   content: text("content").notNull(),
+  expiresAt: timestamp("expires_at"),
+  targetCount: integer("target_count").default(0),
+  pushAttemptedAt: timestamp("push_attempted_at"),
+  pushSuccessCount: integer("push_success_count").default(0),
+  pushFailureCount: integer("push_failure_count").default(0),
+  lastPushError: text("last_push_error"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
