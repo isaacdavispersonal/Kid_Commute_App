@@ -1,0 +1,371 @@
+Below is a **detailed, end-to-end feature overview** of everything we discussed, organized so you can **audit implementation** with Replit AI. It’s written as **“what should exist + how it should behave + what to verify.”** You can copy/paste sections as checklists.
+
+---
+
+# 1) RouteRun System (Multi-Driver Safe “Single Source of Truth”)
+
+## What it is
+
+A **Route** is the template (stops/roster rules). A **RouteRun** is the live instance for a specific **date + AM/PM**.
+
+## Must-have behaviors
+
+* Exactly **one** RouteRun exists per `route_id + service_date + shift_type`.
+* If multiple drivers are assigned:
+
+  * One is **PRIMARY**
+  * Others are **AID/VIEWER**
+  * Everyone sees the **same RouteRun state**
+* If Driver B opens the route after Driver A started it:
+
+  * B must **join the existing RouteRun**, not create a new one.
+* “Route Active” is based on RouteRun status, **not GPS status**.
+
+## What to verify
+
+* DB constraint preventing duplicates
+* Start Route does an atomic “start or join existing”
+* Participant list exists and roles are enforced
+
+---
+
+# 2) Live Sync / Real-Time Updates (No Manual Refresh)
+
+## What it is
+
+Operational data updates instantly across devices using **WebSockets (Socket.IO)**.
+
+## Must-have behaviors
+
+* App fetches initial state via REST, then **subscribes to live updates**
+* Core events update without refresh:
+
+  * Route started / ended / finalized / reopened
+  * Stop arrived / completed
+  * Attendance updates
+  * Announcements
+  * Route requests
+* Reconnect behavior:
+
+  * On socket reconnect, app re-subscribes and fetches a snapshot once
+
+## What to verify
+
+* Rooms/channels exist:
+
+  * `org:<orgId>`
+  * `user:<userId>`
+  * `route_run:<routeRunId>`
+* Events are emitted and the UI state updates instantly
+
+---
+
+# 3) Route “Active” Status Decoupled From GPS
+
+## What it is
+
+Routes should not show “Active” just because GPS is active.
+
+## Must-have behaviors
+
+* Route is “Active” only when:
+
+  * Driver is clocked in (if required)
+  * RouteRun status is `ACTIVE`
+* GPS can be “available” without route being active
+
+## What to verify
+
+* UI label derives from `route_run.status`
+* GPS heartbeat does not flip route activity state
+
+---
+
+# 4) Attendance Data Integrity (AM/PM Separation)
+
+## What it is
+
+Morning and Afternoon attendance must not bleed into each other.
+
+## Must-have behaviors
+
+* Attendance is scoped to `route_run_id` (not just student + date)
+* Morning presence cannot become Afternoon absence automatically
+* Afternoon attendance remains editable for that RouteRun (based on permissions)
+
+## What to verify
+
+* Attendance records are stored per RouteRun
+* Queries filter by `route_run_id`
+* Audit log records who changed what and when
+
+---
+
+# 5) Driver Mistake Protection: Soft Close + Route Summary + Corrections
+
+## What it is
+
+Ending a route should not instantly lock the driver out of fixes.
+
+## Required lifecycle
+
+* `ACTIVE` → `ENDED_PENDING_REVIEW` → `FINALIZED`
+
+## Must-have behaviors
+
+* “Complete Route” moves to **Pending Review**, not final
+* App shows a **Route Summary** screen with:
+
+  * route info, duration
+  * stops completed vs total
+  * attendance totals + exceptions
+  * per-student pickup/dropoff stop + timestamps
+  * pre/post checklist status + mileage
+* Driver can correct mistakes while Pending Review:
+
+  * wrong stop
+  * wrong absent/present
+  * wrong got off/on status
+* After Finalized:
+
+  * driver cannot edit
+  * admin can edit with an **audit trail**
+* “Reopen route” exists with guardrails (admin-only recommended)
+
+## Extra protections (strongly recommended)
+
+* Undo snackbars for:
+
+  * mark absent
+  * mark got off
+  * complete route
+* Confirm/hold-to-complete for route completion
+
+## What to verify
+
+* Pending review window exists + can edit
+* Finalize locks edits
+* Admin corrections are logged with old/new values + reason
+
+---
+
+# 6) Admin Desktop Dashboard (Same Login, Role-Gated)
+
+## What it is
+
+Admins can manage on desktop without a separate app.
+
+## Must-have behaviors
+
+* Same auth credentials for mobile + web
+* `/admin/*` routes exist and are role-gated:
+
+  * only admins can access
+* Backend enforces RBAC (not just frontend hiding)
+
+## What to verify
+
+* Driver cannot access admin endpoints
+* Admin sees desktop-optimized layout
+
+---
+
+# 7) Announcements Reliability + Announcement History
+
+## What it is
+
+Announcements must display correctly + admins must see history.
+
+## Must-have behaviors
+
+* Announcements support explicit targeting:
+
+  * org-wide
+  * drivers
+  * parents
+  * route drivers
+  * route parents
+* Announcements appear:
+
+  * live via realtime events
+  * and on refresh via REST fallback
+* Admin has **Announcement History** page:
+
+  * what was sent
+  * when
+  * by whom
+  * to which audience/route
+  * search + filters
+
+## What to verify
+
+* `announcements` table has audience fields
+* `GET /announcements` filters correctly by role and route membership
+* History UI exists and matches DB
+
+---
+
+# 8) Notification Badges (Accurate + Traceable)
+
+## What it is
+
+Badges in nav should reflect real “needs attention” or “unread”.
+
+## Must-have behaviors
+
+* Activity & Operations badge:
+
+  * must not get stuck
+  * must be server-derived
+  * must break down by tab/category (so admin knows what it refers to)
+* Badge counts clear when:
+
+  * admin views/acknowledges
+  * or items are resolved
+* Badges exist for:
+
+  * unread messages
+  * unread announcements
+  * critical ops exceptions (time/checklist/etc.)
+
+## What to verify
+
+* Badge endpoint exists (example: `/admin/badges/activity-operations`)
+* Ack/resolve mechanism exists (`admin_acknowledgements` or resolved flags)
+* UI shows badge on:
+
+  * left nav
+  * Activity & Ops tabs
+  * relevant filters/chips
+
+---
+
+# 9) Push Notifications + Deep Linking
+
+## What it is
+
+If user is off-app and receives DM/announcement, they should get push and tapping it opens the correct screen.
+
+## Must-have behaviors
+
+* Device token registration:
+
+  * on login/app start, FCM token sent to backend
+  * backend stores tokens per user (multi-device supported)
+* Push triggers for:
+
+  * new messages
+  * announcements (optional but recommended)
+* Push payload includes deeplink data:
+
+  * message thread id
+  * announcement id
+  * route run id (if needed)
+* Tapping notification deep-links into app:
+
+  * opens correct thread/screen
+  * handles cold start and logged-out gracefully
+
+## What to verify
+
+* `devices` table exists and updates token changes
+* Backend logs push attempts + handles invalid tokens
+* Client has notification router that waits for auth readiness then navigates
+
+---
+
+# 10) Route Request System (Driver → Admin “Operational Requests”)
+
+## What it is
+
+A structured request system for route/roster discrepancies (separate from chat).
+
+## Must-have behaviors
+
+Drivers can submit route-scoped requests like:
+
+* Missing student (should be on route but isn’t)
+* Unexpected student (appears but shouldn’t)
+* Wrong stop
+* Clarification request
+
+Admin can:
+
+* Approve / Deny / Resolve
+* Optionally apply the change to the active RouteRun roster
+* Changes propagate live to drivers
+
+## Required features
+
+* Request has:
+
+  * route_run_id
+  * request type
+  * student id (when applicable)
+  * description
+  * status (open/approved/denied/resolved)
+  * resolution note
+  * audit log event
+* Badges + notifications:
+
+  * admin badge increments on OPEN requests
+  * driver notified when resolved
+* Realtime updates:
+
+  * driver sees status changes immediately
+
+## What to verify
+
+* `route_requests` table exists
+* Admin dashboard queue exists
+* Approvals update the run roster safely and log changes
+* Drivers cannot silently mutate roster without a request (unless you explicitly allow)
+
+---
+
+# 11) iOS White Bar After Login (WKWebView Layout)
+
+## What it is
+
+A WKWebView layout bug that appears after auth transitions.
+
+## Must-have behaviors
+
+* After login/signup:
+
+  * no white bar
+  * no blocked header taps
+* Fix strategy (must be consistent):
+
+  * status bar overlay set on authed layout mount
+  * “resize nudge” after auth transition
+  * safe-area padding applied only once
+  * background colors prevent white gaps
+* Add device-only debug overlay (optional but extremely helpful)
+
+## What to verify
+
+* Bug no longer appears without requiring app restart
+* Debug overlay shows padding/safe-area values if it reoccurs
+
+---
+
+# Quick “Implementation Confirmation Questions” for Replit AI
+
+Use these to verify fast:
+
+1. Do we have a `route_runs` table with a unique constraint on `(route_id, service_date, shift_type)`?
+2. Can multiple drivers join the same RouteRun as participants without duplicating runs?
+3. Is operational state synced via Socket.IO (no refresh) for stops, attendance, announcements, requests?
+4. Is attendance stored/scoped to `route_run_id` so AM/PM never share state?
+5. Do we have a soft-close flow: `ENDED_PENDING_REVIEW` with a summary screen and editable corrections?
+6. Are admin corrections after finalize logged with old/new values and reasons?
+7. Are announcements queryable and visible correctly by audience, and is there an admin history page?
+8. Are badges server-derived, broken down by category, and clearable/acknowledgeable?
+9. Are device tokens stored, pushes sent, and do pushes deep-link to the correct screen?
+10. Is there a Route Request workflow with admin approval/deny and live updates to drivers?
+11. Is the iOS white bar fixed after auth transitions, and do we have instrumentation if it returns?
+
+---
+
+If you want, I can convert this into a **single “audit checklist”** with ✅ boxes and “Evidence to provide” lines (screenshots/logs/endpoint responses) so you can systematically validate every feature with your testers.
