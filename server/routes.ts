@@ -479,7 +479,8 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       }
 
       if (userRole === "admin") {
-        flaggedChecklistsCount = await storage.getFlaggedChecklistsCount();
+        // Use acknowledgement-based count for accurate badge
+        flaggedChecklistsCount = await storage.getUnacknowledgedFlaggedChecklistsCount(userId);
       }
 
       return {
@@ -1103,6 +1104,142 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(404).json({ message: error.message });
         }
         res.status(500).json({ message: "Failed to delete vehicle checklist" });
+      }
+    }
+  );
+
+  // ============ Admin Badges & Acknowledgements ============
+
+  // Get activity operations badge counts
+  app.get(
+    "/api/admin/badges/activity-operations",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const adminId = req.user.id;
+        const badges = await storage.getActivityOperationsBadges(adminId);
+        res.json(badges);
+      } catch (error) {
+        console.error("Error fetching activity badges:", error);
+        res.status(500).json({ message: "Failed to fetch badge counts" });
+      }
+    }
+  );
+
+  // Acknowledge items (mark as reviewed)
+  app.post(
+    "/api/admin/acknowledge",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const adminId = req.user.id;
+        const { entityType, entityIds } = req.body;
+        
+        if (!entityType || !entityIds || !Array.isArray(entityIds)) {
+          return res.status(400).json({ 
+            message: "entityType and entityIds array are required" 
+          });
+        }
+        
+        const validTypes = [
+          "AUDIT_LOG", "FLAGGED_CHECKLIST", "TIME_EXCEPTION", 
+          "INCIDENT", "SUPPLY_REQUEST", "DRIVER_FEEDBACK"
+        ];
+        if (!validTypes.includes(entityType)) {
+          return res.status(400).json({ 
+            message: `Invalid entityType. Must be one of: ${validTypes.join(", ")}` 
+          });
+        }
+        
+        await storage.createBulkAcknowledgements(adminId, entityType, entityIds);
+        
+        // Return updated badge counts
+        const badges = await storage.getActivityOperationsBadges(adminId);
+        res.json({ success: true, badges });
+      } catch (error) {
+        console.error("Error acknowledging items:", error);
+        res.status(500).json({ message: "Failed to acknowledge items" });
+      }
+    }
+  );
+
+  // Acknowledge all items of a type (mark section as reviewed)
+  app.post(
+    "/api/admin/acknowledge-section",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const adminId = req.user.id;
+        const { section } = req.body;
+        
+        if (!section) {
+          return res.status(400).json({ message: "section is required" });
+        }
+        
+        // Get all unacknowledged items for the section
+        let entityIds: string[] = [];
+        let entityType = "";
+        
+        switch (section) {
+          case "routeHealth":
+            entityType = "FLAGGED_CHECKLIST";
+            const checklists = await storage.getAllVehicleChecklists();
+            entityIds = checklists
+              .filter(c => c.hasIssues)
+              .map(c => c.id);
+            break;
+          case "driverUtilities":
+            // Acknowledge both supply requests and feedback
+            const supplies = await storage.getSuppliesRequests();
+            const supplyIds = supplies
+              .filter(s => s.status === "pending")
+              .map(s => s.id);
+            await storage.createBulkAcknowledgements(adminId, "SUPPLY_REQUEST", supplyIds);
+            
+            const feedback = await storage.getAllDriverFeedback();
+            const feedbackIds = feedback
+              .filter(f => f.status === "NEW")
+              .map(f => f.id);
+            await storage.createBulkAcknowledgements(adminId, "DRIVER_FEEDBACK", feedbackIds);
+            break;
+          case "auditLog":
+            entityType = "INCIDENT";
+            const incidents = await storage.getAllIncidents();
+            entityIds = incidents
+              .filter(i => i.status === "submitted")
+              .map(i => i.id);
+            break;
+          case "timeManagement":
+            entityType = "TIME_EXCEPTION";
+            // Get open time entries
+            const today = new Date().toISOString().split("T")[0];
+            const entries = await storage.getTimeEntriesForPayroll(
+              new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+              today
+            );
+            entityIds = entries
+              .filter(e => !e.clockOut)
+              .map(e => e.id);
+            break;
+          default:
+            return res.status(400).json({ 
+              message: "Invalid section. Must be: routeHealth, driverUtilities, auditLog, or timeManagement" 
+            });
+        }
+        
+        if (entityType && entityIds.length > 0) {
+          await storage.createBulkAcknowledgements(adminId, entityType, entityIds);
+        }
+        
+        // Return updated badge counts
+        const badges = await storage.getActivityOperationsBadges(adminId);
+        res.json({ success: true, badges });
+      } catch (error) {
+        console.error("Error acknowledging section:", error);
+        res.status(500).json({ message: "Failed to acknowledge section" });
       }
     }
   );

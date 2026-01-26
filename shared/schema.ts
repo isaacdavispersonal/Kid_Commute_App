@@ -1860,6 +1860,38 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 
+// ============ Admin Acknowledgements Table ============
+// Tracks which items admins have reviewed/acknowledged for badge clearing
+export const adminAcknowledgementEntityTypeEnum = pgEnum("ack_entity_type", [
+  "AUDIT_LOG",
+  "FLAGGED_CHECKLIST",
+  "TIME_EXCEPTION",
+  "INCIDENT",
+  "SUPPLY_REQUEST",
+  "DRIVER_FEEDBACK",
+]);
+
+export const adminAcknowledgements = pgTable("admin_acknowledgements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminUserId: varchar("admin_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  entityType: adminAcknowledgementEntityTypeEnum("entity_type").notNull(),
+  entityId: varchar("entity_id").notNull(),
+  acknowledgedAt: timestamp("acknowledged_at").defaultNow(),
+}, (table) => [
+  index("idx_ack_admin_entity").on(table.adminUserId, table.entityType, table.entityId),
+  index("idx_ack_entity").on(table.entityType, table.entityId),
+]);
+
+export const insertAdminAcknowledgementSchema = createInsertSchema(adminAcknowledgements).omit({
+  id: true,
+  acknowledgedAt: true,
+});
+
+export type InsertAdminAcknowledgement = z.infer<typeof insertAdminAcknowledgementSchema>;
+export type AdminAcknowledgement = typeof adminAcknowledgements.$inferSelect;
+
 // ============ Vehicle Inspection Tables ============
 
 // Vehicle inspections table

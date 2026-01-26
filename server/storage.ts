@@ -44,6 +44,7 @@ import {
   routeRuns,
   routeRunParticipants,
   routeRunEvents,
+  adminAcknowledgements,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -375,6 +376,21 @@ export interface IStorage {
   getTodayVehicleChecklist(driverId: string, vehicleId: string, type: "PRE_TRIP" | "POST_TRIP"): Promise<VehicleChecklist | undefined>;
   deleteVehicleChecklist(id: string): Promise<void>;
   getFlaggedChecklistsCount(): Promise<number>;
+  getUnacknowledgedFlaggedChecklistsCount(adminId: string): Promise<number>;
+
+  // Admin acknowledgements operations
+  createAcknowledgement(adminId: string, entityType: string, entityId: string): Promise<void>;
+  createBulkAcknowledgements(adminId: string, entityType: string, entityIds: string[]): Promise<void>;
+  hasAcknowledgement(adminId: string, entityType: string, entityId: string): Promise<boolean>;
+  getActivityOperationsBadges(adminId: string): Promise<{
+    total: number;
+    bySection: {
+      routeHealth: number;
+      driverUtilities: number;
+      auditLog: number;
+      timeManagement: number;
+    };
+  }>;
 
   // Driver feedback operations
   createDriverFeedback(feedback: InsertDriverFeedback): Promise<DriverFeedback>;
@@ -4274,6 +4290,175 @@ export class DatabaseStorage implements IStorage {
       .from(vehicleChecklists)
       .where(eq(vehicleChecklists.hasIssues, true));
     return Number(result[0]?.count || 0);
+  }
+
+  async getUnacknowledgedFlaggedChecklistsCount(adminId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(vehicleChecklists)
+      .leftJoin(
+        adminAcknowledgements,
+        and(
+          eq(adminAcknowledgements.entityType, "FLAGGED_CHECKLIST"),
+          eq(adminAcknowledgements.entityId, vehicleChecklists.id),
+          eq(adminAcknowledgements.adminUserId, adminId)
+        )
+      )
+      .where(
+        and(
+          eq(vehicleChecklists.hasIssues, true),
+          sql`${adminAcknowledgements.id} IS NULL`
+        )
+      );
+    return Number(result[0]?.count || 0);
+  }
+
+  // ============ Admin Acknowledgements operations ============
+
+  async createAcknowledgement(adminId: string, entityType: string, entityId: string): Promise<void> {
+    await db.insert(adminAcknowledgements)
+      .values({
+        adminUserId: adminId,
+        entityType: entityType as any,
+        entityId,
+      })
+      .onConflictDoNothing();
+  }
+
+  async createBulkAcknowledgements(adminId: string, entityType: string, entityIds: string[]): Promise<void> {
+    if (entityIds.length === 0) return;
+    
+    const values = entityIds.map(entityId => ({
+      adminUserId: adminId,
+      entityType: entityType as any,
+      entityId,
+    }));
+    
+    await db.insert(adminAcknowledgements)
+      .values(values)
+      .onConflictDoNothing();
+  }
+
+  async hasAcknowledgement(adminId: string, entityType: string, entityId: string): Promise<boolean> {
+    const result = await db
+      .select({ id: adminAcknowledgements.id })
+      .from(adminAcknowledgements)
+      .where(
+        and(
+          eq(adminAcknowledgements.adminUserId, adminId),
+          eq(adminAcknowledgements.entityType, entityType as any),
+          eq(adminAcknowledgements.entityId, entityId)
+        )
+      )
+      .limit(1);
+    return result.length > 0;
+  }
+
+  async getActivityOperationsBadges(adminId: string): Promise<{
+    total: number;
+    bySection: {
+      routeHealth: number;
+      driverUtilities: number;
+      auditLog: number;
+      timeManagement: number;
+    };
+  }> {
+    // Get unacknowledged flagged checklists (Route Health)
+    const flaggedChecklists = await this.getUnacknowledgedFlaggedChecklistsCount(adminId);
+    
+    // Get unacknowledged supply requests (Driver Utilities)
+    const supplyRequestsResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(suppliesRequests)
+      .leftJoin(
+        adminAcknowledgements,
+        and(
+          eq(adminAcknowledgements.entityType, "SUPPLY_REQUEST"),
+          eq(adminAcknowledgements.entityId, suppliesRequests.id),
+          eq(adminAcknowledgements.adminUserId, adminId)
+        )
+      )
+      .where(
+        and(
+          eq(suppliesRequests.status, "pending"),
+          sql`${adminAcknowledgements.id} IS NULL`
+        )
+      );
+    const pendingSupplyRequests = Number(supplyRequestsResult[0]?.count || 0);
+    
+    // Get unacknowledged driver feedback (Driver Utilities)
+    const feedbackResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(driverFeedback)
+      .leftJoin(
+        adminAcknowledgements,
+        and(
+          eq(adminAcknowledgements.entityType, "DRIVER_FEEDBACK"),
+          eq(adminAcknowledgements.entityId, driverFeedback.id),
+          eq(adminAcknowledgements.adminUserId, adminId)
+        )
+      )
+      .where(
+        and(
+          eq(driverFeedback.status, "NEW"),
+          sql`${adminAcknowledgements.id} IS NULL`
+        )
+      );
+    const newFeedback = Number(feedbackResult[0]?.count || 0);
+    
+    // Get unacknowledged incidents (Audit Log section)
+    const incidentsResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(incidents)
+      .leftJoin(
+        adminAcknowledgements,
+        and(
+          eq(adminAcknowledgements.entityType, "INCIDENT"),
+          eq(adminAcknowledgements.entityId, incidents.id),
+          eq(adminAcknowledgements.adminUserId, adminId)
+        )
+      )
+      .where(
+        and(
+          eq(incidents.status, "submitted"),
+          sql`${adminAcknowledgements.id} IS NULL`
+        )
+      );
+    const openIncidents = Number(incidentsResult[0]?.count || 0);
+    
+    // Time Management - count open clock events without clock out
+    const timeExceptionsResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(timeEntries)
+      .leftJoin(
+        adminAcknowledgements,
+        and(
+          eq(adminAcknowledgements.entityType, "TIME_EXCEPTION"),
+          eq(adminAcknowledgements.entityId, timeEntries.id),
+          eq(adminAcknowledgements.adminUserId, adminId)
+        )
+      )
+      .where(
+        and(
+          sql`${timeEntries.clockOut} IS NULL`,
+          sql`${adminAcknowledgements.id} IS NULL`
+        )
+      );
+    const timeExceptions = Number(timeExceptionsResult[0]?.count || 0);
+    
+    const driverUtilitiesTotal = pendingSupplyRequests + newFeedback;
+    const auditLogTotal = openIncidents;
+    const total = flaggedChecklists + driverUtilitiesTotal + auditLogTotal + timeExceptions;
+    
+    return {
+      total,
+      bySection: {
+        routeHealth: flaggedChecklists,
+        driverUtilities: driverUtilitiesTotal,
+        auditLog: auditLogTotal,
+        timeManagement: timeExceptions,
+      },
+    };
   }
 
   // ============ Driver Feedback operations ============
