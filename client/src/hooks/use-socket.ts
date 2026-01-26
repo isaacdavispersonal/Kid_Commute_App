@@ -78,87 +78,139 @@ export function useSocketEvent<T extends keyof SocketEvents>(
 export function useRouteRunSocket(routeRunId: string | null) {
   const { subscribeRoute, unsubscribeRoute, connectionState, isReconnecting } = useSocket();
   const queryClient = useQueryClient();
-  const lastRouteRunIdRef = useRef<string | null>(null);
-
+  
+  // Use ref to always have access to the latest routeRunId in event handlers
+  // This prevents stale closures when routeRunId changes rapidly
+  const currentRouteRunIdRef = useRef<string | null>(routeRunId);
+  const subscribedRouteRunIdRef = useRef<string | null>(null);
+  
+  // Keep the ref in sync with the prop
   useEffect(() => {
+    currentRouteRunIdRef.current = routeRunId;
+  }, [routeRunId]);
+
+  // Handle subscription/unsubscription with proper cleanup
+  useEffect(() => {
+    // If no routeRunId, clean up any existing subscription
     if (!routeRunId) {
-      if (lastRouteRunIdRef.current) {
-        unsubscribeRoute(lastRouteRunIdRef.current);
-        lastRouteRunIdRef.current = null;
+      if (subscribedRouteRunIdRef.current) {
+        console.log(`[Socket] Unsubscribing from route run: ${subscribedRouteRunIdRef.current}`);
+        unsubscribeRoute(subscribedRouteRunIdRef.current);
+        subscribedRouteRunIdRef.current = null;
       }
       return;
     }
 
-    if (routeRunId !== lastRouteRunIdRef.current) {
-      if (lastRouteRunIdRef.current) {
-        unsubscribeRoute(lastRouteRunIdRef.current);
+    // If routeRunId changed, unsubscribe from old and subscribe to new
+    if (routeRunId !== subscribedRouteRunIdRef.current) {
+      // Unsubscribe from previous route run first
+      if (subscribedRouteRunIdRef.current) {
+        console.log(`[Socket] Unsubscribing from old route run: ${subscribedRouteRunIdRef.current}`);
+        unsubscribeRoute(subscribedRouteRunIdRef.current);
       }
+      
+      // Subscribe to new route run
+      console.log(`[Socket] Subscribing to route run: ${routeRunId}`);
       subscribeRoute(routeRunId);
-      lastRouteRunIdRef.current = routeRunId;
+      subscribedRouteRunIdRef.current = routeRunId;
     }
 
+    // Cleanup on unmount
     return () => {
-      if (routeRunId) {
-        unsubscribeRoute(routeRunId);
-        lastRouteRunIdRef.current = null;
+      if (subscribedRouteRunIdRef.current) {
+        console.log(`[Socket] Cleanup - unsubscribing from route run: ${subscribedRouteRunIdRef.current}`);
+        unsubscribeRoute(subscribedRouteRunIdRef.current);
+        subscribedRouteRunIdRef.current = null;
       }
     };
   }, [routeRunId, subscribeRoute, unsubscribeRoute]);
 
+  // Event handlers use the ref to check if the event is for the current route run
+  // This prevents updates from previous routes after switching
   useSocketEvent("route_run.started", (data) => {
+    const currentId = currentRouteRunIdRef.current;
+    if (!currentId || data.routeRun?.id !== currentId) {
+      console.log(`[Socket] Ignoring route_run.started for ${data.routeRun?.id} (current: ${currentId})`);
+      return;
+    }
     console.log("[Socket] Route run started:", data);
-    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", routeRunId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", currentId] });
     queryClient.invalidateQueries({ queryKey: ["/api/route-runs/active"] });
   });
 
   useSocketEvent("route_run.ended_pending_review", (data) => {
+    const currentId = currentRouteRunIdRef.current;
+    if (!currentId || data.routeRun?.id !== currentId) {
+      console.log(`[Socket] Ignoring route_run.ended for ${data.routeRun?.id} (current: ${currentId})`);
+      return;
+    }
     console.log("[Socket] Route run ended:", data);
-    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", routeRunId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", currentId] });
     queryClient.invalidateQueries({ queryKey: ["/api/route-runs/active"] });
   });
 
   useSocketEvent("route_run.finalized", (data) => {
+    const currentId = currentRouteRunIdRef.current;
+    if (!currentId || data.routeRun?.id !== currentId) {
+      return;
+    }
     console.log("[Socket] Route run finalized:", data);
-    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", routeRunId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", currentId] });
   });
 
   useSocketEvent("route_run.snapshot", (data) => {
+    const currentId = currentRouteRunIdRef.current;
+    if (!currentId || data.routeRun?.id !== currentId) {
+      console.log(`[Socket] Ignoring snapshot for ${data.routeRun?.id} (current: ${currentId})`);
+      return;
+    }
     console.log("[Socket] Route run snapshot received:", data);
-    queryClient.setQueryData(["/api/route-runs", routeRunId], data);
+    queryClient.setQueryData(["/api/route-runs", currentId], data);
   });
 
   useSocketEvent("participant.joined", (data) => {
+    const currentId = currentRouteRunIdRef.current;
+    if (!currentId) return;
     console.log("[Socket] Participant joined:", data);
-    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", routeRunId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", currentId] });
   });
 
   useSocketEvent("participant.left", (data) => {
+    const currentId = currentRouteRunIdRef.current;
+    if (!currentId) return;
     console.log("[Socket] Participant left:", data);
-    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", routeRunId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", currentId] });
   });
 
   useSocketEvent("attendance.updated", (data) => {
+    const currentId = currentRouteRunIdRef.current;
+    if (!currentId) return;
     console.log("[Socket] Attendance updated:", data);
     queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
     queryClient.invalidateQueries({ queryKey: ["/api/driver/attendance"] });
   });
 
   useSocketEvent("stop.arrived", (data) => {
+    const currentId = currentRouteRunIdRef.current;
+    if (!currentId) return;
     console.log("[Socket] Stop arrived:", data);
-    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", routeRunId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", currentId] });
   });
 
   useSocketEvent("stop.completed", (data) => {
+    const currentId = currentRouteRunIdRef.current;
+    if (!currentId) return;
     console.log("[Socket] Stop completed:", data);
-    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", routeRunId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/route-runs", currentId] });
   });
 
   useEffect(() => {
-    if (connectionState === "connected" && routeRunId && isSocketConnected()) {
+    const currentId = currentRouteRunIdRef.current;
+    if (connectionState === "connected" && currentId && isSocketConnected()) {
       console.log("[Socket] Reconnected - refetching route run data");
-      queryClient.invalidateQueries({ queryKey: ["/api/route-runs", routeRunId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/route-runs", currentId] });
     }
-  }, [connectionState, routeRunId, queryClient]);
+  }, [connectionState, queryClient]);
 
   return {
     connectionState,
