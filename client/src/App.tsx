@@ -1,5 +1,7 @@
 // Main App component with role-based routing - Unified JWT authentication
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
+import { Capacitor } from "@capacitor/core";
+import { StatusBar, Style } from "@capacitor/status-bar";
 import { Switch, Route, Link, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -81,6 +83,33 @@ function Router() {
   // ALL hooks must be called before any early returns to follow React's rules of hooks
   const mainRef = useRef<HTMLElement>(null);
   const { triggerRefresh, isRefreshing } = useRefresh();
+
+  // iOS StatusBar + viewport recalculation fix for post-auth white bar issue
+  // This runs when the authenticated shell mounts to ensure proper layout
+  useEffect(() => {
+    // Only apply on iOS native app
+    if (Capacitor.getPlatform() !== "ios") return;
+    if (!isAuthenticated || !user) return;
+
+    // Set StatusBar overlay settings consistently after auth
+    (async () => {
+      try {
+        await StatusBar.setOverlaysWebView({ overlay: true });
+        await StatusBar.setStyle({ style: Style.Dark });
+      } catch (e) {
+        console.log("[StatusBar] Could not set status bar style:", e);
+      }
+    })();
+
+    // Force viewport/layout recalculation to fix iOS WKWebView stuck gap
+    // Two RAFs help iOS settle after DOM swap from auth transition
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+        window.scrollTo(0, 0);
+      });
+    });
+  }, [isAuthenticated, user]);
 
   // Unified logout handler for both web and mobile
   const handleLogout = async () => {

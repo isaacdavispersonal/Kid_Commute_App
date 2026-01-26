@@ -383,6 +383,13 @@ html, body, #root {
   min-height: 100dvh;
 }
 
+/* Override Ionic default backgrounds to prevent white bar after auth */
+:root, ion-app, .ion-page, ion-content {
+  --ion-background-color: hsl(var(--background)) !important;
+  --ion-toolbar-background: hsl(var(--background)) !important;
+  background-color: hsl(var(--background)) !important;
+}
+
 html {
   /* Prevent overscroll on iOS */
   overscroll-behavior: none;

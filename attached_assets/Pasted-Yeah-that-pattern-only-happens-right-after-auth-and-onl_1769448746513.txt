@@ -1,0 +1,138 @@
+Yeah — that pattern (only happens **right after auth**, and only clears after a **full app restart**) almost always means **the WebView layout/safe-area math gets into a bad state after a major route/app-shell transition**, and it never recalculates until a cold start.
+
+Here’s how to explain it to Replit AI + the most likely fixes to try (in the right order).
+
+---
+
+## 🐛 Bug Report: iOS “White Bar” Reappears After Login / Account Creation
+
+### Repro steps
+
+1. Install/open iOS TestFlight build
+2. Create an account **or** log in
+3. Navigate into the authenticated app shell
+
+### Actual behavior
+
+* A **white bar appears at the top** (status-bar/safe-area area), pushing content down and **blocking taps** near the top UI.
+* The bar **persists across navigation**.
+* The only workaround is **force close the app and reopen**, after which the UI renders normally.
+
+### Expected behavior
+
+* No white bar after login/signup.
+* Safe area + header layout should remain consistent across auth transitions.
+
+### Why this matters
+
+* It looks broken immediately after onboarding/login (worst moment for user trust).
+* It blocks interaction with top-right/profile elements.
+
+---
+
+## Most likely root cause (what’s actually happening)
+
+After auth, your app probably **switches root layouts** (Auth stack → App stack). On iOS WKWebView, that transition can leave you with:
+
+### A) **Safe-area padding applied twice**
+
+Example: both the page wrapper *and* the header container add `padding-top: env(safe-area-inset-top)`, but only after the authenticated shell mounts.
+
+### B) **Viewport height not recalculated**
+
+iOS sometimes misreports `vh/dvh` right after a big DOM swap. You end up with a “gap” at the top until a hard restart forces a clean layout.
+
+### C) **StatusBar overlay setting not consistently applied after auth**
+
+If you’re using `@capacitor/status-bar`, the overlay mode can drift between auth/app shells unless you set it every time the app shell mounts.
+
+---
+
+## ✅ Fix plan (do these in this order)
+
+### 1) Ensure safe-area inset is applied in exactly ONE place
+
+Search for:
+
+* `env(safe-area-inset-top)`
+* `constant(safe-area-inset-top)`
+* `pt-safe`, `safe-area`, `ios-safe`, etc.
+
+**Rule:** only the top-level app container (or only the header) should handle it — not both.
+
+**Quick test:** temporarily remove *all* safe-area padding except one wrapper and see if the bar disappears after login.
+
+---
+
+### 2) Re-apply StatusBar settings on authenticated shell mount
+
+In your “AppLayout” / “AuthedRoot” component (whatever mounts after login), run this once:
+
+```ts
+import { Capacitor } from "@capacitor/core";
+import { StatusBar, Style } from "@capacitor/status-bar";
+
+useEffect(() => {
+  if (Capacitor.getPlatform() !== "ios") return;
+
+  (async () => {
+    // Pick ONE behavior and stick to it
+    await StatusBar.setOverlaysWebView({ overlay: true });
+    await StatusBar.setStyle({ style: Style.Light }); // or Dark
+  })();
+}, []);
+```
+
+If you previously set `overlay: false`, then you must ensure your layout accounts for the status bar height correctly — but **be consistent**.
+
+---
+
+### 3) Force a viewport/layout recalculation right after login
+
+This is the “WKWebView needs a nudge” fix. After auth success (or after the AppLayout mounts), do:
+
+```ts
+useEffect(() => {
+  // two RAFs helps iOS settle after DOM swap
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+      window.scrollTo(0, 0);
+    });
+  });
+}, []);
+```
+
+This often clears the “stuck gap” without needing a restart.
+
+---
+
+### 4) Make sure the background behind the safe area matches the app
+
+Even if there *is* a top inset, it shouldn’t be white unless something is white behind it.
+
+Set **all of these** to your app background:
+
+```css
+html, body, #root {
+  background: var(--background);
+  height: 100%;
+}
+```
+
+If you have a top-level container using a different background than the body, iOS will show the body color in the gap.
+
+---
+
+## What to ask Replit AI to do (copy/paste)
+
+**Request:**
+
+* Identify where safe-area top padding is applied and ensure it is applied **only once**
+* Re-apply StatusBar overlay settings when the authenticated root mounts
+* Add a post-login layout “nudge” (resize + scrollTo) to force WKWebView to recalc
+* Ensure html/body/root background matches app background so any inset never appears white
+
+---
+
+If you want, paste (or screenshot) the **CSS for your top-level layout containers** (AuthLayout + AppLayout) and I’ll tell you exactly where the double-safe-area or background mismatch is likely happening.
