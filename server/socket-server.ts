@@ -2,6 +2,9 @@ import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import { verifyToken } from "./utils/jwt-auth";
 import { storage } from "./storage";
+import { createLogger } from "./logger";
+
+const logger = createLogger("socket.io");
 
 export interface AuthenticatedSocket extends Socket {
   userId: string;
@@ -86,14 +89,14 @@ export function initSocketServer({ httpServer }: SocketServerOptions): Server {
 
       next();
     } catch (error) {
-      console.error("[Socket.IO] Auth error:", error);
+      logger.error("Auth error:", error);
       next(new Error("Authentication failed"));
     }
   });
 
   io.on("connection", async (socket: Socket) => {
     const authSocket = socket as AuthenticatedSocket;
-    console.log(`[Socket.IO] Client connected: userId=${authSocket.userId}, role=${authSocket.userRole}`);
+    logger.debug(`Client connected: userId=${authSocket.userId}, role=${authSocket.userRole}`);
 
     authSocket.join(`user:${authSocket.userId}`);
     authSocket.join("org:default");
@@ -103,9 +106,9 @@ export function initSocketServer({ httpServer }: SocketServerOptions): Server {
       for (const routeId of authSocket.authorizedRoutes) {
         authSocket.join(`route:${routeId}`);
       }
-      console.log(`[Socket.IO] Joined rooms: user:${authSocket.userId}, org:default, routes: ${authSocket.authorizedRoutes.join(", ")}`);
+      logger.debug(`Joined rooms: user:${authSocket.userId}, org:default, routes: ${authSocket.authorizedRoutes.join(", ")}`);
     } else {
-      console.log(`[Socket.IO] Joined rooms: user:${authSocket.userId}, org:default`);
+      logger.debug(`Joined rooms: user:${authSocket.userId}, org:default`);
     }
 
     authSocket.emit("connected", {
@@ -132,7 +135,7 @@ export function initSocketServer({ httpServer }: SocketServerOptions): Server {
         }
 
         authSocket.join(`route_run:${routeRunId}`);
-        console.log(`[Socket.IO] User ${authSocket.userId} subscribed to route_run:${routeRunId}`);
+        logger.debug(`User ${authSocket.userId} subscribed to route_run:${routeRunId}`);
 
         authSocket.emit("subscribed", { room: `route_run:${routeRunId}` });
 
@@ -142,23 +145,23 @@ export function initSocketServer({ httpServer }: SocketServerOptions): Server {
           participants,
         });
       } catch (error) {
-        console.error("[Socket.IO] Error subscribing to route run:", error);
+        logger.error("Error subscribing to route run:", error);
         authSocket.emit("error", { message: "Failed to subscribe to route run" });
       }
     });
 
     authSocket.on("unsubscribe_route_run", (routeRunId: string) => {
       authSocket.leave(`route_run:${routeRunId}`);
-      console.log(`[Socket.IO] User ${authSocket.userId} unsubscribed from route_run:${routeRunId}`);
+      logger.debug(`User ${authSocket.userId} unsubscribed from route_run:${routeRunId}`);
       authSocket.emit("unsubscribed", { room: `route_run:${routeRunId}` });
     });
 
     authSocket.on("disconnect", (reason) => {
-      console.log(`[Socket.IO] Client disconnected: userId=${authSocket.userId}, reason=${reason}`);
+      logger.debug(`Client disconnected: userId=${authSocket.userId}, reason=${reason}`);
     });
 
     authSocket.on("reconnect_request", async () => {
-      console.log(`[Socket.IO] Reconnect request from user ${authSocket.userId}`);
+      logger.debug(`Reconnect request from user ${authSocket.userId}`);
       authSocket.emit("reconnected", {
         userId: authSocket.userId,
         role: authSocket.userRole,
@@ -166,7 +169,7 @@ export function initSocketServer({ httpServer }: SocketServerOptions): Server {
     });
   });
 
-  console.log("[Socket.IO] Server initialized");
+  logger.info("Server initialized");
   return io;
 }
 
@@ -243,7 +246,7 @@ export function emitAnnouncementCreated(data: {
   audienceType?: string;
 }) {
   if (!io) {
-    console.warn("[Socket.IO] Cannot emit announcement.created - server not initialized");
+    logger.warn("Cannot emit announcement.created - server not initialized");
     return;
   }
 
@@ -256,7 +259,7 @@ export function emitAnnouncementCreated(data: {
     const roomClients = io.sockets.adapter.rooms.get(room);
     const clientCount = roomClients ? roomClients.size : 0;
     
-    console.log(`[Socket.IO] Emitting announcement.created to room=${room}, clients=${clientCount}, announcement_id=${announcementId}, audience_type=${audienceType}`);
+    logger.debug(`Emitting announcement.created to room=${room}, clients=${clientCount}, announcement_id=${announcementId}, audience_type=${audienceType}`);
     io.to(room).emit("announcement.created", data);
   } else {
     // Org-wide announcement
@@ -264,7 +267,7 @@ export function emitAnnouncementCreated(data: {
     const roomClients = io.sockets.adapter.rooms.get(room);
     const clientCount = roomClients ? roomClients.size : 0;
     
-    console.log(`[Socket.IO] Emitting announcement.created to room=${room}, clients=${clientCount}, announcement_id=${announcementId}, audience_type=${audienceType}`);
+    logger.debug(`Emitting announcement.created to room=${room}, clients=${clientCount}, announcement_id=${announcementId}, audience_type=${audienceType}`);
     io.to(room).emit("announcement.created", data);
   }
 }

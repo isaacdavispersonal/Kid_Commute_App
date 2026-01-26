@@ -1,14 +1,7 @@
 import { storage } from "./storage";
+import { createLogger } from "./logger";
 
-const log = (msg: string) => {
-  const timestamp = new Date().toLocaleTimeString();
-  console.log(`${timestamp} [info] [data-retention] ${msg}`);
-};
-
-const logError = (msg: string, error?: any) => {
-  const timestamp = new Date().toLocaleTimeString();
-  console.error(`${timestamp} [error] [data-retention] ${msg}`, error);
-};
+const logger = createLogger("data-retention");
 
 // Default retention periods (in days) based on privacy policy
 const DEFAULT_RETENTION_PERIODS = {
@@ -35,7 +28,7 @@ export interface RetentionStats {
 export async function runDataRetention(): Promise<RetentionStats> {
   const startTime = Date.now();
   
-  log("Starting data retention cleanup...");
+  logger.info("Starting data retention cleanup...");
 
   try {
     // Get retention periods from admin settings, use defaults if not set
@@ -67,7 +60,7 @@ export async function runDataRetention(): Promise<RetentionStats> {
       
       // Validate: must be a positive integer
       if (isNaN(parsed) || parsed <= 0 || !Number.isFinite(parsed)) {
-        logError(
+        logger.error(
           `Invalid retention setting "${settingName}": "${setting.settingValue}" - ` +
           `must be a positive integer. Using default: ${defaultValue} days`
         );
@@ -105,7 +98,7 @@ export async function runDataRetention(): Promise<RetentionStats> {
       ),
     };
 
-    log(`Using retention periods: ${JSON.stringify(retentionPeriods)}`);
+    logger.debug(`Using retention periods: ${JSON.stringify(retentionPeriods)}`);
 
     // Run all cleanup operations in parallel
     const [
@@ -142,18 +135,18 @@ export async function runDataRetention(): Promise<RetentionStats> {
     };
 
     if (totalDeleted > 0) {
-      log(
+      logger.info(
         `Cleanup completed: ${messagesDeleted} messages, ${geofenceEventsDeleted} geofence events, ` +
         `${auditLogsDeleted} audit logs, ${dismissedAnnouncementsDeleted} announcements, ` +
         `${deviceTokensDeleted} device tokens (${totalDeleted} total records deleted in ${executionTime}ms)`
       );
     } else {
-      log(`Cleanup completed: No old data to delete (${executionTime}ms)`);
+      logger.info(`Cleanup completed: No old data to delete (${executionTime}ms)`);
     }
 
     return stats;
   } catch (error) {
-    logError("Error during data retention cleanup", error);
+    logger.error("Error during data retention cleanup", error);
     throw error;
   }
 }
@@ -165,19 +158,19 @@ export async function runDataRetention(): Promise<RetentionStats> {
 export function initializeDataRetention(intervalHours: number = 24): void {
   const intervalMs = intervalHours * 60 * 60 * 1000;
 
-  log(`Initializing data retention service (runs every ${intervalHours} hours)`);
+  logger.info(`Initializing data retention service (runs every ${intervalHours} hours)`);
 
   // Run immediately on startup
   runDataRetention().catch((error) => {
-    logError("Initial data retention cleanup failed", error);
+    logger.error("Initial data retention cleanup failed", error);
   });
 
   // Then run on schedule
   setInterval(() => {
     runDataRetention().catch((error) => {
-      logError("Scheduled data retention cleanup failed", error);
+      logger.error("Scheduled data retention cleanup failed", error);
     });
   }, intervalMs);
 
-  log(`Data retention scheduled to run every ${intervalHours} hours`);
+  logger.info(`Data retention scheduled to run every ${intervalHours} hours`);
 }

@@ -1,6 +1,8 @@
 import { samsaraClient } from "./samsara-client";
 import { gpsIngestionPipeline } from "./gps-pipeline";
-import { log } from "./vite";
+import { createLogger } from "./logger";
+
+const logger = createLogger("gps-polling");
 
 // Configurable batch size for parallel processing (default: 10)
 // Guards against NaN, zero, or negative values
@@ -14,16 +16,16 @@ class GPSPollingService {
 
   async start() {
     if (this.intervalId) {
-      log("[gps-polling] Service already running", "warn");
+      logger.warn("Service already running");
       return;
     }
 
     if (!samsaraClient) {
-      log("[gps-polling] Samsara client not configured (missing SAMSARA_API_TOKEN)", "warn");
+      logger.warn("Samsara client not configured (missing SAMSARA_API_TOKEN)");
       return;
     }
 
-    log("[gps-polling] Starting GPS polling service (every 30 seconds)", "info");
+    logger.info("Starting GPS polling service (every 30 seconds)");
 
     // Poll immediately on start
     await this.poll();
@@ -38,7 +40,7 @@ class GPSPollingService {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      log("[gps-polling] GPS polling service stopped", "info");
+      logger.info("GPS polling service stopped");
     }
   }
 
@@ -71,14 +73,14 @@ class GPSPollingService {
       });
       return { success: true, samsaraId: vehicle.samsaraId };
     } catch (error) {
-      log(`[gps-polling] Failed to process vehicle ${vehicle.samsaraId}: ${error}`, "error");
+      logger.error(`Failed to process vehicle ${vehicle.samsaraId}: ${error}`);
       return { success: false, samsaraId: vehicle.samsaraId };
     }
   }
 
   private async poll() {
     if (this.isPolling) {
-      log("[gps-polling] Previous poll still in progress, skipping", "info");
+      logger.debug("Previous poll still in progress, skipping");
       return;
     }
 
@@ -88,10 +90,7 @@ class GPSPollingService {
     try {
       const result = await samsaraClient!.getVehicleLocationsFeed();
 
-      log(
-        `[gps-polling] Received ${result.vehicles.length} vehicle location(s) from Samsara`,
-        "info"
-      );
+      logger.debug(`Received ${result.vehicles.length} vehicle location(s) from Samsara`);
 
       if (result.vehicles.length === 0) {
         return;
@@ -118,28 +117,20 @@ class GPSPollingService {
         
         // Log batch timing if slow or has failures
         if (batchDuration > 1000 || batchFailures > 0) {
-          log(
-            `[gps-polling] Batch ${i + 1}/${batches.length}: ${batchSuccess}/${batch.length} success, ${batchDuration}ms`,
-            batchFailures > 0 ? "warn" : "info"
-          );
+          const logMethod = batchFailures > 0 ? logger.warn : logger.debug;
+          logMethod(`Batch ${i + 1}/${batches.length}: ${batchSuccess}/${batch.length} success, ${batchDuration}ms`);
         }
       }
 
       const totalDuration = Date.now() - pollStartTime;
       
       if (totalFailures > 0) {
-        log(
-          `[gps-polling] Completed with ${totalFailures} failure(s): ${totalSuccess}/${result.vehicles.length} updated in ${totalDuration}ms`,
-          "warn"
-        );
+        logger.warn(`Completed with ${totalFailures} failure(s): ${totalSuccess}/${result.vehicles.length} updated in ${totalDuration}ms`);
       } else if (result.vehicles.length > 0) {
-        log(
-          `[gps-polling] Successfully updated ${totalSuccess} vehicle location(s) in ${totalDuration}ms`,
-          "info"
-        );
+        logger.debug(`Successfully updated ${totalSuccess} vehicle location(s) in ${totalDuration}ms`);
       }
     } catch (error) {
-      log(`[gps-polling] Error polling GPS data: ${error}`, "error");
+      logger.error(`Error polling GPS data: ${error}`);
     } finally {
       this.isPolling = false;
     }

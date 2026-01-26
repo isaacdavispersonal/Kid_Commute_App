@@ -1,9 +1,11 @@
 import { db } from "./db";
 import { vehicles, shifts, clockEvents } from "@shared/schema";
 import { eq, or, and, sql, gte, desc } from "drizzle-orm";
-import { log } from "./vite";
+import { createLogger } from "./logger";
 import { geofenceDetectionService } from "./geofence-service";
 import { dwellDetectionService } from "./dwell-detection-service";
+
+const logger = createLogger("gps-pipeline");
 
 export interface CanonicalGPSUpdate {
   latitude: number;
@@ -89,13 +91,13 @@ class GPSIngestionPipeline {
     // Find a shift where the most recent event is IN
     for (const [shiftId, data] of shiftData.entries()) {
       if (data.lastEvent && data.lastEvent.type === 'IN') {
-        log(`[gps-pipeline] Found active shift ${shiftId} for vehicle ${vehicleId}`, "info");
+        logger.debug(`Found active shift ${shiftId} for vehicle ${vehicleId}`);
         return shiftId;
       }
     }
 
-    // No active shift found - log for telemetry
-    log(`[gps-pipeline] No active shift found for vehicle ${vehicleId}`, "info");
+    // No active shift found - debug level since this is expected for idle vehicles
+    logger.debug(`No active shift found for vehicle ${vehicleId}`);
     return null;
   }
 
@@ -104,17 +106,14 @@ class GPSIngestionPipeline {
       const dedupeKey = this.generateDedupeKey(update);
       
       if (this.processedEvents.has(dedupeKey)) {
-        log(`[gps-pipeline] Duplicate event detected, skipping: ${dedupeKey}`, "info");
+        logger.debug(`Duplicate event detected, skipping: ${dedupeKey}`);
         return;
       }
 
       const vehicle = await this.resolveVehicle(update.vehicleIdentifier);
       
       if (!vehicle) {
-        log(
-          `[gps-pipeline] No vehicle found for ${JSON.stringify(update.vehicleIdentifier)}`,
-          "warn"
-        );
+        logger.warn(`No vehicle found for ${JSON.stringify(update.vehicleIdentifier)}`);
         return;
       }
 
@@ -150,12 +149,9 @@ class GPSIngestionPipeline {
         this.processedEvents.delete(dedupeKey);
       }, this.dedupeWindowMs);
 
-      log(
-        `[gps-pipeline] Updated vehicle ${vehicle.name} (${vehicle.plateNumber}) from ${update.source}`,
-        "info"
-      );
+      logger.debug(`Updated vehicle ${vehicle.name} (${vehicle.plateNumber}) from ${update.source}`);
     } catch (error) {
-      log(`[gps-pipeline] Error ingesting GPS update: ${error}`, "error");
+      logger.error(`Error ingesting GPS update: ${error}`);
       throw error;
     }
   }
