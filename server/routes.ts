@@ -1244,6 +1244,208 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // ============ Route Requests Routes ============
+
+  // Create a route request (driver)
+  app.post(
+    "/api/route-requests",
+    requireAuth,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.id;
+        const { routeRunId, routeId, requestType, studentId, studentName, description, priority } = req.body;
+        
+        if (!routeRunId || !requestType) {
+          return res.status(400).json({ 
+            message: "routeRunId and requestType are required" 
+          });
+        }
+        
+        const validTypes = ["MISSING_STUDENT", "UNEXPECTED_STUDENT", "WRONG_STOP", "ROSTER_CLARIFICATION"];
+        if (!validTypes.includes(requestType)) {
+          return res.status(400).json({ 
+            message: `Invalid requestType. Must be one of: ${validTypes.join(", ")}` 
+          });
+        }
+        
+        const request = await storage.createRouteRequest({
+          routeRunId,
+          routeId,
+          createdByUserId: driverId,
+          requestType,
+          studentId,
+          studentName,
+          description,
+          priority: priority || "normal",
+        });
+        
+        // Create audit log
+        await storage.createAuditLog({
+          userId: driverId,
+          action: "ROUTE_REQUEST_CREATED",
+          details: `Created ${requestType} request for route run ${routeRunId}`,
+        });
+        
+        // Emit Socket.IO event for real-time updates
+        const io = getSocketIO();
+        if (io) {
+          io.to(`route_run:${routeRunId}`).emit("route_request.created", { request });
+          io.to("org:default").emit("route_request.created", { request });
+        }
+        
+        res.status(201).json(request);
+      } catch (error) {
+        console.error("Error creating route request:", error);
+        res.status(500).json({ message: "Failed to create route request" });
+      }
+    }
+  );
+
+  // Get route requests for a specific route run (driver/admin)
+  app.get(
+    "/api/route-requests/route-run/:routeRunId",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const { routeRunId } = req.params;
+        const requests = await storage.getRouteRequestsByRouteRun(routeRunId);
+        res.json(requests);
+      } catch (error) {
+        console.error("Error fetching route requests:", error);
+        res.status(500).json({ message: "Failed to fetch route requests" });
+      }
+    }
+  );
+
+  // Get all route requests (admin)
+  app.get(
+    "/api/admin/route-requests",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { status } = req.query;
+        const requests = await storage.getAllRouteRequests(status as string | undefined);
+        
+        // Enrich with driver and student names
+        const enrichedRequests = await Promise.all(
+          requests.map(async (request) => {
+            const driver = await storage.getUser(request.createdByUserId);
+            let student = null;
+            if (request.studentId) {
+              student = await storage.getStudent(request.studentId);
+            }
+            let route = null;
+            if (request.routeId) {
+              route = await storage.getRoute(request.routeId);
+            }
+            return {
+              ...request,
+              driverName: driver?.name || "Unknown Driver",
+              studentInfo: student ? { id: student.id, name: student.name } : null,
+              routeName: route?.name || null,
+            };
+          })
+        );
+        
+        res.json(enrichedRequests);
+      } catch (error) {
+        console.error("Error fetching route requests:", error);
+        res.status(500).json({ message: "Failed to fetch route requests" });
+      }
+    }
+  );
+
+  // Get open route requests count (admin)
+  app.get(
+    "/api/admin/route-requests/count",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const count = await storage.getOpenRouteRequestsCount();
+        res.json({ count });
+      } catch (error) {
+        console.error("Error fetching route request count:", error);
+        res.status(500).json({ message: "Failed to fetch route request count" });
+      }
+    }
+  );
+
+  // Update route request status (admin)
+  app.patch(
+    "/api/admin/route-requests/:id",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const adminId = req.user.id;
+        const { status, resolutionNote } = req.body;
+        
+        if (!status) {
+          return res.status(400).json({ message: "status is required" });
+        }
+        
+        const validStatuses = ["OPEN", "APPROVED", "DENIED", "RESOLVED"];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ 
+            message: `Invalid status. Must be one of: ${validStatuses.join(", ")}` 
+          });
+        }
+        
+        const existingRequest = await storage.getRouteRequestById(id);
+        if (!existingRequest) {
+          return res.status(404).json({ message: "Route request not found" });
+        }
+        
+        const updated = await storage.updateRouteRequestStatus(
+          id,
+          status,
+          adminId,
+          resolutionNote
+        );
+        
+        // Create audit log
+        await storage.createAuditLog({
+          userId: adminId,
+          action: "ROUTE_REQUEST_UPDATED",
+          details: `Updated route request ${id} to ${status}`,
+        });
+        
+        // Emit Socket.IO event for real-time updates
+        const io = getSocketIO();
+        if (io) {
+          io.to(`route_run:${existingRequest.routeRunId}`).emit("route_request.updated", { request: updated });
+          io.to("org:default").emit("route_request.updated", { request: updated });
+        }
+        
+        res.json(updated);
+      } catch (error) {
+        console.error("Error updating route request:", error);
+        res.status(500).json({ message: "Failed to update route request" });
+      }
+    }
+  );
+
+  // Get driver's own route requests
+  app.get(
+    "/api/driver/route-requests",
+    requireAuth,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.id;
+        const requests = await storage.getRouteRequestsByDriver(driverId);
+        res.json(requests);
+      } catch (error) {
+        console.error("Error fetching driver route requests:", error);
+        res.status(500).json({ message: "Failed to fetch route requests" });
+      }
+    }
+  );
+
   // ============ Audit Log Routes ============
 
   // Get all audit logs
