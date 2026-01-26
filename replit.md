@@ -79,7 +79,14 @@ Preferred communication style: Simple, everyday language.
     - **Optimized GPS Pipeline**: Enhanced `server/gps-pipeline.ts` with timezone-aware shift detection.
     - **Unified Driver Route Dashboard**: Consolidated interface for route management, attendance, and stop completion, enforcing inspection and stop completion gates.
     - **Session Management**: PostgreSQL-backed sessions with 7-day TTL.
-    - **Push Notifications**: Mobile app support for iOS/Android via Firebase Cloud Messaging, with device token management.
+    - **Push Notifications**: Mobile app support for iOS/Android via Firebase Cloud Messaging.
+      - **Device Token Management**: Registration via `POST /api/push-tokens`, removal via `DELETE /api/push-tokens/:token`. Tokens tracked with `failureCount`, `isActive`, `deactivatedAt` fields.
+      - **Token Failure Handling**: Automatic revocation after 3 consecutive delivery failures.
+      - **Deep Link Support**: All push payloads include `type` and `deeplink` fields for navigation. Type-based routing maps notifications to role-specific pages.
+      - **Notification Types**: `new_message`, `announcement`, `route_started`, `bus_approaching`, `student_pickup`, `route_delay`, `test`.
+      - **Route Mapping**: Driver → /driver/*, Parent → /parent/*, Admin → /admin/*. Parent announcements route to /parent/messages (no separate announcements page).
+      - **Pending Navigation Queue**: If notification tapped before auth ready, navigation is queued and executed after user is authenticated.
+      - **Enhanced Logging**: `[push]` prefix for push service logs, `[push-token]` prefix for registration. Logs include user IDs, token counts per user, FCM response status, and failure tracking.
     - **Automated Data Retention**: Scheduled cleanup service for old data (Messages, GPS/geofence events, audit logs, announcements, device tokens) with configurable retention periods.
     - **BambooHR Payroll Integration**: Automated driver clock-in/out data export with federal/Arizona overtime rules, including employee mapping, pay period selection, preview, batch submission, and audit trail.
     - **Pull-to-Refresh**: Mobile-optimized gesture for manual data refresh on driver and parent pages. Uses single scroll container architecture with RefreshContext for callback management. Integrated pages: driver dashboard/routes/announcements, parent dashboard/tracking/messages.
