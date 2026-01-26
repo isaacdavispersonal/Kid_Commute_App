@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import RouteRunSummary from "@/components/route-run-summary";
 import {
   Dialog,
   DialogContent,
@@ -92,6 +93,18 @@ export default function DriverRoutePage() {
   const [newDamageFound, setNewDamageFound] = useState(false);
   const [damageNotes, setDamageNotes] = useState("");
   const [postTripNotes, setPostTripNotes] = useState("");
+  const [showSummary, setShowSummary] = useState(false);
+  const [activeRouteRunId, setActiveRouteRunId] = useState<string | null>(null);
+
+  // Check if there's an active route run that's pending review
+  useEffect(() => {
+    if (routeContext?.activeRouteRun) {
+      setActiveRouteRunId(routeContext.activeRouteRun.id);
+      if (routeContext.activeRouteRun.status === "ENDED_PENDING_REVIEW") {
+        setShowSummary(true);
+      }
+    }
+  }, [routeContext?.activeRouteRun]);
 
   const toggleStop = (stopId: string) => {
     const newExpanded = new Set(expandedStops);
@@ -223,14 +236,15 @@ export default function DriverRoutePage() {
         postTripInspection: postTripData,
       });
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ["/api/driver/route", shiftId] });
       toast({
         title: "Route completed!",
-        description: "Great job! Post-trip inspection saved.",
+        description: "Review the summary and confirm when ready.",
       });
       setShowPostTripDialog(false);
-      setTimeout(() => setLocation("/driver"), 2000);
+      // Show summary screen instead of navigating away
+      setShowSummary(true);
     },
     onError: (error: any) => {
       toast({
@@ -350,6 +364,23 @@ export default function DriverRoutePage() {
     
     return true;
   };
+
+  // Show summary screen when route is ended pending review
+  if (showSummary && activeRouteRunId) {
+    return (
+      <div className="h-full">
+        <RouteRunSummary
+          routeRunId={activeRouteRunId}
+          canEditAttendance={true}
+          onFinalize={() => {
+            setShowSummary(false);
+            setLocation("/driver");
+          }}
+          onBack={() => setShowSummary(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     

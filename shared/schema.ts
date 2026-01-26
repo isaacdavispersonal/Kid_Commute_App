@@ -494,6 +494,12 @@ export type ShiftRouteContext = {
     totalStops: number;
     activeStopId: string | null;
   };
+  activeRouteRun?: {
+    id: string;
+    status: "SCHEDULED" | "ACTIVE" | "ENDED_PENDING_REVIEW" | "FINALIZED" | "CANCELLED";
+    startedAt: string | null;
+    endedAt: string | null;
+  } | null;
 };
 
 // Route stops junction table - Links routes to stops with ordering
