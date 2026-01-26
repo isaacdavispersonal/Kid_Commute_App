@@ -1088,6 +1088,8 @@ export const routeRuns = pgTable(
     startedAt: timestamp("started_at"),
     endedAt: timestamp("ended_at"),
     finalizedAt: timestamp("finalized_at"),
+    startMileage: integer("start_mileage"), // Odometer reading at start
+    endMileage: integer("end_mileage"), // Odometer reading at end
     notes: text("notes"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -1184,6 +1186,40 @@ export const insertRouteRunEventSchema = createInsertSchema(routeRunEvents).omit
 
 export type InsertRouteRunEvent = z.infer<typeof insertRouteRunEventSchema>;
 export type RouteRunEvent = typeof routeRunEvents.$inferSelect;
+
+// Attendance change log table - audit trail for attendance corrections
+export const attendanceChangeLogs = pgTable(
+  "attendance_change_logs",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    routeRunId: varchar("route_run_id")
+      .notNull()
+      .references(() => routeRuns.id, { onDelete: "cascade" }),
+    studentId: varchar("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    actorUserId: varchar("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    oldValueJson: jsonb("old_value_json").notNull(), // Previous attendance state
+    newValueJson: jsonb("new_value_json").notNull(), // New attendance state
+    reason: text("reason"), // Optional reason for the change
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_attendance_change_logs_run").on(table.routeRunId),
+    index("idx_attendance_change_logs_student").on(table.studentId),
+    index("idx_attendance_change_logs_actor").on(table.actorUserId),
+  ]
+);
+
+export const insertAttendanceChangeLogSchema = createInsertSchema(attendanceChangeLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAttendanceChangeLog = z.infer<typeof insertAttendanceChangeLogSchema>;
+export type AttendanceChangeLog = typeof attendanceChangeLogs.$inferSelect;
 
 // Admin settings table - stores system configuration
 export const adminSettings = pgTable("admin_settings", {
@@ -2169,6 +2205,21 @@ export const routeRunEventsRelations = relations(routeRunEvents, ({ one }) => ({
   }),
   actor: one(users, {
     fields: [routeRunEvents.actorUserId],
+    references: [users.id],
+  }),
+}));
+
+export const attendanceChangeLogsRelations = relations(attendanceChangeLogs, ({ one }) => ({
+  routeRun: one(routeRuns, {
+    fields: [attendanceChangeLogs.routeRunId],
+    references: [routeRuns.id],
+  }),
+  student: one(students, {
+    fields: [attendanceChangeLogs.studentId],
+    references: [students.id],
+  }),
+  actor: one(users, {
+    fields: [attendanceChangeLogs.actorUserId],
     references: [users.id],
   }),
 }));

@@ -131,6 +131,9 @@ import {
   type InsertRouteRunParticipant,
   type RouteRunEvent,
   type InsertRouteRunEvent,
+  type AttendanceChangeLog,
+  type InsertAttendanceChangeLog,
+  attendanceChangeLogs,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray, isNotNull, isNull } from "drizzle-orm";
@@ -467,6 +470,14 @@ export interface IStorage {
   // RouteRun event operations (audit log)
   logRouteRunEvent(event: InsertRouteRunEvent): Promise<RouteRunEvent>;
   getRouteRunEvents(routeRunId: string): Promise<RouteRunEvent[]>;
+
+  // RouteRun reopen (admin only - for corrections)
+  reopenRouteRun(id: string): Promise<RouteRun>;
+
+  // Attendance change log operations (for corrections audit)
+  logAttendanceChange(log: InsertAttendanceChangeLog): Promise<AttendanceChangeLog>;
+  getAttendanceChangeLogs(routeRunId: string): Promise<AttendanceChangeLog[]>;
+  getAttendanceChangeLogsByStudent(studentId: string): Promise<AttendanceChangeLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5397,6 +5408,47 @@ export class DatabaseStorage implements IStorage {
       .from(routeRunEvents)
       .where(eq(routeRunEvents.routeRunId, routeRunId))
       .orderBy(desc(routeRunEvents.createdAt));
+  }
+
+  // ============ RouteRun reopen (admin only) ============
+
+  async reopenRouteRun(id: string): Promise<RouteRun> {
+    const [updated] = await db
+      .update(routeRuns)
+      .set({
+        status: "ENDED_PENDING_REVIEW",
+        finalizedAt: null, // Clear finalization timestamp
+        updatedAt: new Date(),
+      })
+      .where(eq(routeRuns.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("RouteRun not found");
+    }
+    return updated;
+  }
+
+  // ============ Attendance Change Log operations ============
+
+  async logAttendanceChange(log: InsertAttendanceChangeLog): Promise<AttendanceChangeLog> {
+    const [created] = await db.insert(attendanceChangeLogs).values(log).returning();
+    return created;
+  }
+
+  async getAttendanceChangeLogs(routeRunId: string): Promise<AttendanceChangeLog[]> {
+    return await db
+      .select()
+      .from(attendanceChangeLogs)
+      .where(eq(attendanceChangeLogs.routeRunId, routeRunId))
+      .orderBy(desc(attendanceChangeLogs.createdAt));
+  }
+
+  async getAttendanceChangeLogsByStudent(studentId: string): Promise<AttendanceChangeLog[]> {
+    return await db
+      .select()
+      .from(attendanceChangeLogs)
+      .where(eq(attendanceChangeLogs.studentId, studentId))
+      .orderBy(desc(attendanceChangeLogs.createdAt));
   }
 }
 
