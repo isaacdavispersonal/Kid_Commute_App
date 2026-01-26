@@ -119,7 +119,7 @@ export default function DriverRoutePage() {
     setExpandedStops(newExpanded);
   };
 
-  // Mutation to mark student attendance
+  // Mutation to mark student attendance with optimistic updates
   const attendanceMutation = useMutation({
     mutationFn: async ({
       studentId,
@@ -136,17 +136,51 @@ export default function DriverRoutePage() {
         shiftId, // Track AM/PM attendance separately
       });
     },
+    // Optimistic update: immediately update UI before server responds
+    onMutate: async ({ studentId, status }) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ["/api/driver/route", shiftId] });
+
+      // Snapshot the previous value for rollback
+      const previousData = queryClient.getQueryData<ShiftRouteContext>(["/api/driver/route", shiftId]);
+
+      // Optimistically update the cache
+      if (previousData) {
+        queryClient.setQueryData<ShiftRouteContext>(["/api/driver/route", shiftId], {
+          ...previousData,
+          students: previousData.students.map((s) =>
+            s.id === studentId ? { ...s, attendance: status } : s
+          ),
+          stops: previousData.stops.map((stop) => ({
+            ...stop,
+            students: stop.students.map((s) =>
+              s.id === studentId
+                ? { ...s, attendance: { status, markedByUserId: "", createdAt: new Date().toISOString() } }
+                : s
+            ),
+          })),
+        });
+      }
+
+      // Return context with previous data for rollback
+      return { previousData };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/driver/route", shiftId] });
       toast({
         title: "Attendance updated",
         description: "Student attendance has been recorded",
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown, _variables, context) => {
       console.error("[attendance] Error:", error);
+      
+      // Rollback to previous data on error
+      if (context?.previousData) {
+        queryClient.setQueryData(["/api/driver/route", shiftId], context.previousData);
+      }
+      
       let message = "Failed to update attendance";
-      if (error?.message) {
+      if (error instanceof Error) {
         message = error.message;
       } else if (typeof error === 'string') {
         message = error;
@@ -156,6 +190,10 @@ export default function DriverRoutePage() {
         description: message,
         variant: "destructive",
       });
+    },
+    // Always refetch after error or success to ensure consistency
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/driver/route", shiftId] });
     },
   });
 
