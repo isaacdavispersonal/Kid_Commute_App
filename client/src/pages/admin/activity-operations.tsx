@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Package, FileText, Clock } from "lucide-react";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 // Import the individual page components (we'll keep their logic as components)
 import RouteHealthSection from "./sections/route-health-section";
@@ -20,14 +21,52 @@ interface BadgeData {
   };
 }
 
+// Map tab values to section names
+const tabToSection: Record<string, string> = {
+  "route-health": "routeHealth",
+  "driver-utilities": "driverUtilities",
+  "audit-log": "auditLog",
+  "time-management": "timeManagement",
+};
+
 export default function ActivityOperationsPage() {
   const [activeTab, setActiveTab] = useState("route-health");
+  const acknowledgedTabsRef = useRef<Set<string>>(new Set());
 
   // Fetch badge counts
   const { data: badges } = useQuery<BadgeData>({
     queryKey: ["/api/admin/badges/activity-operations"],
     refetchInterval: 15000,
   });
+
+  // Mutation to acknowledge a section
+  const acknowledgeMutation = useMutation({
+    mutationFn: async (section: string) => {
+      return apiRequest("/api/admin/acknowledge-section", {
+        method: "POST",
+        body: JSON.stringify({ section }),
+      });
+    },
+    onSuccess: () => {
+      // Refresh badge counts
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/badges/activity-operations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
+    },
+  });
+
+  // Auto-acknowledge section when viewed (only once per session)
+  useEffect(() => {
+    const section = tabToSection[activeTab];
+    if (section && !acknowledgedTabsRef.current.has(activeTab)) {
+      // Mark as acknowledged after a short delay to ensure user actually viewed the content
+      const timer = setTimeout(() => {
+        acknowledgedTabsRef.current.add(activeTab);
+        acknowledgeMutation.mutate(section);
+      }, 2000); // 2 second delay before acknowledging
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab]);
 
   const routeHealthBadge = badges?.bySection.routeHealth || 0;
   const driverUtilitiesBadge = badges?.bySection.driverUtilities || 0;

@@ -1,0 +1,314 @@
+You’re thinking in exactly the right direction.
+Yes — this should be a request system, not an ad-hoc message, and it should be route-scoped, auditable, and reversible.
+
+This problem happens in every transportation operation, and the fix is always the same: don’t let drivers silently “fix” roster issues in the field — give them a structured way to flag and request changes, and give admins controlled tools to approve or deny them.
+
+Below is a clean, scalable solution that fits everything you’ve already built (route runs, audit logs, announcements, badges).
+
+Best Solution: Route-Specific Exception & Request System
+Why this is needed
+
+Right now, when:
+
+a student is missing who should be on the route, or
+
+a student appears who shouldn’t be,
+
+drivers have three bad options:
+
+mark attendance incorrectly
+
+send a vague message
+
+do nothing and hope admin notices
+
+All three cause data corruption or confusion.
+
+Core Concept: Requests ≠ Messages
+
+Messages are for conversation.
+Requests are for operational changes.
+
+Requests must be:
+
+tied to a route or route run
+
+typed (missing student, extra student, stop mismatch, etc.)
+
+tracked with status
+
+auditable
+
+able to trigger notifications/badges
+
+Request Types (start small, expand later)
+
+Create a single route_requests system with typed categories.
+
+Required request types
+
+MISSING_STUDENT
+
+Student should be on this route but isn’t listed
+
+UNEXPECTED_STUDENT
+
+Student appears but should not be on this route
+
+WRONG_STOP
+
+Student assigned to incorrect pickup/dropoff stop
+
+ROSTER_CLARIFICATION
+
+Driver unsure which student is correct
+
+Optional later:
+
+temporary rider
+
+early dropoff
+
+alternate pickup (admin-approved only)
+
+Data Model (simple but powerful)
+Table: route_requests
+
+id
+
+route_run_id (required)
+
+route_id
+
+created_by_user_id (driver)
+
+request_type (enum)
+
+student_id (nullable, required for most)
+
+description (free text from driver)
+
+status enum:
+
+OPEN
+
+APPROVED
+
+DENIED
+
+RESOLVED
+
+admin_user_id (nullable)
+
+resolution_note
+
+created_at
+
+updated_at
+
+Optional:
+
+priority (normal / urgent)
+
+attachments (photo of roster, note, etc.)
+
+Driver Experience (Field-safe)
+Where drivers access it
+
+Route screen → “Report Route Issue”
+
+Quick-access button during active route
+
+Driver flow
+
+Tap Report Route Issue
+
+Select issue type:
+
+“Student missing”
+
+“Student shouldn’t be on route”
+
+“Wrong stop”
+
+Select student (or “unknown student”)
+
+Add short note
+
+Submit
+
+What happens next
+
+Driver sees request as Pending
+
+Driver does not alter roster silently
+
+Attendance UI can show:
+
+“Pending admin review” badge on that student
+
+Admin Experience (Clear & Actionable)
+Admin dashboard
+
+Add:
+Admin → Activity & Operations → Route Requests
+
+Admin sees
+
+Route
+
+Driver
+
+Request type
+
+Student
+
+Time submitted
+
+Current route status (active/pending review/etc.)
+
+Admin actions
+
+Approve
+
+Optionally apply change immediately:
+
+add student to route run
+
+remove student
+
+change stop
+
+Deny
+
+Provide reason (shown to driver)
+
+Resolve
+
+For informational-only issues
+
+After approval
+
+System:
+
+updates route run roster
+
+logs audit event
+
+emits realtime update
+
+Driver sees change live, no refresh
+
+Real-time + Notification Integration
+Realtime
+
+Emit:
+
+route_request.created
+
+route_request.updated
+
+Channel:
+
+route_run:<id> (driver sees status)
+
+org:<org_id> (admin sees new request)
+
+Badges
+
+Admin:
+
+Activity & Ops badge increments for OPEN requests
+
+Driver:
+
+Route screen shows “1 pending request”
+
+Push notifications
+
+Admin receives push:
+
+“Route request from Driver on WV Pink Route”
+
+Driver receives push when resolved:
+
+“Route request approved”
+
+Attendance Guardrails (important)
+
+While a request is OPEN:
+
+Student attendance row:
+
+can be marked “Pending Review”
+
+OR driver can mark attendance but system flags it as provisional
+
+Audit log captures everything
+
+This prevents drivers from being blocked and prevents silent data corruption.
+
+Audit Log Integration (you already have this)
+
+Every request lifecycle event should write:
+
+who created it
+
+who approved/denied
+
+what changed
+
+when
+
+This ties directly into your existing Activity & Operations → Audit Log.
+
+Why this is better than “just messaging”
+
+Messages get lost
+
+Requests are structured
+
+Requests create accountability
+
+Requests are traceable
+
+Requests power badges + alerts
+
+Requests scale as you grow
+
+You’re not overhauling messaging — you’re adding a parallel, purpose-built workflow.
+
+Minimum Viable Version (if you want to ship fast)
+
+Start with:
+
+MISSING_STUDENT
+
+UNEXPECTED_STUDENT
+
+Basic approve/deny
+
+Route-scoped requests only
+
+Realtime update + badge
+
+That alone solves 80% of field confusion.
+
+Recommendation Summary
+
+✔ Yes, build a route-specific request system
+✔ Keep it separate from chat
+✔ Tie it to route runs
+✔ Make it realtime
+✔ Log everything
+✔ Use it to protect data integrity
+
+If you want, I can turn this into:
+
+a Replit AI implementation prompt
+
+exact DB migrations + endpoints
+
+UX wireframe flow
+
+or a policy doc explaining when drivers should use requests vs messages
