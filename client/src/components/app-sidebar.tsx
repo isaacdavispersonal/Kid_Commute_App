@@ -280,8 +280,23 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
     refetchInterval: 15000,
   });
 
+  // Fetch activity operations badges for admins
+  const { data: activityBadges } = useQuery<{
+    total: number;
+    bySection: {
+      routeHealth: number;
+      driverUtilities: number;
+      auditLog: number;
+      timeManagement: number;
+    };
+  }>({
+    queryKey: ["/api/admin/badges/activity-operations"],
+    refetchInterval: 15000,
+    enabled: userRole === "admin",
+  });
+
   const totalUnread = (unreadCounts?.messages || 0) + (unreadCounts?.announcements || 0) + (unreadCounts?.notifications || 0);
-  const flaggedChecklistsCount = unreadCounts?.flaggedChecklists || 0;
+  const activityBadgeTotal = activityBadges?.total || 0;
 
   // Determine if sidebar is currently open
   const isOpen = isMobile ? openMobile : open;
@@ -357,9 +372,9 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
     const isMessages = item.title === "Messages";
     const isActivityOperations = item.title === "Activity & Operations";
     const showMessagesBadge = isMessages && totalUnread > 0;
-    const showFlaggedBadge = isActivityOperations && flaggedChecklistsCount > 0 && userRole === "admin";
-    const showBadge = showMessagesBadge || showFlaggedBadge;
-    const badgeCount = showMessagesBadge ? totalUnread : flaggedChecklistsCount;
+    const showActivityBadge = isActivityOperations && activityBadgeTotal > 0 && userRole === "admin";
+    const showBadge = showMessagesBadge || showActivityBadge;
+    const badgeCount = showMessagesBadge ? totalUnread : activityBadgeTotal;
 
     return (
       <SidebarMenuItem key={item.title} data-active={isActive ? "true" : undefined}>
@@ -379,7 +394,7 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
               <Badge 
                 variant="destructive" 
                 className="ml-auto h-5 min-w-5 px-1 text-xs"
-                data-testid={showFlaggedBadge ? "badge-flagged-checklists" : "badge-unread-count"}
+                data-testid={showActivityBadge ? "badge-activity-operations" : "badge-unread-count"}
               >
                 {badgeCount}
               </Badge>
