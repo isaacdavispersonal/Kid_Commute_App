@@ -1,5 +1,6 @@
 // Reference: PostgreSQL database blueprint and Replit Auth blueprint
 import { config } from "./config";
+import type { AnnouncementQueryResult, SqlCondition } from "@shared/socket-types";
 import {
   users,
   vehicles,
@@ -139,6 +140,10 @@ import {
   type AttendanceChangeLog,
   type InsertAttendanceChangeLog,
   attendanceChangeLogs,
+  type Geofence,
+  type InsertGeofence,
+  type GeofenceEvent,
+  type InsertGeofenceEvent,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray, isNotNull, isNull } from "drizzle-orm";
@@ -309,7 +314,7 @@ export interface IStorage {
     search?: string;
     limit?: number;
     offset?: number;
-  }): Promise<{ announcements: any[]; total: number }>;
+  }): Promise<AnnouncementQueryResult>;
   getAnnouncementById(id: string): Promise<Announcement | undefined>;
   updateAnnouncementDeliveryStats(id: string, stats: {
     targetCount?: number;
@@ -445,12 +450,12 @@ export interface IStorage {
   ): Promise<RouteRequest>;
 
   // Geofence operations
-  getAllGeofences(): Promise<any[]>;
-  getGeofence(id: string): Promise<any | undefined>;
-  createGeofence(geofence: any): Promise<any>;
-  updateGeofence(id: string, updates: any): Promise<any>;
+  getAllGeofences(): Promise<Geofence[]>;
+  getGeofence(id: string): Promise<Geofence | undefined>;
+  createGeofence(geofence: InsertGeofence): Promise<Geofence>;
+  updateGeofence(id: string, updates: Partial<InsertGeofence>): Promise<Geofence>;
   deleteGeofence(id: string): Promise<void>;
-  getGeofenceEvents(limit?: number): Promise<any[]>;
+  getGeofenceEvents(limit?: number): Promise<GeofenceEvent[]>;
 
   // Data retention operations
   cleanupOldMessages(retentionDays: number): Promise<number>;
@@ -3360,8 +3365,8 @@ export class DatabaseStorage implements IStorage {
     search?: string;
     limit?: number;
     offset?: number;
-  }): Promise<{ announcements: any[]; total: number }> {
-    const conditions: any[] = [];
+  }): Promise<AnnouncementQueryResult> {
+    const conditions: SqlCondition[] = [];
 
     if (filters?.startDate) {
       conditions.push(sql`${announcements.createdAt} >= ${filters.startDate}`);
@@ -4789,7 +4794,7 @@ export class DatabaseStorage implements IStorage {
     return geofence;
   }
 
-  async createGeofence(geofenceData: any): Promise<any> {
+  async createGeofence(geofenceData: InsertGeofence): Promise<Geofence> {
     const [newGeofence] = await db
       .insert(geofences)
       .values({
@@ -4800,7 +4805,7 @@ export class DatabaseStorage implements IStorage {
     return newGeofence;
   }
 
-  async updateGeofence(id: string, updates: any): Promise<any> {
+  async updateGeofence(id: string, updates: Partial<InsertGeofence>): Promise<Geofence> {
     const [updated] = await db
       .update(geofences)
       .set({

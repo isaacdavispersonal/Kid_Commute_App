@@ -1,6 +1,19 @@
 import type { RouteRun, Announcement, StudentAttendance } from "./schema";
+import type { SQL } from "drizzle-orm";
 
 export type AttendanceStatus = "PENDING" | "riding" | "absent" | "completed";
+
+export interface AnnouncementWithDetails extends Announcement {
+  adminName?: string | null;
+  routeName?: string | null;
+}
+
+export interface AnnouncementQueryResult {
+  announcements: AnnouncementWithDetails[];
+  total: number;
+}
+
+export type SqlCondition = SQL<unknown>;
 
 export interface AttendanceUpdatePayload {
   studentId: string;
