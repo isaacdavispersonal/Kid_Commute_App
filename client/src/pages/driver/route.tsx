@@ -459,7 +459,8 @@ export default function DriverRoutePage() {
               <div className="space-y-3">
                 {students.map((student) => {
                   const hasAttendance = student.attendance !== null;
-                  const isRiding = student.attendance === "riding";
+                  // Default to riding if no attendance record exists
+                  const isRiding = student.attendance === "riding" || !hasAttendance;
                   const isAbsent = student.attendance === "absent";
                   const hasBoarded = student.boardEvent !== null;
                   const hasDisembarked = student.deboardEvent !== null;
@@ -492,16 +493,14 @@ export default function DriverRoutePage() {
                           )}
                         </div>
 
-                        {/* Attendance Status */}
-                        {hasAttendance && (
-                          <Badge
-                            variant={isRiding ? "default" : "secondary"}
-                            className="flex-shrink-0"
-                            data-testid={`badge-attendance-${student.id}`}
-                          >
-                            {isRiding ? "Riding" : "Absent"}
-                          </Badge>
-                        )}
+                        {/* Attendance Status - always show, default is "Riding" */}
+                        <Badge
+                          variant={isRiding ? "default" : "secondary"}
+                          className="flex-shrink-0"
+                          data-testid={`badge-attendance-${student.id}`}
+                        >
+                          {isRiding ? "Riding" : "Absent"}
+                        </Badge>
                       </div>
 
                       {/* Ride Events */}
@@ -528,57 +527,52 @@ export default function DriverRoutePage() {
 
                       {/* Action Buttons with Loading States */}
                       <div className="flex gap-2 flex-wrap">
-                        {/* Attendance marking - only for lead drivers */}
-                        {!hasAttendance && !routeCompleted && canMarkAttendance && (
-                          <>
-                            <Button
-                              size="touch"
-                              variant="default"
-                              onClick={() =>
-                                attendanceMutation.mutate({
-                                  studentId: student.id,
-                                  status: "riding",
-                                })
-                              }
-                              disabled={attendanceMutation.isPending}
-                              data-testid={`button-mark-riding-${student.id}`}
-                            >
-                              {attendanceMutation.isPending ? (
-                                <Clock className="h-4 w-4 mr-1 animate-spin" />
-                              ) : (
-                                <UserCheck className="h-4 w-4 mr-1" />
-                              )}
-                              {attendanceMutation.isPending ? "Saving..." : "Riding"}
-                            </Button>
-                            <Button
-                              size="touch"
-                              variant="secondary"
-                              onClick={() =>
-                                attendanceMutation.mutate({
-                                  studentId: student.id,
-                                  status: "absent",
-                                })
-                              }
-                              disabled={attendanceMutation.isPending}
-                              data-testid={`button-mark-absent-${student.id}`}
-                            >
-                              {attendanceMutation.isPending ? (
-                                <Clock className="h-4 w-4 mr-1 animate-spin" />
-                              ) : (
-                                <UserX className="h-4 w-4 mr-1" />
-                              )}
-                              {attendanceMutation.isPending ? "Saving..." : "Absent"}
-                            </Button>
-                          </>
+                        {/* Mark Absent button - only for lead drivers, only for students currently riding */}
+                        {isRiding && !routeCompleted && canMarkAttendance && (
+                          <Button
+                            size="touch"
+                            variant="secondary"
+                            onClick={() =>
+                              attendanceMutation.mutate({
+                                studentId: student.id,
+                                status: "absent",
+                              })
+                            }
+                            disabled={attendanceMutation.isPending}
+                            data-testid={`button-mark-absent-${student.id}`}
+                          >
+                            {attendanceMutation.isPending ? (
+                              <Clock className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <UserX className="h-4 w-4 mr-1" />
+                            )}
+                            {attendanceMutation.isPending ? "Saving..." : "Mark Absent"}
+                          </Button>
                         )}
-                        {/* Pending status indicator for non-lead drivers */}
-                        {!hasAttendance && !routeCompleted && !canMarkAttendance && (
-                          <Badge variant="outline" className="text-muted-foreground">
-                            Pending
-                          </Badge>
+                        {/* Mark Riding button - only for lead drivers, only for students marked absent */}
+                        {isAbsent && !routeCompleted && canMarkAttendance && (
+                          <Button
+                            size="touch"
+                            variant="default"
+                            onClick={() =>
+                              attendanceMutation.mutate({
+                                studentId: student.id,
+                                status: "riding",
+                              })
+                            }
+                            disabled={attendanceMutation.isPending}
+                            data-testid={`button-mark-riding-${student.id}`}
+                          >
+                            {attendanceMutation.isPending ? (
+                              <Clock className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <UserCheck className="h-4 w-4 mr-1" />
+                            )}
+                            {attendanceMutation.isPending ? "Saving..." : "Mark Riding"}
+                          </Button>
                         )}
-                        {/* Board button - available to all drivers, but only shows when student is riding OR is pending */}
-                        {(isRiding || (!hasAttendance && !canMarkAttendance)) && !hasBoarded && !routeCompleted && (
+                        {/* Board button - available to all drivers for students who are riding */}
+                        {isRiding && !hasBoarded && !routeCompleted && (
                           <Button
                             size="touch"
                             variant="default"
