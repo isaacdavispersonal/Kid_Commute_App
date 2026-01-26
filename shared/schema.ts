@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
 import {
   index,
+  uniqueIndex,
   jsonb,
   pgTable,
   timestamp,
@@ -1103,11 +1104,9 @@ export const routeRuns = pgTable(
   (table) => [
     index("idx_route_runs_route_date").on(table.routeId, table.serviceDate),
     index("idx_route_runs_primary_driver").on(table.primaryDriverId),
+    uniqueIndex("idx_route_runs_unique_context").on(table.routeId, table.serviceDate, table.shiftType),
   ]
 );
-
-// Unique constraint: one run per route + date + shift type
-// Note: This is enforced at the application level due to Drizzle limitations
 
 export const insertRouteRunSchema = createInsertSchema(routeRuns).omit({
   id: true,
