@@ -9500,59 +9500,105 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const message = JSON.parse(data.toString());
         console.log("Received WebSocket message:", message);
         
-        // Handle room subscription requests
+        // Handle room subscription requests with strict allowlist validation
         if (message.type === "subscribe" && message.room) {
-          // Allow subscribing to route_run rooms if authorized
-          if (message.room.startsWith("route_run:")) {
-            const routeRunId = message.room.replace("route_run:", "");
-            
-            // Authorization check for route run access
-            const wsUserId = (ws as any).userId;
-            const wsUserRole = (ws as any).userRole;
-            
-            // Require authentication
-            if (!wsUserId) {
-              ws.send(JSON.stringify({ 
-                type: "error", 
-                message: "Not authenticated",
-                room: message.room
-              }));
-              console.log(`Client rejected from room ${message.room}: not authenticated`);
-              return;
+          const wsUserId = (ws as any).userId;
+          const wsUserRole = (ws as any).userRole;
+          const roomName = String(message.room || "");
+          
+          // Require authentication for all room subscriptions
+          if (!wsUserId) {
+            ws.send(JSON.stringify({ 
+              type: "error", 
+              message: "Not authenticated",
+              room: roomName
+            }));
+            console.log(`[WebSocket Security] Rejected unauthenticated subscription to room: ${roomName}`);
+            return;
+          }
+          
+          // Room allowlist validation - parse room type and ID
+          const roomParts = roomName.split(":");
+          if (roomParts.length !== 2) {
+            ws.send(JSON.stringify({ 
+              type: "error", 
+              message: "Invalid room format",
+              room: roomName
+            }));
+            console.log(`[WebSocket Security] Rejected invalid room format: ${roomName} by user ${wsUserId}`);
+            return;
+          }
+          
+          const [roomType, roomId] = roomParts;
+          
+          // Validate room type is in allowlist
+          const allowedRoomTypes = ["user", "org", "route_run"];
+          if (!allowedRoomTypes.includes(roomType)) {
+            ws.send(JSON.stringify({ 
+              type: "error", 
+              message: "Room type not allowed",
+              room: roomName
+            }));
+            console.log(`[WebSocket Security] Rejected disallowed room type: ${roomType} by user ${wsUserId}`);
+            return;
+          }
+          
+          // Authorization checks per room type
+          let authorized = false;
+          
+          if (roomType === "user") {
+            // user:<id> - Only allow subscribing to own user room
+            authorized = roomId === wsUserId;
+            if (!authorized) {
+              console.log(`[WebSocket Security] User ${wsUserId} attempted to subscribe to another user's room: ${roomName}`);
             }
-            
-            // Fresh authorization check (not cached) using canAccessRoute
-            const routeRun = await storage.getRouteRun(routeRunId);
+          } 
+          else if (roomType === "org") {
+            // org:<id> - Only allow subscribing to org "default" (single-tenant for now)
+            // In multi-tenant, validate user belongs to this org
+            authorized = roomId === "default";
+            if (!authorized) {
+              console.log(`[WebSocket Security] User ${wsUserId} attempted to subscribe to invalid org room: ${roomName}`);
+            }
+          }
+          else if (roomType === "route_run") {
+            // route_run:<id> - Validate access to the route run
+            const routeRun = await storage.getRouteRun(roomId);
             if (!routeRun) {
               ws.send(JSON.stringify({ 
                 type: "error", 
                 message: "Route run not found",
-                room: message.room
+                room: roomName
               }));
-              console.log(`Client rejected from room ${message.room}: route run not found`);
+              console.log(`[WebSocket Security] Route run not found: ${roomId} requested by user ${wsUserId}`);
               return;
             }
             
             // Check authorization using fresh route assignment data
-            const authorized = await canAccessRoute(wsUserId.toString(), wsUserRole, routeRun.routeId);
-            
+            authorized = await canAccessRoute(wsUserId.toString(), wsUserRole, routeRun.routeId);
             if (!authorized) {
-              ws.send(JSON.stringify({ 
-                type: "error", 
-                message: "Not authorized to subscribe to this route run",
-                room: message.room
-              }));
-              console.log(`Client rejected from room ${message.room}: not authorized`);
-              return;
+              console.log(`[WebSocket Security] User ${wsUserId} (${wsUserRole}) not authorized for route_run ${roomId}`);
             }
-            
-            subscribeToRoom(ws, message.room);
-            ws.send(JSON.stringify({ 
-              type: "subscribed", 
-              room: message.room 
-            }));
-            console.log(`Client subscribed to room: ${message.room}`);
           }
+          
+          // Reject if not authorized
+          if (!authorized) {
+            ws.send(JSON.stringify({ 
+              type: "error", 
+              message: "Not authorized to subscribe to this room",
+              room: roomName
+            }));
+            return;
+          }
+          
+          // Authorized - subscribe to room
+          subscribeToRoom(ws, roomName);
+          ws.send(JSON.stringify({ 
+            type: "subscribed", 
+            room: roomName 
+          }));
+          console.log(`[WebSocket] User ${wsUserId} subscribed to room: ${roomName}`);
+          
         } else if (message.type === "unsubscribe" && message.room) {
           // Handle unsubscription
           const clients = wsRooms.get(message.room);
