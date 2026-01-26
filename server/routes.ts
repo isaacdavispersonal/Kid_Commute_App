@@ -6000,6 +6000,56 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Reopen a finalized route run (admin only - for corrections)
+  app.post(
+    "/api/route-runs/:id/reopen",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        if (run.status !== "FINALIZED") {
+          return res.status(400).json({ 
+            message: `Can only reopen finalized routes. Current status: ${run.status}` 
+          });
+        }
+        
+        const reopenedRun = await storage.reopenRouteRun(id);
+        
+        // Log reopen event
+        await storage.logRouteRunEvent({
+          routeRunId: id,
+          eventType: "RUN_REOPENED",
+          actorUserId: req.user.id,
+          payload: { reason: req.body.reason || "Admin correction" },
+        });
+        
+        // Broadcast via WebSocket (legacy)
+        broadcastToRoom(`route_run:${id}`, {
+          type: "route_run.reopened",
+          routeRunId: id,
+          status: "ENDED_PENDING_REVIEW",
+        });
+        
+        // Emit via Socket.IO
+        emitRouteRunEndedPendingReview(id, {
+          routeRun: reopenedRun,
+        });
+        
+        res.json({ routeRun: reopenedRun });
+      } catch (error) {
+        console.error("Error reopening route run:", error);
+        res.status(500).json({ message: "Failed to reopen route run" });
+      }
+    }
+  );
+
   // Join a route run as a participant
   app.post(
     "/api/route-runs/:id/join",
@@ -6156,6 +6206,327 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       } catch (error) {
         console.error("Error getting route run events:", error);
         res.status(500).json({ message: "Failed to get events" });
+      }
+    }
+  );
+
+  // Get route run summary (for review screen after ending route)
+  app.get(
+    "/api/route-runs/:id/summary",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        // Check authorization
+        const canAccess = await canAccessRoute(req.user.id, req.user.role, run.routeId);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized to view this route run" });
+        }
+        
+        // Get route details
+        const route = await storage.getRoute(run.routeId);
+        
+        // Get participants
+        const participants = await storage.getRouteRunParticipants(id);
+        const participantsWithDetails = await Promise.all(
+          participants.map(async (p) => {
+            const user = await storage.getUser(p.userId);
+            return {
+              ...p,
+              firstName: user?.firstName,
+              lastName: user?.lastName,
+            };
+          })
+        );
+        
+        // Get route stops with completion status
+        const routeStops = await storage.getRouteStops(run.routeId);
+        const events = await storage.getRouteRunEvents(id);
+        
+        const completedStops = events.filter(e => 
+          e.eventType === "STOP_COMPLETED" || e.eventType === "STOP_SKIPPED"
+        ).length;
+        
+        // Get students on this route with their attendance for this run's date
+        const students = await storage.getStudentsByRouteForDate(run.routeId, run.serviceDate, null);
+        
+        // Get attendance change logs for this run
+        const attendanceLogs = await storage.getAttendanceChangeLogs(id);
+        
+        // Calculate attendance breakdown
+        const attendanceBreakdown = {
+          total: students.length,
+          rode: students.filter(s => s.attendance === "riding").length,
+          absentPremarked: students.filter(s => s.attendance === "absent").length,
+          pending: students.filter(s => s.attendance === "PENDING").length,
+        };
+        
+        // Get events and map student boarding/deboarding
+        const studentEvents = events.filter(e => 
+          e.eventType === "STUDENT_BOARDED" || e.eventType === "STUDENT_DEBOARDED"
+        );
+        
+        // Build per-student timeline
+        const studentDetails = students.map(student => {
+          const boardingEvent = studentEvents.find(
+            e => e.eventType === "STUDENT_BOARDED" && 
+            (e.payload as any)?.studentId === student.id
+          );
+          const deboardingEvent = studentEvents.find(
+            e => e.eventType === "STUDENT_DEBOARDED" && 
+            (e.payload as any)?.studentId === student.id
+          );
+          
+          // Find last modification
+          const studentLogs = attendanceLogs.filter(l => l.studentId === student.id);
+          const lastModified = studentLogs[0]; // Already ordered by desc
+          
+          return {
+            id: student.id,
+            firstName: student.firstName,
+            lastName: student.lastName,
+            attendance: student.attendance,
+            pickupStopId: (boardingEvent?.payload as any)?.stopId,
+            pickupTime: boardingEvent?.createdAt,
+            dropoffStopId: (deboardingEvent?.payload as any)?.stopId,
+            dropoffTime: deboardingEvent?.createdAt,
+            lastModifiedBy: lastModified?.actorUserId,
+            lastModifiedAt: lastModified?.createdAt,
+          };
+        });
+        
+        // Calculate duration
+        let durationMinutes = null;
+        if (run.startedAt && run.endedAt) {
+          durationMinutes = Math.round(
+            (new Date(run.endedAt).getTime() - new Date(run.startedAt).getTime()) / 60000
+          );
+        }
+        
+        res.json({
+          routeRun: run,
+          route: {
+            id: route?.id,
+            name: route?.name,
+            shiftType: run.shiftType,
+          },
+          participants: participantsWithDetails,
+          stops: {
+            total: routeStops.length,
+            completed: completedStops,
+          },
+          attendance: attendanceBreakdown,
+          students: studentDetails,
+          mileage: {
+            start: run.startMileage,
+            end: run.endMileage,
+          },
+          duration: {
+            startedAt: run.startedAt,
+            endedAt: run.endedAt,
+            minutes: durationMinutes,
+          },
+          attendanceLogs,
+        });
+      } catch (error) {
+        console.error("Error getting route run summary:", error);
+        res.status(500).json({ message: "Failed to get summary" });
+      }
+    }
+  );
+
+  // Correct attendance for a route run (drivers while ENDED_PENDING_REVIEW, admins anytime)
+  app.post(
+    "/api/route-runs/:id/correct-attendance",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { studentId, newStatus, reason } = req.body;
+        const userId = req.user.id;
+        const userRole = req.user.role;
+        
+        if (!studentId || !newStatus) {
+          return res.status(400).json({ message: "studentId and newStatus are required" });
+        }
+        
+        if (!["PENDING", "riding", "absent"].includes(newStatus)) {
+          return res.status(400).json({ message: "Invalid status. Must be PENDING, riding, or absent" });
+        }
+        
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        // Authorization check
+        const canAccess = await canAccessRoute(userId, userRole, run.routeId);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized for this route" });
+        }
+        
+        // Status-based permission check
+        if (run.status === "FINALIZED") {
+          // Only admins can correct after finalization
+          if (userRole !== "admin") {
+            return res.status(403).json({ 
+              message: "Route is finalized. Only admins can make corrections." 
+            });
+          }
+        } else if (run.status !== "ENDED_PENDING_REVIEW" && run.status !== "ACTIVE") {
+          return res.status(400).json({ 
+            message: `Cannot correct attendance for route with status: ${run.status}` 
+          });
+        }
+        
+        // Get current attendance state
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        // Get current attendance for this student on this date
+        const currentAttendance = await storage.getStudentAttendance(studentId, run.serviceDate, null);
+        const oldStatus = currentAttendance?.status || "PENDING";
+        
+        // Update attendance
+        const updatedAttendance = await storage.setStudentAttendance({
+          studentId,
+          date: run.serviceDate,
+          status: newStatus,
+          markedByUserId: userId,
+          shiftId: null, // Route runs may not have a shift association
+          routeRunId: id,
+        });
+        
+        // Log the change to audit table
+        await storage.logAttendanceChange({
+          routeRunId: id,
+          studentId,
+          actorUserId: userId,
+          oldValueJson: { status: oldStatus },
+          newValueJson: { status: newStatus },
+          reason: reason || null,
+        });
+        
+        // Log event
+        await storage.logRouteRunEvent({
+          routeRunId: id,
+          eventType: "ATTENDANCE_UPDATED",
+          actorUserId: userId,
+          payload: { 
+            studentId, 
+            oldStatus, 
+            newStatus,
+            reason,
+          },
+        });
+        
+        // Emit via Socket.IO
+        emitAttendanceUpdated(id, {
+          studentId,
+          status: newStatus,
+          updatedBy: userId,
+        });
+        
+        res.json({ 
+          success: true, 
+          attendance: updatedAttendance,
+          message: `Attendance updated from ${oldStatus} to ${newStatus}` 
+        });
+      } catch (error) {
+        console.error("Error correcting attendance:", error);
+        res.status(500).json({ message: "Failed to correct attendance" });
+      }
+    }
+  );
+
+  // Update route run mileage
+  app.patch(
+    "/api/route-runs/:id/mileage",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { startMileage, endMileage } = req.body;
+        const userId = req.user.id;
+        const userRole = req.user.role;
+        
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        // Check authorization
+        const canAccess = await canAccessRoute(userId, userRole, run.routeId);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized for this route" });
+        }
+        
+        // Only allow updates while not finalized (or admin override)
+        if (run.status === "FINALIZED" && userRole !== "admin") {
+          return res.status(403).json({ 
+            message: "Route is finalized. Only admins can update mileage." 
+          });
+        }
+        
+        const updatedRun = await storage.updateRouteRun(id, {
+          startMileage: startMileage !== undefined ? startMileage : run.startMileage,
+          endMileage: endMileage !== undefined ? endMileage : run.endMileage,
+        });
+        
+        res.json({ routeRun: updatedRun });
+      } catch (error) {
+        console.error("Error updating mileage:", error);
+        res.status(500).json({ message: "Failed to update mileage" });
+      }
+    }
+  );
+
+  // Get attendance change logs for a route run
+  app.get(
+    "/api/route-runs/:id/attendance-logs",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        // Check authorization
+        const canAccess = await canAccessRoute(req.user.id, req.user.role, run.routeId);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized to view this route run" });
+        }
+        
+        const logs = await storage.getAttendanceChangeLogs(id);
+        
+        // Enrich with user and student details
+        const enrichedLogs = await Promise.all(
+          logs.map(async (log) => {
+            const actor = await storage.getUser(log.actorUserId);
+            const student = await storage.getStudent(log.studentId);
+            return {
+              ...log,
+              actorName: actor ? `${actor.firstName} ${actor.lastName}` : "Unknown",
+              studentName: student ? `${student.firstName} ${student.lastName}` : "Unknown",
+            };
+          })
+        );
+        
+        res.json({ logs: enrichedLogs });
+      } catch (error) {
+        console.error("Error getting attendance logs:", error);
+        res.status(500).json({ message: "Failed to get attendance logs" });
       }
     }
   );
