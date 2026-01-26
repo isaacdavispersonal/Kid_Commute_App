@@ -1,0 +1,160 @@
+SECTION 0 — Ground Rules (Paste First)
+
+Goal: Establish system-wide rules so the rest of the implementation is consistent.
+
+Hard rules
+
+Route Template ≠ Route Run
+
+Route is static (stops, roster rules).
+
+RouteRun is the live instance for a specific date + shift (AM/PM).
+
+Every live action is scoped to a RouteRun
+
+Attendance, stop arrival, completion, announcements-to-route, etc. must reference route_run_id.
+
+Realtime is required for operational state
+
+UI must update without refresh via Socket.IO (or equivalent).
+
+Auditability is required
+
+Corrections must be logged (who/when/what changed).
+
+Soft close before finalize
+
+Route completion must not immediately hard-lock corrections.
+
+Deliverables
+
+Implement new core models (route_runs, participants, event log).
+
+Implement Socket.IO channels and event emission.
+
+Update UI flows to use route_run scoping + realtime updates.
+
+Acceptance
+
+No critical route/attendance/announcement feature depends on manual refresh.
+
+Multi-driver can view the same run without breaking each other.
+
+SECTION 1 — RouteRun: Multi-Driver Safety (Primary + Aid/Viewers)
+Goal
+
+Prevent a route from breaking if multiple drivers are assigned or viewing it. Only one live session exists, and everyone sees the same truth.
+
+Required DB Tables / Fields
+
+route_runs
+
+id (pk)
+
+route_id
+
+service_date (YYYY-MM-DD)
+
+shift_type enum: AM|PM
+
+status enum: SCHEDULED|ACTIVE|ENDED_PENDING_REVIEW|FINALIZED|CANCELLED
+
+primary_driver_id (nullable until started)
+
+started_at, ended_at, finalized_at
+
+created_at, updated_at
+
+Unique constraint: (route_id, service_date, shift_type) must be unique
+
+route_run_participants
+
+id
+
+route_run_id
+
+user_id
+
+role enum: PRIMARY|AID|VIEWER
+
+joined_at
+
+Unique constraint: (route_run_id, user_id) unique
+
+route_run_events (audit/event log)
+
+id
+
+route_run_id
+
+type (string: RUN_STARTED, STOP_ARRIVED, ATTENDANCE_UPDATED, RUN_ENDED, RUN_FINALIZED, RUN_REOPENED, etc.)
+
+actor_user_id
+
+payload_json (details)
+
+created_at
+
+Backend Logic
+
+GET /driver/today-runs must return RouteRuns for today + shift with correct participant role
+
+POST /route-runs/:id/join to add aid/viewer (or auto-add based on assignment)
+
+Start route action:
+
+POST /route-runs/:id/start
+
+Must atomically:
+
+verify driver clocked in
+
+set status=ACTIVE
+
+set primary_driver_id
+
+set started_at
+
+If already ACTIVE: return existing run state, don’t create duplicates
+
+Permissions
+
+PRIMARY: can start, stop, mark attendance, complete route
+
+AID: default view-only, optional attendance if you enable it
+
+VIEWER: view-only
+
+Realtime Required Events
+
+Emit to room route_run:<route_run_id>:
+
+route_run.started
+
+route_run.participant_joined
+
+route_run.state_updated
+
+Frontend Requirements
+
+Driver sees “Start Route” only if:
+
+is clocked in
+
+is a participant
+
+run not finalized
+
+Aid/Viewer sees live route state but cannot progress stops unless allowed
+
+Edge Cases
+
+Primary loses connection: aid should still see updates when primary resumes
+
+Two drivers press Start simultaneously → only one wins (DB transaction + unique state)
+
+Acceptance Tests
+
+Two drivers open same route; one starts → the other immediately sees run become ACTIVE without refresh
+
+Starting run never creates a duplicate RouteRun row

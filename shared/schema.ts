@@ -770,6 +770,7 @@ export const attendanceStatusEnum = pgEnum("attendance_status", ["PENDING", "rid
 
 // Student attendance table - Per-shift attendance tracking
 // Keyed by studentId + date + shiftId to support AM/PM routes without overwrites
+// routeRunId is optional for backward compatibility; new records should use it
 export const studentAttendance = pgTable("student_attendance", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   studentId: varchar("student_id")
@@ -778,13 +779,16 @@ export const studentAttendance = pgTable("student_attendance", {
   date: varchar("date").notNull(), // Format: YYYY-MM-DD
   shiftId: varchar("shift_id")
     .references(() => shifts.id, { onDelete: "cascade" }), // Links attendance to specific shift (AM/PM)
+  routeRunId: varchar("route_run_id"), // FK to route_runs for multi-driver safety (added later in schema)
   status: varchar("status").notNull().default("PENDING"), // PENDING | riding | absent
   markedByUserId: varchar("marked_by_user_id")
     .references(() => users.id, { onDelete: "cascade" }),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_student_attendance_route_run").on(table.routeRunId),
+]);
 
 export const insertStudentAttendanceSchema = createInsertSchema(studentAttendance).omit({
   id: true,
@@ -814,11 +818,13 @@ export type StudentAttendance = typeof studentAttendance.$inferSelect;
 export const rideEventTypeEnum = pgEnum("ride_event_type", ["BOARD", "DEBOARD"]);
 
 // Student ride events table - Tracks actual board/deboard events during shifts
+// routeRunId is optional for backward compatibility; new records should use it
 export const studentRideEvents = pgTable("student_ride_events", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   shiftId: varchar("shift_id")
     .notNull()
     .references(() => shifts.id, { onDelete: "cascade" }),
+  routeRunId: varchar("route_run_id"), // FK to route_runs for multi-driver safety
   studentId: varchar("student_id")
     .notNull()
     .references(() => students.id, { onDelete: "cascade" }),
@@ -836,6 +842,7 @@ export const studentRideEvents = pgTable("student_ride_events", {
 }, (table) => [
   index("idx_ride_events_shift").on(table.shiftId),
   index("idx_ride_events_student").on(table.studentId),
+  index("idx_ride_events_route_run").on(table.routeRunId),
 ]);
 
 export const insertStudentRideEventSchema = createInsertSchema(studentRideEvents).omit({
@@ -1024,6 +1031,159 @@ export const updateClockEventSchema = createInsertSchema(clockEvents).omit({
 export type InsertClockEvent = z.infer<typeof insertClockEventSchema>;
 export type UpdateClockEvent = z.infer<typeof updateClockEventSchema>;
 export type ClockEvent = typeof clockEvents.$inferSelect;
+
+// ============ RouteRun Tables (Multi-Driver Safety) ============
+
+// RouteRun status enum - lifecycle states for a live route execution
+export const routeRunStatusEnum = pgEnum("route_run_status", [
+  "SCHEDULED",           // Created but not started
+  "ACTIVE",              // Route is in progress
+  "ENDED_PENDING_REVIEW", // Driver finished, awaiting review/corrections
+  "FINALIZED",           // Locked, no more changes allowed
+  "CANCELLED",           // Route was cancelled
+]);
+
+// RouteRun participant role enum
+export const routeRunParticipantRoleEnum = pgEnum("route_run_participant_role", [
+  "PRIMARY",  // Can start, stop, mark attendance, complete route
+  "AID",      // Default view-only, optional attendance if enabled
+  "VIEWER",   // View-only
+]);
+
+// RouteRun event types for audit log
+export const routeRunEventTypeEnum = pgEnum("route_run_event_type", [
+  "RUN_CREATED",
+  "RUN_STARTED",
+  "RUN_ENDED",
+  "RUN_FINALIZED",
+  "RUN_REOPENED",
+  "RUN_CANCELLED",
+  "PARTICIPANT_JOINED",
+  "PARTICIPANT_LEFT",
+  "PARTICIPANT_ROLE_CHANGED",
+  "STOP_ARRIVED",
+  "STOP_COMPLETED",
+  "STOP_SKIPPED",
+  "ATTENDANCE_UPDATED",
+  "STUDENT_BOARDED",
+  "STUDENT_DEBOARDED",
+]);
+
+// RouteRuns table - Live instance of a route for a specific date + shift
+// This is separate from shifts (which handle scheduling/payroll)
+export const routeRuns = pgTable(
+  "route_runs",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    routeId: varchar("route_id")
+      .notNull()
+      .references(() => routes.id, { onDelete: "cascade" }),
+    serviceDate: varchar("service_date").notNull(), // Format: YYYY-MM-DD
+    shiftType: shiftTypeEnum("shift_type").notNull(), // AM/PM/EXTRA
+    status: routeRunStatusEnum("status").notNull().default("SCHEDULED"),
+    primaryDriverId: varchar("primary_driver_id")
+      .references(() => users.id, { onDelete: "set null" }), // Set when started
+    vehicleId: varchar("vehicle_id")
+      .references(() => vehicles.id, { onDelete: "set null" }),
+    startedAt: timestamp("started_at"),
+    endedAt: timestamp("ended_at"),
+    finalizedAt: timestamp("finalized_at"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_route_runs_route_date").on(table.routeId, table.serviceDate),
+    index("idx_route_runs_primary_driver").on(table.primaryDriverId),
+  ]
+);
+
+// Unique constraint: one run per route + date + shift type
+// Note: This is enforced at the application level due to Drizzle limitations
+
+export const insertRouteRunSchema = createInsertSchema(routeRuns).omit({
+  id: true,
+  startedAt: true,
+  endedAt: true,
+  finalizedAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
+});
+
+export const updateRouteRunSchema = createInsertSchema(routeRuns).omit({
+  id: true,
+  routeId: true,
+  serviceDate: true,
+  shiftType: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
+
+export type InsertRouteRun = z.infer<typeof insertRouteRunSchema>;
+export type UpdateRouteRun = z.infer<typeof updateRouteRunSchema>;
+export type RouteRun = typeof routeRuns.$inferSelect;
+
+// RouteRun participants table - tracks who is viewing/participating in a route run
+export const routeRunParticipants = pgTable(
+  "route_run_participants",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    routeRunId: varchar("route_run_id")
+      .notNull()
+      .references(() => routeRuns.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: routeRunParticipantRoleEnum("role").notNull().default("VIEWER"),
+    joinedAt: timestamp("joined_at").defaultNow(),
+    leftAt: timestamp("left_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_route_run_participants_run").on(table.routeRunId),
+    index("idx_route_run_participants_user").on(table.userId),
+  ]
+);
+
+export const insertRouteRunParticipantSchema = createInsertSchema(routeRunParticipants).omit({
+  id: true,
+  joinedAt: true,
+  leftAt: true,
+  createdAt: true,
+});
+
+export type InsertRouteRunParticipant = z.infer<typeof insertRouteRunParticipantSchema>;
+export type RouteRunParticipant = typeof routeRunParticipants.$inferSelect;
+
+// RouteRun events table - audit log for all actions during a route run
+export const routeRunEvents = pgTable(
+  "route_run_events",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    routeRunId: varchar("route_run_id")
+      .notNull()
+      .references(() => routeRuns.id, { onDelete: "cascade" }),
+    eventType: routeRunEventTypeEnum("event_type").notNull(),
+    actorUserId: varchar("actor_user_id")
+      .references(() => users.id, { onDelete: "set null" }),
+    payload: jsonb("payload"), // Flexible JSON for event-specific data
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_route_run_events_run").on(table.routeRunId),
+    index("idx_route_run_events_type").on(table.eventType),
+  ]
+);
+
+export const insertRouteRunEventSchema = createInsertSchema(routeRunEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertRouteRunEvent = z.infer<typeof insertRouteRunEventSchema>;
+export type RouteRunEvent = typeof routeRunEvents.$inferSelect;
 
 // Admin settings table - stores system configuration
 export const adminSettings = pgTable("admin_settings", {
@@ -1971,6 +2131,47 @@ export const vehicleInspectionsRelations = relations(
     }),
   })
 );
+
+// ============ RouteRun Relations ============
+
+export const routeRunsRelations = relations(routeRuns, ({ one, many }) => ({
+  route: one(routes, {
+    fields: [routeRuns.routeId],
+    references: [routes.id],
+  }),
+  primaryDriver: one(users, {
+    fields: [routeRuns.primaryDriverId],
+    references: [users.id],
+  }),
+  vehicle: one(vehicles, {
+    fields: [routeRuns.vehicleId],
+    references: [vehicles.id],
+  }),
+  participants: many(routeRunParticipants),
+  events: many(routeRunEvents),
+}));
+
+export const routeRunParticipantsRelations = relations(routeRunParticipants, ({ one }) => ({
+  routeRun: one(routeRuns, {
+    fields: [routeRunParticipants.routeRunId],
+    references: [routeRuns.id],
+  }),
+  user: one(users, {
+    fields: [routeRunParticipants.userId],
+    references: [users.id],
+  }),
+}));
+
+export const routeRunEventsRelations = relations(routeRunEvents, ({ one }) => ({
+  routeRun: one(routeRuns, {
+    fields: [routeRunEvents.routeRunId],
+    references: [routeRuns.id],
+  }),
+  actor: one(users, {
+    fields: [routeRunEvents.actorUserId],
+    references: [users.id],
+  }),
+}));
 
 // ============ Color Mapping System ============
 

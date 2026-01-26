@@ -41,6 +41,9 @@ import {
   authCredentials,
   passwordResetTokens,
   emailVerificationTokens,
+  routeRuns,
+  routeRunParticipants,
+  routeRunEvents,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -121,6 +124,13 @@ import {
   type InsertAuthCredentials,
   type PasswordResetToken,
   type EmailVerificationToken,
+  type RouteRun,
+  type InsertRouteRun,
+  type UpdateRouteRun,
+  type RouteRunParticipant,
+  type InsertRouteRunParticipant,
+  type RouteRunEvent,
+  type InsertRouteRunEvent,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray, isNotNull, isNull } from "drizzle-orm";
@@ -434,6 +444,29 @@ export interface IStorage {
   markEmailVerificationTokenUsed(token: string): Promise<void>;
   deleteExpiredEmailVerificationTokens(): Promise<number>;
   setEmailVerified(userId: string, verified: boolean): Promise<void>;
+
+  // RouteRun operations (Multi-Driver Safety)
+  getRouteRun(id: string): Promise<RouteRun | undefined>;
+  getRouteRunByContext(routeId: string, serviceDate: string, shiftType: "MORNING" | "AFTERNOON" | "EXTRA"): Promise<RouteRun | undefined>;
+  getActiveRouteRunsByDriver(driverId: string, date: string): Promise<RouteRun[]>;
+  getRouteRunsForToday(routeId: string): Promise<RouteRun[]>;
+  createRouteRun(routeRun: InsertRouteRun): Promise<RouteRun>;
+  updateRouteRun(id: string, updates: UpdateRouteRun): Promise<RouteRun>;
+  startRouteRun(id: string, primaryDriverId: string): Promise<RouteRun>;
+  endRouteRun(id: string): Promise<RouteRun>;
+  finalizeRouteRun(id: string): Promise<RouteRun>;
+  cancelRouteRun(id: string): Promise<RouteRun>;
+
+  // RouteRun participant operations
+  getRouteRunParticipants(routeRunId: string): Promise<RouteRunParticipant[]>;
+  getParticipantRole(routeRunId: string, userId: string): Promise<RouteRunParticipant | undefined>;
+  addRouteRunParticipant(participant: InsertRouteRunParticipant): Promise<RouteRunParticipant>;
+  updateParticipantRole(routeRunId: string, userId: string, role: "PRIMARY" | "AID" | "VIEWER"): Promise<RouteRunParticipant>;
+  removeRouteRunParticipant(routeRunId: string, userId: string): Promise<void>;
+
+  // RouteRun event operations (audit log)
+  logRouteRunEvent(event: InsertRouteRunEvent): Promise<RouteRunEvent>;
+  getRouteRunEvents(routeRunId: string): Promise<RouteRunEvent[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5141,6 +5174,229 @@ export class DatabaseStorage implements IStorage {
         emailVerifiedAt: verified ? new Date() : null,
       })
       .where(eq(authCredentials.userId, userId));
+  }
+
+  // ============ RouteRun operations (Multi-Driver Safety) ============
+
+  async getRouteRun(id: string): Promise<RouteRun | undefined> {
+    const [run] = await db.select().from(routeRuns).where(eq(routeRuns.id, id));
+    return run;
+  }
+
+  async getRouteRunByContext(
+    routeId: string,
+    serviceDate: string,
+    shiftType: "MORNING" | "AFTERNOON" | "EXTRA"
+  ): Promise<RouteRun | undefined> {
+    const [run] = await db
+      .select()
+      .from(routeRuns)
+      .where(
+        and(
+          eq(routeRuns.routeId, routeId),
+          eq(routeRuns.serviceDate, serviceDate),
+          eq(routeRuns.shiftType, shiftType)
+        )
+      );
+    return run;
+  }
+
+  async getActiveRouteRunsByDriver(driverId: string, date: string): Promise<RouteRun[]> {
+    return await db
+      .select()
+      .from(routeRuns)
+      .where(
+        and(
+          eq(routeRuns.primaryDriverId, driverId),
+          eq(routeRuns.serviceDate, date),
+          eq(routeRuns.status, "ACTIVE")
+        )
+      );
+  }
+
+  async getRouteRunsForToday(routeId: string): Promise<RouteRun[]> {
+    const today = new Date().toISOString().split("T")[0];
+    return await db
+      .select()
+      .from(routeRuns)
+      .where(
+        and(
+          eq(routeRuns.routeId, routeId),
+          eq(routeRuns.serviceDate, today)
+        )
+      );
+  }
+
+  async createRouteRun(routeRun: InsertRouteRun): Promise<RouteRun> {
+    const [created] = await db.insert(routeRuns).values(routeRun).returning();
+    return created;
+  }
+
+  async updateRouteRun(id: string, updates: UpdateRouteRun): Promise<RouteRun> {
+    const [updated] = await db
+      .update(routeRuns)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(routeRuns.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("RouteRun not found");
+    }
+    return updated;
+  }
+
+  async startRouteRun(id: string, primaryDriverId: string): Promise<RouteRun> {
+    const [updated] = await db
+      .update(routeRuns)
+      .set({
+        status: "ACTIVE",
+        primaryDriverId,
+        startedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(routeRuns.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("RouteRun not found");
+    }
+    return updated;
+  }
+
+  async endRouteRun(id: string): Promise<RouteRun> {
+    const [updated] = await db
+      .update(routeRuns)
+      .set({
+        status: "ENDED_PENDING_REVIEW",
+        endedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(routeRuns.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("RouteRun not found");
+    }
+    return updated;
+  }
+
+  async finalizeRouteRun(id: string): Promise<RouteRun> {
+    const [updated] = await db
+      .update(routeRuns)
+      .set({
+        status: "FINALIZED",
+        finalizedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(routeRuns.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("RouteRun not found");
+    }
+    return updated;
+  }
+
+  async cancelRouteRun(id: string): Promise<RouteRun> {
+    const [updated] = await db
+      .update(routeRuns)
+      .set({
+        status: "CANCELLED",
+        updatedAt: new Date(),
+      })
+      .where(eq(routeRuns.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("RouteRun not found");
+    }
+    return updated;
+  }
+
+  // ============ RouteRun Participant operations ============
+
+  async getRouteRunParticipants(routeRunId: string): Promise<RouteRunParticipant[]> {
+    return await db
+      .select()
+      .from(routeRunParticipants)
+      .where(
+        and(
+          eq(routeRunParticipants.routeRunId, routeRunId),
+          isNull(routeRunParticipants.leftAt)
+        )
+      );
+  }
+
+  async getParticipantRole(
+    routeRunId: string,
+    userId: string
+  ): Promise<RouteRunParticipant | undefined> {
+    const [participant] = await db
+      .select()
+      .from(routeRunParticipants)
+      .where(
+        and(
+          eq(routeRunParticipants.routeRunId, routeRunId),
+          eq(routeRunParticipants.userId, userId),
+          isNull(routeRunParticipants.leftAt)
+        )
+      );
+    return participant;
+  }
+
+  async addRouteRunParticipant(
+    participant: InsertRouteRunParticipant
+  ): Promise<RouteRunParticipant> {
+    const [created] = await db
+      .insert(routeRunParticipants)
+      .values(participant)
+      .returning();
+    return created;
+  }
+
+  async updateParticipantRole(
+    routeRunId: string,
+    userId: string,
+    role: "PRIMARY" | "AID" | "VIEWER"
+  ): Promise<RouteRunParticipant> {
+    const [updated] = await db
+      .update(routeRunParticipants)
+      .set({ role })
+      .where(
+        and(
+          eq(routeRunParticipants.routeRunId, routeRunId),
+          eq(routeRunParticipants.userId, userId),
+          isNull(routeRunParticipants.leftAt)
+        )
+      )
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("Participant not found");
+    }
+    return updated;
+  }
+
+  async removeRouteRunParticipant(routeRunId: string, userId: string): Promise<void> {
+    await db
+      .update(routeRunParticipants)
+      .set({ leftAt: new Date() })
+      .where(
+        and(
+          eq(routeRunParticipants.routeRunId, routeRunId),
+          eq(routeRunParticipants.userId, userId),
+          isNull(routeRunParticipants.leftAt)
+        )
+      );
+  }
+
+  // ============ RouteRun Event operations (audit log) ============
+
+  async logRouteRunEvent(event: InsertRouteRunEvent): Promise<RouteRunEvent> {
+    const [created] = await db.insert(routeRunEvents).values(event).returning();
+    return created;
+  }
+
+  async getRouteRunEvents(routeRunId: string): Promise<RouteRunEvent[]> {
+    return await db
+      .select()
+      .from(routeRunEvents)
+      .where(eq(routeRunEvents.routeRunId, routeRunId))
+      .orderBy(desc(routeRunEvents.createdAt));
   }
 }
 

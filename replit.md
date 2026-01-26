@@ -72,6 +72,12 @@ Preferred communication style: Simple, everyday language.
     - **BambooHR Payroll Integration**: Automated driver clock-in/out data export with federal/Arizona overtime rules, including employee mapping, pay period selection, preview, batch submission, and audit trail.
     - **Pull-to-Refresh**: Mobile-optimized gesture for manual data refresh on driver and parent pages. Uses single scroll container architecture with RefreshContext for callback management. Integrated pages: driver dashboard/routes/announcements, parent dashboard/tracking/messages.
     - **iOS Post-Auth Layout Fix**: Addresses WKWebView white bar issue after login/signup by re-applying StatusBar overlay settings and forcing viewport recalculation with double RAF + resize event. Ionic CSS backgrounds are overridden to match app theme.
+    - **RouteRun System**: Multi-driver route execution tracking with real-time coordination.
+      - **Data Model**: route_runs (execution instances), route_run_participants (multi-driver roles), route_run_events (audit trail)
+      - **Status Flow**: SCHEDULED → ACTIVE → ENDED_PENDING_REVIEW → FINALIZED (or CANCELLED)
+      - **Participant Roles**: PRIMARY (can start/end, mark attendance), AID (helper driver), VIEWER (read-only)
+      - **API Endpoints**: `/api/route-runs` CRUD, `/api/route-runs/:id/start|end|finalize|join|leave`, `/api/route-runs/:id/events`
+      - **WebSocket Rooms**: Clients subscribe via `{type: "subscribe", room: "route_run:{id}"}` for real-time updates
 
 ## Backlog / Future Features
 

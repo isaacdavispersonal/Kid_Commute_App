@@ -49,6 +49,41 @@ export interface RoutesBootstrapResult {
   wss: WebSocketServer;
 }
 
+// WebSocket room tracking for route run broadcasts
+// Maps room name to set of WebSocket clients subscribed to that room
+const wsRooms = new Map<string, Set<WebSocket>>();
+
+// Helper to broadcast a message to all clients in a specific room
+function broadcastToRoom(room: string, message: any) {
+  const clients = wsRooms.get(room);
+  if (!clients) return;
+  
+  const data = JSON.stringify(message);
+  clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
+}
+
+// Helper to subscribe a client to a room
+function subscribeToRoom(ws: WebSocket, room: string) {
+  if (!wsRooms.has(room)) {
+    wsRooms.set(room, new Set());
+  }
+  wsRooms.get(room)!.add(ws);
+}
+
+// Helper to unsubscribe a client from all rooms
+function unsubscribeFromAllRooms(ws: WebSocket) {
+  wsRooms.forEach((clients, room) => {
+    clients.delete(ws);
+    if (clients.size === 0) {
+      wsRooms.delete(room);
+    }
+  });
+}
+
 // Helper function to calculate net hours worked for a single shift
 // Reuses the same state machine logic as calculatePayrollData
 async function calculateShiftHours(shiftId: string, driverName: string): Promise<{
@@ -5585,6 +5620,508 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // ============ RouteRun Routes (Multi-Driver Safety) ============
+
+  // Helper to check if user has access to a route
+  async function canAccessRoute(userId: string, userRole: string, routeId: string): Promise<boolean> {
+    // Admins can access all routes
+    if (userRole === "admin") return true;
+    
+    // Drivers can access routes they are assigned to
+    if (userRole === "driver") {
+      const assignments = await storage.getDriverAssignmentsByDriver(userId);
+      return assignments.some(a => a.routeId === routeId);
+    }
+    
+    // Parents can access routes their children are on
+    if (userRole === "parent") {
+      const students = await storage.getStudentsByHousehold(userId);
+      return students.some(s => s.assignedRouteId === routeId);
+    }
+    
+    return false;
+  }
+
+  // Get active route run by context (route + date + shift type)
+  app.get(
+    "/api/route-runs/active",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const { routeId, date, shiftType } = req.query;
+        if (!routeId || !date || !shiftType) {
+          return res.status(400).json({ 
+            message: "routeId, date, and shiftType are required" 
+          });
+        }
+        
+        // Validate shiftType
+        if (!["MORNING", "AFTERNOON", "EXTRA"].includes(shiftType as string)) {
+          return res.status(400).json({ message: "Invalid shiftType" });
+        }
+        
+        // Check authorization for this route
+        const canAccess = await canAccessRoute(req.user.id, req.user.role, routeId as string);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized to access this route" });
+        }
+        
+        const run = await storage.getRouteRunByContext(
+          routeId as string, 
+          date as string, 
+          shiftType as "MORNING" | "AFTERNOON" | "EXTRA"
+        );
+        
+        if (!run) {
+          return res.status(404).json({ message: "No route run found" });
+        }
+        
+        // Include participants
+        const participants = await storage.getRouteRunParticipants(run.id);
+        
+        res.json({ routeRun: run, participants });
+      } catch (error) {
+        console.error("Error getting active route run:", error);
+        res.status(500).json({ message: "Failed to get route run" });
+      }
+    }
+  );
+
+  // Get a specific route run by ID
+  app.get(
+    "/api/route-runs/:id",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const run = await storage.getRouteRun(id);
+        
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        // Check authorization for this route
+        const canAccess = await canAccessRoute(req.user.id, req.user.role, run.routeId);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized to access this route run" });
+        }
+        
+        const participants = await storage.getRouteRunParticipants(run.id);
+        const events = await storage.getRouteRunEvents(run.id);
+        
+        res.json({ routeRun: run, participants, events });
+      } catch (error) {
+        console.error("Error getting route run:", error);
+        res.status(500).json({ message: "Failed to get route run" });
+      }
+    }
+  );
+
+  // Create or get existing route run for a context
+  app.post(
+    "/api/route-runs",
+    requireAuth,
+    requireRole("driver", "admin"),
+    async (req: any, res) => {
+      try {
+        const { routeId, serviceDate, shiftType, vehicleId } = req.body;
+        
+        if (!routeId || !serviceDate || !shiftType) {
+          return res.status(400).json({ 
+            message: "routeId, serviceDate, and shiftType are required" 
+          });
+        }
+        
+        // Validate shiftType
+        if (!["MORNING", "AFTERNOON", "EXTRA"].includes(shiftType)) {
+          return res.status(400).json({ message: "Invalid shiftType" });
+        }
+        
+        // Check authorization for this route (drivers must be assigned)
+        const canAccess = await canAccessRoute(req.user.id, req.user.role, routeId);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized to create route run for this route" });
+        }
+        
+        // Check if a run already exists for this context
+        const existingRun = await storage.getRouteRunByContext(
+          routeId, 
+          serviceDate, 
+          shiftType
+        );
+        
+        if (existingRun) {
+          // Return existing run instead of creating duplicate
+          const participants = await storage.getRouteRunParticipants(existingRun.id);
+          return res.json({ routeRun: existingRun, participants, created: false });
+        }
+        
+        // Create new route run
+        const newRun = await storage.createRouteRun({
+          routeId,
+          serviceDate,
+          shiftType,
+          vehicleId: vehicleId || null,
+          status: "SCHEDULED",
+        });
+        
+        // Log creation event
+        await storage.logRouteRunEvent({
+          routeRunId: newRun.id,
+          eventType: "RUN_CREATED",
+          actorUserId: req.user.id,
+          payload: { routeId, serviceDate, shiftType },
+        });
+        
+        res.status(201).json({ routeRun: newRun, participants: [], created: true });
+      } catch (error) {
+        console.error("Error creating route run:", error);
+        res.status(500).json({ message: "Failed to create route run" });
+      }
+    }
+  );
+
+  // Start a route run (requires driver to be clocked in)
+  app.post(
+    "/api/route-runs/:id/start",
+    requireAuth,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const driverId = req.user.id;
+        
+        // Get the route run
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        // Check authorization - driver must be assigned to this route
+        const canAccess = await canAccessRoute(driverId, req.user.role, run.routeId);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized to start this route run" });
+        }
+        
+        // Check if already started
+        if (run.status === "ACTIVE") {
+          const participants = await storage.getRouteRunParticipants(run.id);
+          return res.json({ routeRun: run, participants, message: "Route already active" });
+        }
+        
+        if (run.status !== "SCHEDULED") {
+          return res.status(400).json({ 
+            message: `Cannot start route run with status: ${run.status}` 
+          });
+        }
+        
+        // Verify driver is clocked in
+        const clockedIn = await storage.isDriverClockedIn(driverId);
+        if (!clockedIn) {
+          return res.status(400).json({ 
+            message: "You must clock in before starting a route" 
+          });
+        }
+        
+        // Start the route run
+        const startedRun = await storage.startRouteRun(id, driverId);
+        
+        // Add driver as PRIMARY participant if not already
+        const existingParticipant = await storage.getParticipantRole(id, driverId);
+        if (!existingParticipant) {
+          await storage.addRouteRunParticipant({
+            routeRunId: id,
+            userId: driverId,
+            role: "PRIMARY",
+          });
+        } else if (existingParticipant.role !== "PRIMARY") {
+          await storage.updateParticipantRole(id, driverId, "PRIMARY");
+        }
+        
+        // Log start event
+        await storage.logRouteRunEvent({
+          routeRunId: id,
+          eventType: "RUN_STARTED",
+          actorUserId: driverId,
+          payload: { primaryDriverId: driverId },
+        });
+        
+        const participants = await storage.getRouteRunParticipants(id);
+        
+        // Broadcast via WebSocket
+        broadcastToRoom(`route_run:${id}`, {
+          type: "route_run.started",
+          routeRunId: id,
+          primaryDriverId: driverId,
+          status: "ACTIVE",
+        });
+        
+        res.json({ routeRun: startedRun, participants });
+      } catch (error) {
+        console.error("Error starting route run:", error);
+        res.status(500).json({ message: "Failed to start route run" });
+      }
+    }
+  );
+
+  // End a route run (soft close - allows corrections)
+  app.post(
+    "/api/route-runs/:id/end",
+    requireAuth,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const driverId = req.user.id;
+        
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        // Check authorization - driver must be assigned to this route
+        const canAccess = await canAccessRoute(driverId, req.user.role, run.routeId);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized to end this route run" });
+        }
+        
+        // Only PRIMARY can end the run
+        const participant = await storage.getParticipantRole(id, driverId);
+        if (!participant || participant.role !== "PRIMARY") {
+          return res.status(403).json({ 
+            message: "Only the primary driver can end the route" 
+          });
+        }
+        
+        if (run.status !== "ACTIVE") {
+          return res.status(400).json({ 
+            message: `Cannot end route run with status: ${run.status}` 
+          });
+        }
+        
+        const endedRun = await storage.endRouteRun(id);
+        
+        // Log end event
+        await storage.logRouteRunEvent({
+          routeRunId: id,
+          eventType: "RUN_ENDED",
+          actorUserId: driverId,
+          payload: {},
+        });
+        
+        // Broadcast via WebSocket
+        broadcastToRoom(`route_run:${id}`, {
+          type: "route_run.ended",
+          routeRunId: id,
+          status: "ENDED_PENDING_REVIEW",
+        });
+        
+        res.json({ routeRun: endedRun });
+      } catch (error) {
+        console.error("Error ending route run:", error);
+        res.status(500).json({ message: "Failed to end route run" });
+      }
+    }
+  );
+
+  // Finalize a route run (locks corrections)
+  app.post(
+    "/api/route-runs/:id/finalize",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        if (run.status === "FINALIZED") {
+          return res.json({ routeRun: run, message: "Already finalized" });
+        }
+        
+        if (run.status !== "ENDED_PENDING_REVIEW") {
+          return res.status(400).json({ 
+            message: `Cannot finalize route run with status: ${run.status}` 
+          });
+        }
+        
+        const finalizedRun = await storage.finalizeRouteRun(id);
+        
+        // Log finalize event
+        await storage.logRouteRunEvent({
+          routeRunId: id,
+          eventType: "RUN_FINALIZED",
+          actorUserId: req.user.id,
+          payload: {},
+        });
+        
+        // Broadcast via WebSocket
+        broadcastToRoom(`route_run:${id}`, {
+          type: "route_run.finalized",
+          routeRunId: id,
+          status: "FINALIZED",
+        });
+        
+        res.json({ routeRun: finalizedRun });
+      } catch (error) {
+        console.error("Error finalizing route run:", error);
+        res.status(500).json({ message: "Failed to finalize route run" });
+      }
+    }
+  );
+
+  // Join a route run as a participant
+  app.post(
+    "/api/route-runs/:id/join",
+    requireAuth,
+    requireRole("driver", "admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const userId = req.user.id;
+        const { role } = req.body; // Optional, defaults to VIEWER
+        
+        // Validate role if provided
+        if (role && !["PRIMARY", "AID", "VIEWER"].includes(role)) {
+          return res.status(400).json({ message: "Invalid role" });
+        }
+        
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        // Check authorization - must be assigned to this route
+        const canAccess = await canAccessRoute(userId, req.user.role, run.routeId);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized to join this route run" });
+        }
+        
+        // Check if already a participant
+        const existing = await storage.getParticipantRole(id, userId);
+        if (existing) {
+          return res.json({ participant: existing, message: "Already a participant" });
+        }
+        
+        // Determine role - only allow PRIMARY if run not started
+        let assignedRole: "PRIMARY" | "AID" | "VIEWER" = role || "VIEWER";
+        if (assignedRole === "PRIMARY" && run.status === "ACTIVE" && run.primaryDriverId) {
+          assignedRole = "AID"; // Can't be PRIMARY if already has one
+        }
+        
+        const participant = await storage.addRouteRunParticipant({
+          routeRunId: id,
+          userId,
+          role: assignedRole,
+        });
+        
+        // Log join event
+        await storage.logRouteRunEvent({
+          routeRunId: id,
+          eventType: "PARTICIPANT_JOINED",
+          actorUserId: userId,
+          payload: { role: assignedRole },
+        });
+        
+        // Broadcast via WebSocket
+        broadcastToRoom(`route_run:${id}`, {
+          type: "route_run.participant_joined",
+          routeRunId: id,
+          userId,
+          role: assignedRole,
+        });
+        
+        res.json({ participant });
+      } catch (error) {
+        console.error("Error joining route run:", error);
+        res.status(500).json({ message: "Failed to join route run" });
+      }
+    }
+  );
+
+  // Leave a route run
+  app.post(
+    "/api/route-runs/:id/leave",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const userId = req.user.id;
+        
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        // Check if user is actually a participant (authorization via participation)
+        const participant = await storage.getParticipantRole(id, userId);
+        if (!participant) {
+          return res.status(403).json({ message: "You are not a participant of this route run" });
+        }
+        
+        // PRIMARY cannot leave while route is active
+        if (participant.role === "PRIMARY" && run.status === "ACTIVE") {
+          return res.status(400).json({ 
+            message: "Primary driver cannot leave an active route. End the route first." 
+          });
+        }
+        
+        await storage.removeRouteRunParticipant(id, userId);
+        
+        // Log leave event
+        await storage.logRouteRunEvent({
+          routeRunId: id,
+          eventType: "PARTICIPANT_LEFT",
+          actorUserId: userId,
+          payload: {},
+        });
+        
+        // Broadcast via WebSocket
+        broadcastToRoom(`route_run:${id}`, {
+          type: "route_run.participant_left",
+          routeRunId: id,
+          userId,
+        });
+        
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error leaving route run:", error);
+        res.status(500).json({ message: "Failed to leave route run" });
+      }
+    }
+  );
+
+  // Get route run events (audit log)
+  app.get(
+    "/api/route-runs/:id/events",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        
+        const run = await storage.getRouteRun(id);
+        if (!run) {
+          return res.status(404).json({ message: "Route run not found" });
+        }
+        
+        // Check authorization for this route
+        const canAccess = await canAccessRoute(req.user.id, req.user.role, run.routeId);
+        if (!canAccess) {
+          return res.status(403).json({ message: "Not authorized to view events for this route run" });
+        }
+        
+        const events = await storage.getRouteRunEvents(id);
+        res.json({ events });
+      } catch (error) {
+        console.error("Error getting route run events:", error);
+        res.status(500).json({ message: "Failed to get events" });
+      }
+    }
+  );
+
   // ============ Route Progress routes (Parent) ============
 
   // Get route progress for student
@@ -8027,11 +8564,87 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
 
     console.log(`WebSocket authenticated: userId=${userId}, role=${userRole}, routes=[${authorizedRoutes.join(', ')}]`);
 
-    ws.on("message", (data) => {
-      console.log("Received WebSocket message:", data.toString());
+    ws.on("message", async (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        console.log("Received WebSocket message:", message);
+        
+        // Handle room subscription requests
+        if (message.type === "subscribe" && message.room) {
+          // Allow subscribing to route_run rooms if authorized
+          if (message.room.startsWith("route_run:")) {
+            const routeRunId = message.room.replace("route_run:", "");
+            
+            // Authorization check for route run access
+            const wsUserId = (ws as any).userId;
+            const wsUserRole = (ws as any).userRole;
+            
+            // Require authentication
+            if (!wsUserId) {
+              ws.send(JSON.stringify({ 
+                type: "error", 
+                message: "Not authenticated",
+                room: message.room
+              }));
+              console.log(`Client rejected from room ${message.room}: not authenticated`);
+              return;
+            }
+            
+            // Fresh authorization check (not cached) using canAccessRoute
+            const routeRun = await storage.getRouteRun(routeRunId);
+            if (!routeRun) {
+              ws.send(JSON.stringify({ 
+                type: "error", 
+                message: "Route run not found",
+                room: message.room
+              }));
+              console.log(`Client rejected from room ${message.room}: route run not found`);
+              return;
+            }
+            
+            // Check authorization using fresh route assignment data
+            const authorized = await canAccessRoute(wsUserId.toString(), wsUserRole, routeRun.routeId);
+            
+            if (!authorized) {
+              ws.send(JSON.stringify({ 
+                type: "error", 
+                message: "Not authorized to subscribe to this route run",
+                room: message.room
+              }));
+              console.log(`Client rejected from room ${message.room}: not authorized`);
+              return;
+            }
+            
+            subscribeToRoom(ws, message.room);
+            ws.send(JSON.stringify({ 
+              type: "subscribed", 
+              room: message.room 
+            }));
+            console.log(`Client subscribed to room: ${message.room}`);
+          }
+        } else if (message.type === "unsubscribe" && message.room) {
+          // Handle unsubscription
+          const clients = wsRooms.get(message.room);
+          if (clients) {
+            clients.delete(ws);
+            if (clients.size === 0) {
+              wsRooms.delete(message.room);
+            }
+          }
+          ws.send(JSON.stringify({ 
+            type: "unsubscribed", 
+            room: message.room 
+          }));
+          console.log(`Client unsubscribed from room: ${message.room}`);
+        }
+      } catch (e) {
+        console.log("Non-JSON WebSocket message:", data.toString());
+      }
     });
 
     ws.on("close", () => {
+      // Clean up room subscriptions when client disconnects
+      unsubscribeFromAllRooms(ws);
       console.log("WebSocket client disconnected");
     });
   });
