@@ -17,8 +17,36 @@ export function PullToRefresh({
 }: PullToRefreshProps) {
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
+  
+  // Use refs for mutable state accessed by event handlers
+  // This prevents re-attaching listeners on every state change
+  const isPullingRef = useRef(false);
+  const pullDistanceRef = useRef(0);
   const touchStartY = useRef(0);
   const touchStartScrollTop = useRef(0);
+  const listenersAttachedRef = useRef(false);
+  
+  // Store callbacks in refs to avoid stale closures
+  const onRefreshRef = useRef(onRefresh);
+  const isRefreshingRef = useRef(isRefreshing);
+  
+  // Keep refs in sync with props/state
+  useEffect(() => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
+  
+  useEffect(() => {
+    isRefreshingRef.current = isRefreshing;
+  }, [isRefreshing]);
+  
+  // Sync ref with state for handlers
+  useEffect(() => {
+    isPullingRef.current = isPulling;
+  }, [isPulling]);
+  
+  useEffect(() => {
+    pullDistanceRef.current = pullDistance;
+  }, [pullDistance]);
 
   const PULL_THRESHOLD = 80;
   const MAX_PULL = 120;
@@ -34,15 +62,30 @@ export function PullToRefresh({
     );
     return openOverlays.length > 0;
   }, []);
+  
+  // Reset state when dialog opens mid-pull
+  useEffect(() => {
+    if (disabled) {
+      setIsPulling(false);
+      setPullDistance(0);
+    }
+  }, [disabled]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
-    if (!container || disabled) return;
-
+    
+    // Define handlers outside conditional so cleanup can always reference them
     const handleTouchStart = (e: TouchEvent) => {
-      if (isRefreshing || isDialogOpen()) return;
+      if (isRefreshingRef.current || isDialogOpen()) {
+        // Reset state if dialog opened
+        if (isPullingRef.current) {
+          setIsPulling(false);
+          setPullDistance(0);
+        }
+        return;
+      }
       
-      const scrollTop = container.scrollTop;
+      const scrollTop = container?.scrollTop ?? 0;
       if (scrollTop > 5) return;
       
       touchStartY.current = e.touches[0].clientY;
@@ -51,9 +94,18 @@ export function PullToRefresh({
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!isPulling || isRefreshing || isDialogOpen()) return;
+      // Check for dialog opening mid-gesture
+      if (isDialogOpen()) {
+        if (isPullingRef.current) {
+          setIsPulling(false);
+          setPullDistance(0);
+        }
+        return;
+      }
       
-      const scrollTop = container.scrollTop;
+      if (!isPullingRef.current || isRefreshingRef.current) return;
+      
+      const scrollTop = container?.scrollTop ?? 0;
       if (scrollTop > 5) {
         setIsPulling(false);
         setPullDistance(0);
@@ -75,27 +127,48 @@ export function PullToRefresh({
     };
 
     const handleTouchEnd = async () => {
-      if (!isPulling) return;
+      if (!isPullingRef.current) return;
+      
+      const currentPullDistance = pullDistanceRef.current;
+      const currentIsRefreshing = isRefreshingRef.current;
       
       setIsPulling(false);
       
-      if (pullDistance >= PULL_THRESHOLD && !isRefreshing) {
-        await onRefresh();
+      if (currentPullDistance >= PULL_THRESHOLD && !currentIsRefreshing) {
+        await onRefreshRef.current();
       }
       
       setPullDistance(0);
     };
+    
+    // Cleanup function - always runs, removes listeners unconditionally
+    const cleanup = () => {
+      if (container && listenersAttachedRef.current) {
+        container.removeEventListener("touchstart", handleTouchStart);
+        container.removeEventListener("touchmove", handleTouchMove);
+        container.removeEventListener("touchend", handleTouchEnd);
+        listenersAttachedRef.current = false;
+      }
+    };
+    
+    // Skip attaching if disabled or no container
+    if (!container || disabled) {
+      // Reset state when becoming disabled
+      if (isPullingRef.current) {
+        setIsPulling(false);
+        setPullDistance(0);
+      }
+      return cleanup;
+    }
 
+    // Attach listeners
     container.addEventListener("touchstart", handleTouchStart, { passive: true });
     container.addEventListener("touchmove", handleTouchMove, { passive: false });
     container.addEventListener("touchend", handleTouchEnd, { passive: true });
+    listenersAttachedRef.current = true;
 
-    return () => {
-      container.removeEventListener("touchstart", handleTouchStart);
-      container.removeEventListener("touchmove", handleTouchMove);
-      container.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [scrollContainerRef, isPulling, pullDistance, isRefreshing, onRefresh, disabled, isDialogOpen]);
+    return cleanup;
+  }, [scrollContainerRef, disabled, isDialogOpen]);
 
   const showIndicator = pullDistance > 0 || isRefreshing;
   const progress = Math.min(pullDistance / PULL_THRESHOLD, 1);
