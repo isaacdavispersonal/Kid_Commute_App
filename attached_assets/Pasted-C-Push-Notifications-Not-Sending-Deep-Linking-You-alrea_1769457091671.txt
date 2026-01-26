@@ -1,0 +1,116 @@
+C) Push Notifications Not Sending + Deep Linking
+
+You already have Firebase/APNs configured, so we treat this as an app logic / device token / payload routing issue.
+
+C1) Required device token registration (must be verified)
+
+Implement/verify:
+
+On app launch (and after login):
+
+request notification permission
+
+obtain FCM token
+
+send token to backend:
+POST /devices/register with { user_id, fcm_token, platform, app_version }
+
+Table: devices
+
+id
+
+user_id
+
+platform (ios|android|web)
+
+fcm_token
+
+last_seen_at
+
+created_at
+
+revoked_at nullable
+
+Rules
+
+One user can have multiple device tokens
+
+Token updates must upsert (token changes happen frequently)
+
+C2) When to send push (server rules)
+
+Send push notifications for:
+
+New DM/message to a user
+
+New announcement relevant to a user (optional but recommended)
+
+Operational alerts (later)
+
+Important: push should send when the recipient is off-app, but it’s OK to also send while on-app depending on your UX preference.
+
+C3) Push payload structure (must support deep link)
+
+When sending push, include:
+
+title, body
+
+data payload fields:
+
+type: message|announcement|route_run|...
+
+thread_id for messages
+
+announcement_id
+
+route_run_id if relevant
+
+deeplink: e.g. /messages/<thread_id> or /announcements/<id>
+
+C4) Deep link handling in Capacitor (required)
+
+When user taps push notification:
+
+app opens
+
+app navigates to correct screen based on payload deeplink or type
+
+This needs:
+
+a central “notification router” that:
+
+waits for auth state ready
+
+then navigates to the correct route
+
+C5) “Push not sending” troubleshooting checklist (Replit AI must implement logs)
+
+On backend push send attempt, log:
+
+target user_id
+
+number of device tokens found
+
+FCM response status per token
+
+errors like “invalid registration token” → mark device token revoked
+
+On client, log (debug mode):
+
+permission status
+
+current FCM token
+
+successful /devices/register response
+
+C6) Acceptance tests
+
+Driver logs in on iPhone, grants permission → device token stored in DB
+
+Admin sends DM to driver while driver app is closed → driver receives push within ~seconds
+
+Tapping push opens app and navigates directly to:
+
+the DM thread (messages)
+
+If token is invalid, backend stops using it and does not silently fail

@@ -8410,31 +8410,75 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req: any, res) => {
       try {
         const adminId = req.user.id;
-        const { title, content, targetRole } = req.body;
+        const { title, content, targetRole, routeId, audienceType: requestedAudienceType } = req.body;
 
-        if (!title || !content || !targetRole) {
-          return res.status(400).json({ message: "Title, content, and target role are required" });
+        // Log request details
+        console.log(`[announcements] POST /announcements - actor=${adminId}, audience_type=${requestedAudienceType || targetRole}, route_id=${routeId || "none"}`);
+
+        if (!title || !content) {
+          return res.status(400).json({ message: "Title and content are required" });
         }
 
-        if (targetRole !== "driver" && targetRole !== "parent") {
-          return res.status(400).json({ message: "Target role must be 'driver' or 'parent'" });
+        // Valid audience types
+        const validAudienceTypes = ["ORG_ALL", "ROLE_DRIVERS", "ROLE_PARENTS", "ROUTE_DRIVERS", "ROUTE_PARENTS"];
+
+        // Determine audience type
+        let audienceType = requestedAudienceType;
+        if (!audienceType && targetRole) {
+          audienceType = targetRole === "driver" ? "ROLE_DRIVERS" : "ROLE_PARENTS";
+        }
+        if (!audienceType) {
+          return res.status(400).json({ message: "Audience type or target role is required" });
         }
 
-        // Get target users count for delivery tracking
-        const targetUsers = await storage.getUsersByRole(targetRole);
+        // Validate audienceType against enum
+        if (!validAudienceTypes.includes(audienceType)) {
+          console.log(`[announcements] Rejected: invalid audience_type=${audienceType}`);
+          return res.status(400).json({ message: `Invalid audience type. Must be one of: ${validAudienceTypes.join(", ")}` });
+        }
+
+        // Validate route-scoped announcements require route_id
+        const isRouteScopedAudience = audienceType === "ROUTE_DRIVERS" || audienceType === "ROUTE_PARENTS";
+        if (isRouteScopedAudience && !routeId) {
+          console.log(`[announcements] Rejected: route-scoped audience ${audienceType} requires route_id`);
+          return res.status(400).json({ message: "Route ID is required for route-scoped announcements" });
+        }
+
+        // Determine target role for backwards compatibility
+        const isDriverAudience = audienceType === "ROLE_DRIVERS" || audienceType === "ROUTE_DRIVERS";
+        const effectiveTargetRole = targetRole || (isDriverAudience ? "driver" : "parent");
+
+        // Get target users for delivery tracking
+        let targetUsers: any[] = [];
+        if (audienceType === "ROUTE_DRIVERS" && routeId) {
+          targetUsers = await storage.getDriversForRoute(routeId);
+        } else if (audienceType === "ROUTE_PARENTS" && routeId) {
+          targetUsers = await storage.getParentsForRoute(routeId);
+        } else if (audienceType === "ROLE_DRIVERS") {
+          targetUsers = await storage.getUsersByRole("driver");
+        } else if (audienceType === "ROLE_PARENTS") {
+          targetUsers = await storage.getUsersByRole("parent");
+        } else if (audienceType === "ORG_ALL") {
+          const drivers = await storage.getUsersByRole("driver");
+          const parents = await storage.getUsersByRole("parent");
+          targetUsers = [...drivers, ...parents];
+        }
         const targetCount = targetUsers.length;
 
-        // Map targetRole to audienceType
-        const audienceType = targetRole === "driver" ? "ROLE_DRIVERS" : "ROLE_PARENTS";
+        console.log(`[announcements] Target users resolved: count=${targetCount}, audience_type=${audienceType}${routeId ? `, route_id=${routeId}` : ""}`);
 
         const announcement = await storage.createAnnouncement({
           adminId,
           title,
           content,
-          targetRole,
+          targetRole: effectiveTargetRole,
           audienceType,
+          routeId: routeId || null,
           targetCount,
         });
+
+        // Log insert success
+        console.log(`[announcements] Created announcement_id=${announcement.id}, audience_type=${audienceType}, target_count=${targetCount}`);
 
         // Broadcast via WebSocket (legacy)
         if (wss) {
@@ -8450,9 +8494,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           });
         }
 
-        // Emit via Socket.IO (org-wide broadcast)
+        // Emit via Socket.IO with appropriate targeting
         emitAnnouncementCreated({
           announcement,
+          targetRouteId: routeId || undefined,
+          audienceType,
         });
 
         // Send push notifications to target users and track delivery

@@ -171,8 +171,22 @@ export function useAnnouncementSocket() {
 
   useSocketEvent("announcement.created", (data) => {
     console.log("[Socket] Announcement created:", data);
+    
+    // Invalidate announcement lists
     queryClient.invalidateQueries({ queryKey: ["/api/driver/announcements"] });
     queryClient.invalidateQueries({ queryKey: ["/api/parent/announcements"] });
     queryClient.invalidateQueries({ queryKey: ["/api/admin/announcements"] });
+    
+    // Invalidate unread counts/badges to update badge indicators
+    queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/driver/notifications/unread-count"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/parent/notifications/unread-count"] });
+    
+    // Invalidate announcement history for admin
+    queryClient.invalidateQueries({ 
+      predicate: (query) => 
+        typeof query.queryKey[0] === "string" && 
+        query.queryKey[0].includes("/api/admin/announcement-history")
+    });
   });
 }

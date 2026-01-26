@@ -98,7 +98,15 @@ export function initSocketServer({ httpServer }: SocketServerOptions): Server {
     authSocket.join(`user:${authSocket.userId}`);
     authSocket.join("org:default");
     
-    console.log(`[Socket.IO] Joined rooms: user:${authSocket.userId}, org:default`);
+    // Join route rooms for route-scoped announcements
+    if (authSocket.authorizedRoutes && authSocket.authorizedRoutes.length > 0) {
+      for (const routeId of authSocket.authorizedRoutes) {
+        authSocket.join(`route:${routeId}`);
+      }
+      console.log(`[Socket.IO] Joined rooms: user:${authSocket.userId}, org:default, routes: ${authSocket.authorizedRoutes.join(", ")}`);
+    } else {
+      console.log(`[Socket.IO] Joined rooms: user:${authSocket.userId}, org:default`);
+    }
 
     authSocket.emit("connected", {
       userId: authSocket.userId,
@@ -232,13 +240,32 @@ export function emitAttendanceUpdated(routeRunId: string, data: {
 export function emitAnnouncementCreated(data: {
   announcement: any;
   targetRouteId?: string;
+  audienceType?: string;
 }) {
+  if (!io) {
+    console.warn("[Socket.IO] Cannot emit announcement.created - server not initialized");
+    return;
+  }
+
+  const announcementId = data.announcement?.id || "unknown";
+  const audienceType = data.audienceType || data.announcement?.audienceType;
+
   if (data.targetRouteId) {
-    if (io) {
-      io.to(`route:${data.targetRouteId}`).emit("announcement.created", data);
-    }
+    // Route-scoped announcement
+    const room = `route:${data.targetRouteId}`;
+    const roomClients = io.sockets.adapter.rooms.get(room);
+    const clientCount = roomClients ? roomClients.size : 0;
+    
+    console.log(`[Socket.IO] Emitting announcement.created to room=${room}, clients=${clientCount}, announcement_id=${announcementId}, audience_type=${audienceType}`);
+    io.to(room).emit("announcement.created", data);
   } else {
-    emitToOrg("announcement.created", data);
+    // Org-wide announcement
+    const room = "org:default";
+    const roomClients = io.sockets.adapter.rooms.get(room);
+    const clientCount = roomClients ? roomClients.size : 0;
+    
+    console.log(`[Socket.IO] Emitting announcement.created to room=${room}, clients=${clientCount}, announcement_id=${announcementId}, audience_type=${audienceType}`);
+    io.to(room).emit("announcement.created", data);
   }
 }
 

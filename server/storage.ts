@@ -149,6 +149,8 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
   getUsersByRole(role: "admin" | "driver" | "parent"): Promise<User[]>;
+  getDriversForRoute(routeId: string): Promise<User[]>;
+  getParentsForRoute(routeId: string): Promise<User[]>;
   getUsersByPhones(phones: string[]): Promise<User[]>;
   updateUserRole(userId: string, newRole: "admin" | "driver" | "parent"): Promise<User>;
   updateUserProfile(userId: string, profile: UpdateProfile): Promise<User>;
@@ -604,6 +606,54 @@ export class DatabaseStorage implements IStorage {
 
   async getUsersByRole(role: "admin" | "driver" | "parent"): Promise<User[]> {
     return await db.select().from(users).where(eq(users.role, role)).orderBy(desc(users.createdAt));
+  }
+
+  async getDriversForRoute(routeId: string): Promise<User[]> {
+    const assignments = await db
+      .select({ userId: driverAssignments.driverId })
+      .from(driverAssignments)
+      .where(eq(driverAssignments.routeId, routeId));
+    
+    if (assignments.length === 0) return [];
+    
+    const driverIds = assignments.map(a => a.userId);
+    return await db
+      .select()
+      .from(users)
+      .where(and(eq(users.role, "driver"), inArray(users.id, driverIds)));
+  }
+
+  async getParentsForRoute(routeId: string): Promise<User[]> {
+    // Get students on this route (direct assignment)
+    const directStudents = await db
+      .select()
+      .from(students)
+      .where(eq(students.assignedRouteId, routeId));
+    
+    // Get students from junction table (multi-route assignment)
+    const junctionStudents = await db
+      .select({ student: students })
+      .from(studentRoutes)
+      .innerJoin(students, eq(studentRoutes.studentId, students.id))
+      .where(eq(studentRoutes.routeId, routeId));
+    
+    // Collect guardian phones from all students
+    const guardianPhones = new Set<string>();
+    for (const s of directStudents) {
+      for (const phone of s.guardianPhones) {
+        if (phone) guardianPhones.add(phone);
+      }
+    }
+    for (const { student } of junctionStudents) {
+      for (const phone of student.guardianPhones) {
+        if (phone) guardianPhones.add(phone);
+      }
+    }
+    
+    if (guardianPhones.size === 0) return [];
+    
+    // Find parent users by phone number
+    return await this.getUsersByPhones(Array.from(guardianPhones));
   }
 
   async getUsersByPhones(phones: string[]): Promise<User[]> {
