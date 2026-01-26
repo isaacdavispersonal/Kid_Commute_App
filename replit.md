@@ -52,6 +52,10 @@ Preferred communication style: Simple, everyday language.
     - **Messaging System**: Route-based messaging between drivers and parents, with admin intervention.
     - **Announcement System**: Dismissible announcements for users, route-specific broadcasts, enhanced admin broadcasts, and announcement history with delivery diagnostics.
       - **Admin Announcement History**: Tabbed interface (Create/History) at `/admin/announcements` with filters (search, audience type), pagination, and detailed delivery diagnostics (target count, success/failure counts, push timing, error messages).
+      - **Audience Types**: ORG_ALL (all drivers + parents), ROLE_DRIVERS, ROLE_PARENTS, ROUTE_DRIVERS (drivers on specific route), ROUTE_PARENTS (parents with students on route).
+      - **Route-Scoped Targeting**: Route-scoped announcements (ROUTE_DRIVERS, ROUTE_PARENTS) require route_id and only target users assigned to that route.
+      - **Socket.IO Rooms**: Users join `route:{routeId}` rooms on connection for real-time route-scoped announcement delivery.
+      - **Client Badge Updates**: Announcement socket events trigger badge/unread count refreshes automatically.
     - **Incident Management**: Drivers report incidents, admins review.
     - **Route Request System**: Drivers can report route issues during active routes (missing students, unexpected students, wrong stops, roster clarifications). Admins review and resolve requests via Activity & Operations page. Real-time Socket.IO events for created/updated requests. Badge count for open requests.
     - **Driver Assignment System**: Admins assign drivers to routes with optional vehicle assignment.
