@@ -35,7 +35,13 @@ Preferred communication style: Simple, everyday language.
     - `GET /api/auth/test-users` - Returns sample users for each role (admin, driver, parent).
     - `POST /api/auth/test-login` with `{"role": "admin"|"driver"|"parent"}` - Logs in as any role without password, sets auth cookie. Optional: `{"role": "admin", "userId": "specific-id"}` for specific user.
 - **API**: RESTful APIs in JSON format with structured error handling.
-- **Real-Time Communication**: `ws` WebSocket server.
+- **Real-Time Communication**: Dual WebSocket system with `ws` library (legacy) and Socket.IO.
+  - **Socket.IO Server**: `server/socket-server.ts` - JWT-authenticated with automatic room management
+  - **Rooms**: `user:{userId}` (direct updates), `org:default` (org-wide broadcasts), `route_run:{routeRunId}` (live route operations)
+  - **Events**: `route_run.started`, `route_run.ended_pending_review`, `route_run.finalized`, `stop.arrived`, `stop.completed`, `attendance.updated`, `announcement.created`, `participant.joined`, `participant.left`
+  - **Frontend Hooks**: `useSocket()` for connection state, `useRouteRunSocket(routeRunId)` for route subscriptions, `useAnnouncementSocket()` for org-wide announcements
+  - **Reconnection**: Automatic reconnection with exponential backoff, "Reconnecting..." UI indicator in header
+  - **Path**: `/socket.io` with WebSocket and polling fallback transports
 - **Data Storage**: PostgreSQL via Neon serverless with Drizzle ORM.
 - **Core Data Model**: Includes Users (multi-role), AuthCredentials (password management), Households, Vehicles, Routes, Stops, Students, Shifts, Clock Events, Messages, Incidents, and Vehicle Inspections.
 - **Key Features**:
@@ -77,7 +83,8 @@ Preferred communication style: Simple, everyday language.
       - **Status Flow**: SCHEDULED → ACTIVE → ENDED_PENDING_REVIEW → FINALIZED (or CANCELLED)
       - **Participant Roles**: PRIMARY (can start/end, mark attendance), AID (helper driver), VIEWER (read-only)
       - **API Endpoints**: `/api/route-runs` CRUD, `/api/route-runs/:id/start|end|finalize|join|leave`, `/api/route-runs/:id/events`
-      - **WebSocket Rooms**: Clients subscribe via `{type: "subscribe", room: "route_run:{id}"}` for real-time updates
+      - **Socket.IO Rooms**: Clients subscribe via `socket.emit("subscribe_route_run", routeRunId)` for real-time updates
+      - **Socket.IO Events**: `route_run.started`, `route_run.ended_pending_review`, `route_run.finalized`, `participant.joined`, `participant.left`
 
 ## Backlog / Future Features
 

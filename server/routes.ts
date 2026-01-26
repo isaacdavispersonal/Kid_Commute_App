@@ -13,6 +13,17 @@ import memoizee from "memoizee";
 import { registerAdminImportRoutes } from "./routes/admin-import";
 import { verifyToken } from "./utils/jwt-auth";
 import { pushNotificationService } from "./push-notification-service";
+import { 
+  emitRouteRunStarted, 
+  emitRouteRunEndedPendingReview, 
+  emitRouteRunFinalized,
+  emitParticipantJoined,
+  emitParticipantLeft,
+  emitAttendanceUpdated,
+  emitAnnouncementCreated,
+  emitStopArrived,
+  emitStopCompleted,
+} from "./socket-server";
 
 // Webhook authentication middleware
 const verifyWebhookToken = (req: any, res: any, next: any) => {
@@ -5635,7 +5646,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     
     // Parents can access routes their children are on
     if (userRole === "parent") {
-      const students = await storage.getStudentsByHousehold(userId);
+      const students = await storage.getStudentsByParent(userId);
       return students.some(s => s.assignedRouteId === routeId);
     }
     
@@ -5848,12 +5859,18 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         
         const participants = await storage.getRouteRunParticipants(id);
         
-        // Broadcast via WebSocket
+        // Broadcast via WebSocket (legacy)
         broadcastToRoom(`route_run:${id}`, {
           type: "route_run.started",
           routeRunId: id,
           primaryDriverId: driverId,
           status: "ACTIVE",
+        });
+        
+        // Emit via Socket.IO
+        emitRouteRunStarted(id, {
+          routeRun: startedRun,
+          primaryDriverId: driverId,
         });
         
         res.json({ routeRun: startedRun, participants });
@@ -5909,11 +5926,16 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           payload: {},
         });
         
-        // Broadcast via WebSocket
+        // Broadcast via WebSocket (legacy)
         broadcastToRoom(`route_run:${id}`, {
           type: "route_run.ended",
           routeRunId: id,
           status: "ENDED_PENDING_REVIEW",
+        });
+        
+        // Emit via Socket.IO
+        emitRouteRunEndedPendingReview(id, {
+          routeRun: endedRun,
         });
         
         res.json({ routeRun: endedRun });
@@ -5958,11 +5980,16 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           payload: {},
         });
         
-        // Broadcast via WebSocket
+        // Broadcast via WebSocket (legacy)
         broadcastToRoom(`route_run:${id}`, {
           type: "route_run.finalized",
           routeRunId: id,
           status: "FINALIZED",
+        });
+        
+        // Emit via Socket.IO
+        emitRouteRunFinalized(id, {
+          routeRun: finalizedRun,
         });
         
         res.json({ routeRun: finalizedRun });
@@ -6026,10 +6053,16 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           payload: { role: assignedRole },
         });
         
-        // Broadcast via WebSocket
+        // Broadcast via WebSocket (legacy)
         broadcastToRoom(`route_run:${id}`, {
           type: "route_run.participant_joined",
           routeRunId: id,
+          userId,
+          role: assignedRole,
+        });
+        
+        // Emit via Socket.IO
+        emitParticipantJoined(id, {
           userId,
           role: assignedRole,
         });
@@ -6079,10 +6112,15 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           payload: {},
         });
         
-        // Broadcast via WebSocket
+        // Broadcast via WebSocket (legacy)
         broadcastToRoom(`route_run:${id}`, {
           type: "route_run.participant_left",
           routeRunId: id,
+          userId,
+        });
+        
+        // Emit via Socket.IO
+        emitParticipantLeft(id, {
           userId,
         });
         
@@ -7679,7 +7717,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           targetRole,
         });
 
-        // Broadcast via WebSocket
+        // Broadcast via WebSocket (legacy)
         if (wss) {
           wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
@@ -7692,6 +7730,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             }
           });
         }
+
+        // Emit via Socket.IO (org-wide broadcast)
+        emitAnnouncementCreated({
+          announcement,
+        });
 
         res.json(announcement);
       } catch (error) {
@@ -7721,6 +7764,12 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           driverId: adminId, // Use admin ID as driverId for admin-created announcements
           title,
           content,
+        });
+
+        // Emit via Socket.IO (route-specific broadcast)
+        emitAnnouncementCreated({
+          announcement,
+          targetRouteId: routeId,
         });
 
         res.json(announcement);

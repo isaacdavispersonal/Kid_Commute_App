@@ -31,7 +31,7 @@ export async function canAccessRoute(userId: string, userRole: string, routeId: 
   }
   
   if (userRole === "parent") {
-    const students = await storage.getStudentsByHousehold(userId);
+    const students = await storage.getStudentsByParent(userId);
     return students.some(s => s.assignedRouteId === routeId);
   }
   
@@ -76,7 +76,7 @@ export function initSocketServer({ httpServer }: SocketServerOptions): Server {
         const assignments = await storage.getDriverAssignmentsByDriver(user.id);
         authSocket.authorizedRoutes = assignments.map(a => a.routeId);
       } else if (user.role === "parent") {
-        const students = await storage.getStudentsByHousehold(user.id);
+        const students = await storage.getStudentsByParent(user.id);
         authSocket.authorizedRoutes = students
           .map(s => s.assignedRouteId)
           .filter((id): id is string => id !== null);

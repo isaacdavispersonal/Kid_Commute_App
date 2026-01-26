@@ -72,6 +72,11 @@ app.use((req, res, next) => {
 (async () => {
   const { httpServer: server, wss } = await registerRoutes(app);
 
+  // Initialize Socket.IO server for real-time sync
+  const { initSocketServer } = await import("./socket-server");
+  const io = initSocketServer({ httpServer: server });
+  log("Socket.IO server initialized");
+
   // Initialize notification service with WebSocket server
   const { notificationService } = await import("./notification-service");
   const { pushNotificationService } = await import("./push-notification-service");

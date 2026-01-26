@@ -25,6 +25,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { isConfigured, getConfigError } from "@/lib/config";
 import { ConfigErrorScreen } from "@/components/config-error-screen";
+import { useSocket, useAnnouncementSocket } from "@/hooks/use-socket";
+import { disconnectSocket } from "@/lib/socket";
 
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
@@ -83,6 +85,17 @@ function Router() {
   // ALL hooks must be called before any early returns to follow React's rules of hooks
   const mainRef = useRef<HTMLElement>(null);
   const { triggerRefresh, isRefreshing } = useRefresh();
+  
+  // Socket.IO for real-time sync - useSocket handles init, we just cleanup on logout
+  const { connectionState, isReconnecting } = useSocket();
+  useAnnouncementSocket(); // Listen for org-wide announcements
+  
+  // Disconnect socket on logout
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      disconnectSocket();
+    }
+  }, [isAuthenticated, user]);
 
   // iOS StatusBar + viewport recalculation fix for post-auth white bar issue
   // This runs when the authenticated shell mounts to ensure proper layout
@@ -189,7 +202,14 @@ function Router() {
             <div className="h-[env(safe-area-inset-top,0px)]" />
             {/* Actual header content with touch targets */}
             <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <div className="flex items-center gap-2">
+                <SidebarTrigger data-testid="button-sidebar-toggle" />
+                {isReconnecting && (
+                  <span className="text-xs text-muted-foreground animate-pulse" data-testid="text-reconnecting">
+                    Reconnecting...
+                  </span>
+                )}
+              </div>
               <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="touch" className="gap-2" data-testid="button-user-menu">
