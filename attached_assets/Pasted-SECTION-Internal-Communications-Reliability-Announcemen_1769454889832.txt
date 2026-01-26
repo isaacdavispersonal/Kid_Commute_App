@@ -1,0 +1,119 @@
+SECTION — Internal Communications Reliability (Announcements + Badges + Push)
+Goal
+
+Fix internal comms so that:
+
+Announcements always appear for the correct audience (drivers/parents)
+
+The app shows notification badges when new items arrive (messages/announcements/checklist flags)
+
+Push notifications send when user is off-app, and tapping the notification deep-links to the relevant screen
+
+A) Announcements Are Not Showing (Critical)
+A1) Data model + audience targeting (must be explicit)
+
+Create/confirm a single announcements table with explicit targeting:
+
+Table: announcements
+
+id
+
+org_id
+
+created_by_user_id
+
+audience_type enum:
+
+ORG_ALL
+
+ROLE_DRIVERS
+
+ROLE_PARENTS
+
+ROUTE_DRIVERS (requires route_id)
+
+ROUTE_PARENTS (requires route_id)
+
+route_id nullable (required for route-scoped)
+
+title
+
+body
+
+created_at
+
+expires_at optional
+
+Non-negotiable rules
+
+If audience is route-scoped, reject requests missing route_id
+
+Announcements must always be queryable by:
+
+org + role
+
+org + route membership (for parents/drivers)
+
+A2) Backend endpoints
+
+POST /announcements
+
+validate user permissions (admin or route driver depending on allowed)
+
+validate audience rules
+
+insert announcement
+
+emit realtime event (see below)
+
+GET /announcements?since=<timestamp>&limit=...
+
+returns announcements visible to the requesting user (server-side filtering)
+
+A3) Realtime events (required)
+
+Emit realtime event on create:
+
+Event: announcement.created
+
+Payload includes: announcement_id, audience_type, route_id, created_at
+
+Deliver to appropriate socket rooms:
+
+org:<org_id> for org-wide
+
+route-specific room for route-targeted (either route:<route_id> or route_run:<id> depending on your architecture)
+
+A4) Client behavior (required)
+
+On app start / login:
+
+fetch latest announcements (REST) for bootstrap
+
+subscribe to relevant sockets
+
+On announcement.created event:
+
+append into local store immediately
+
+set badges (see badge section)
+
+A5) Acceptance tests
+
+Admin posts announcement to drivers → appears on driver app within 2 seconds (no refresh)
+
+Admin posts to parents → appears on parent app within 2 seconds
+
+Route-scoped announcement shows only to that route’s participants/parents
+
+Announcement persists after app restart (REST fetch loads it)
+
+A6) Logging to add (critical)
+
+On POST /announcements:
+
+log request: actor, org_id, audience_type, route_id
+
+log insert success: announcement_id
+
+log socket emit targets: which rooms were notified

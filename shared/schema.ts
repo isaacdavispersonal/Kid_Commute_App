@@ -1227,6 +1227,63 @@ export const insertAttendanceChangeLogSchema = createInsertSchema(attendanceChan
 export type InsertAttendanceChangeLog = z.infer<typeof insertAttendanceChangeLogSchema>;
 export type AttendanceChangeLog = typeof attendanceChangeLogs.$inferSelect;
 
+// Route Requests table - structured requests from drivers for route/roster issues
+export const routeRequestTypeEnum = pgEnum("route_request_type", [
+  "MISSING_STUDENT",
+  "UNEXPECTED_STUDENT",
+  "WRONG_STOP",
+  "ROSTER_CLARIFICATION",
+]);
+
+export const routeRequestStatusEnum = pgEnum("route_request_status", [
+  "OPEN",
+  "APPROVED",
+  "DENIED",
+  "RESOLVED",
+]);
+
+export const routeRequests = pgTable(
+  "route_requests",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    routeRunId: varchar("route_run_id")
+      .notNull()
+      .references(() => routeRuns.id, { onDelete: "cascade" }),
+    routeId: varchar("route_id")
+      .references(() => routes.id, { onDelete: "set null" }),
+    createdByUserId: varchar("created_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    requestType: routeRequestTypeEnum("request_type").notNull(),
+    studentId: varchar("student_id")
+      .references(() => students.id, { onDelete: "set null" }),
+    studentName: varchar("student_name"), // For unknown/unlisted students
+    description: text("description"),
+    status: routeRequestStatusEnum("status").notNull().default("OPEN"),
+    priority: varchar("priority").default("normal"), // normal, urgent
+    adminUserId: varchar("admin_user_id")
+      .references(() => users.id, { onDelete: "set null" }),
+    resolutionNote: text("resolution_note"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_route_requests_run").on(table.routeRunId),
+    index("idx_route_requests_route").on(table.routeId),
+    index("idx_route_requests_status").on(table.status),
+    index("idx_route_requests_created_by").on(table.createdByUserId),
+  ]
+);
+
+export const insertRouteRequestSchema = createInsertSchema(routeRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertRouteRequest = z.infer<typeof insertRouteRequestSchema>;
+export type RouteRequest = typeof routeRequests.$inferSelect;
+
 // Admin settings table - stores system configuration
 export const adminSettings = pgTable("admin_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2259,6 +2316,31 @@ export const attendanceChangeLogsRelations = relations(attendanceChangeLogs, ({ 
   actor: one(users, {
     fields: [attendanceChangeLogs.actorUserId],
     references: [users.id],
+  }),
+}));
+
+export const routeRequestsRelations = relations(routeRequests, ({ one }) => ({
+  routeRun: one(routeRuns, {
+    fields: [routeRequests.routeRunId],
+    references: [routeRuns.id],
+  }),
+  route: one(routes, {
+    fields: [routeRequests.routeId],
+    references: [routes.id],
+  }),
+  createdBy: one(users, {
+    fields: [routeRequests.createdByUserId],
+    references: [users.id],
+    relationName: "requestCreator",
+  }),
+  student: one(students, {
+    fields: [routeRequests.studentId],
+    references: [students.id],
+  }),
+  admin: one(users, {
+    fields: [routeRequests.adminUserId],
+    references: [users.id],
+    relationName: "requestAdmin",
   }),
 }));
 

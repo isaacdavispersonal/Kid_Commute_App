@@ -45,6 +45,7 @@ import {
   routeRunParticipants,
   routeRunEvents,
   adminAcknowledgements,
+  routeRequests,
   type User,
   type UpsertUser,
   type UpdateProfile,
@@ -132,6 +133,8 @@ import {
   type InsertRouteRunParticipant,
   type RouteRunEvent,
   type InsertRouteRunEvent,
+  type RouteRequest,
+  type InsertRouteRequest,
   type AttendanceChangeLog,
   type InsertAttendanceChangeLog,
   attendanceChangeLogs,
@@ -402,6 +405,20 @@ export interface IStorage {
     adminResponse?: string,
     respondedBy?: string
   ): Promise<DriverFeedback>;
+
+  // Route request operations
+  createRouteRequest(request: InsertRouteRequest): Promise<RouteRequest>;
+  getRouteRequestById(id: string): Promise<RouteRequest | undefined>;
+  getRouteRequestsByRouteRun(routeRunId: string): Promise<RouteRequest[]>;
+  getRouteRequestsByDriver(driverId: string): Promise<RouteRequest[]>;
+  getAllRouteRequests(status?: string): Promise<RouteRequest[]>;
+  getOpenRouteRequestsCount(): Promise<number>;
+  updateRouteRequestStatus(
+    id: string,
+    status: "OPEN" | "APPROVED" | "DENIED" | "RESOLVED",
+    adminUserId?: string,
+    resolutionNote?: string
+  ): Promise<RouteRequest>;
 
   // Geofence operations
   getAllGeofences(): Promise<any[]>;
@@ -4459,6 +4476,82 @@ export class DatabaseStorage implements IStorage {
         timeManagement: timeExceptions,
       },
     };
+  }
+
+  // ============ Route Request operations ============
+
+  async createRouteRequest(request: InsertRouteRequest): Promise<RouteRequest> {
+    const [newRequest] = await db
+      .insert(routeRequests)
+      .values(request)
+      .returning();
+    return newRequest;
+  }
+
+  async getRouteRequestById(id: string): Promise<RouteRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(routeRequests)
+      .where(eq(routeRequests.id, id))
+      .limit(1);
+    return request;
+  }
+
+  async getRouteRequestsByRouteRun(routeRunId: string): Promise<RouteRequest[]> {
+    return await db
+      .select()
+      .from(routeRequests)
+      .where(eq(routeRequests.routeRunId, routeRunId))
+      .orderBy(desc(routeRequests.createdAt));
+  }
+
+  async getRouteRequestsByDriver(driverId: string): Promise<RouteRequest[]> {
+    return await db
+      .select()
+      .from(routeRequests)
+      .where(eq(routeRequests.createdByUserId, driverId))
+      .orderBy(desc(routeRequests.createdAt));
+  }
+
+  async getAllRouteRequests(status?: string): Promise<RouteRequest[]> {
+    if (status) {
+      return await db
+        .select()
+        .from(routeRequests)
+        .where(eq(routeRequests.status, status as any))
+        .orderBy(desc(routeRequests.createdAt));
+    }
+    return await db
+      .select()
+      .from(routeRequests)
+      .orderBy(desc(routeRequests.createdAt));
+  }
+
+  async getOpenRouteRequestsCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(routeRequests)
+      .where(eq(routeRequests.status, "OPEN"));
+    return Number(result[0]?.count || 0);
+  }
+
+  async updateRouteRequestStatus(
+    id: string,
+    status: "OPEN" | "APPROVED" | "DENIED" | "RESOLVED",
+    adminUserId?: string,
+    resolutionNote?: string
+  ): Promise<RouteRequest> {
+    const [updated] = await db
+      .update(routeRequests)
+      .set({
+        status: status as any,
+        adminUserId,
+        resolutionNote,
+        updatedAt: new Date(),
+      })
+      .where(eq(routeRequests.id, id))
+      .returning();
+    return updated;
   }
 
   // ============ Driver Feedback operations ============
