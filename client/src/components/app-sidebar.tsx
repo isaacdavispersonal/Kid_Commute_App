@@ -295,7 +295,6 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
     enabled: userRole === "admin",
   });
 
-  const totalUnread = (unreadCounts?.messages || 0) + (unreadCounts?.announcements || 0) + (unreadCounts?.notifications || 0);
   const activityBadgeTotal = activityBadges?.total || 0;
 
   // Determine if sidebar is currently open
@@ -370,11 +369,30 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
   const renderMenuItem = (item: { title: string; url: string; icon: any }) => {
     const isActive = location === item.url;
     const isMessages = item.title === "Messages";
+    const isAnnouncements = item.title === "Announcements";
     const isActivityOperations = item.title === "Activity & Operations";
-    const showMessagesBadge = isMessages && totalUnread > 0;
+    
+    // Separate badge counts for each nav item
+    const messageCount = unreadCounts?.messages || 0;
+    const announcementCount = unreadCounts?.announcements || 0;
+    
+    const showMessagesBadge = isMessages && messageCount > 0;
+    const showAnnouncementsBadge = isAnnouncements && announcementCount > 0;
     const showActivityBadge = isActivityOperations && activityBadgeTotal > 0 && userRole === "admin";
-    const showBadge = showMessagesBadge || showActivityBadge;
-    const badgeCount = showMessagesBadge ? totalUnread : activityBadgeTotal;
+    const showBadge = showMessagesBadge || showAnnouncementsBadge || showActivityBadge;
+    
+    let badgeCount = 0;
+    let badgeTestId = "badge-unread-count";
+    if (showMessagesBadge) {
+      badgeCount = messageCount;
+      badgeTestId = "badge-unread-messages";
+    } else if (showAnnouncementsBadge) {
+      badgeCount = announcementCount;
+      badgeTestId = "badge-unread-announcements";
+    } else if (showActivityBadge) {
+      badgeCount = activityBadgeTotal;
+      badgeTestId = "badge-activity-operations";
+    }
 
     return (
       <SidebarMenuItem key={item.title} data-active={isActive ? "true" : undefined}>
@@ -394,7 +412,7 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
               <Badge 
                 variant="destructive" 
                 className="ml-auto h-5 min-w-5 px-1 text-xs"
-                data-testid={showActivityBadge ? "badge-activity-operations" : "badge-unread-count"}
+                data-testid={badgeTestId}
               >
                 {badgeCount}
               </Badge>

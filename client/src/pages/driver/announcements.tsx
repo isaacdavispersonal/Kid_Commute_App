@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Megaphone, Bell, CheckCircle } from "lucide-react";
@@ -47,12 +47,40 @@ export default function DriverAnnouncements() {
   const handleDismiss = async (announcementId: string) => {
     await apiRequest("POST", "/api/announcements/dismiss", { announcementId });
     await queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
   };
 
   const handleDismissRoute = async (announcementId: string) => {
     await apiRequest("POST", "/api/driver/route-announcements/dismiss", { announcementId });
     await queryClient.invalidateQueries({ queryKey: ["/api/driver/route-announcements"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
   };
+
+  // Mark announcements as read when page loads and invalidate badge counts
+  const markedAsReadRef = useRef<Set<string>>(new Set());
+  
+  useEffect(() => {
+    const markAnnouncementsAsRead = async () => {
+      if (!globalAnnouncements || globalAnnouncements.length === 0) return;
+      
+      // Mark each announcement as read (only if not already marked in this session)
+      for (const announcement of globalAnnouncements) {
+        if (!markedAsReadRef.current.has(announcement.id)) {
+          try {
+            await apiRequest("POST", "/api/announcements/mark-read", { announcementId: announcement.id });
+            markedAsReadRef.current.add(announcement.id);
+          } catch (error) {
+            console.error("Error marking announcement as read:", error);
+          }
+        }
+      }
+      
+      // Invalidate unread counts to update badges
+      queryClient.invalidateQueries({ queryKey: ["/api/user/unread-counts"] });
+    };
+    
+    markAnnouncementsAsRead();
+  }, [globalAnnouncements]);
 
   const unreadGlobalCount = globalAnnouncements?.length || 0;
   const unreadRouteCount = routeAnnouncements?.length || 0;
