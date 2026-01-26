@@ -91,13 +91,30 @@ function Router() {
     if (Capacitor.getPlatform() !== "ios") return;
     if (!isAuthenticated || !user) return;
 
+    console.log("[iOS-Layout-Fix] Auth detected, applying StatusBar + viewport fix");
+    
+    // Get current safe area values for debugging
+    const safeAreaTop = getComputedStyle(document.documentElement).getPropertyValue('--sat') || 
+                        getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-top)');
+    console.log("[iOS-Layout-Fix] Safe area top value:", safeAreaTop);
+    console.log("[iOS-Layout-Fix] Window dimensions:", { 
+      innerHeight: window.innerHeight, 
+      innerWidth: window.innerWidth,
+      visualViewport: window.visualViewport ? {
+        height: window.visualViewport.height,
+        offsetTop: window.visualViewport.offsetTop
+      } : 'not available'
+    });
+
     // Set StatusBar overlay settings consistently after auth
     (async () => {
       try {
+        console.log("[iOS-Layout-Fix] Setting StatusBar overlay: true, style: Dark");
         await StatusBar.setOverlaysWebView({ overlay: true });
         await StatusBar.setStyle({ style: Style.Dark });
+        console.log("[iOS-Layout-Fix] StatusBar settings applied successfully");
       } catch (e) {
-        console.log("[StatusBar] Could not set status bar style:", e);
+        console.log("[iOS-Layout-Fix] StatusBar error:", e);
       }
     })();
 
@@ -105,8 +122,15 @@ function Router() {
     // Two RAFs help iOS settle after DOM swap from auth transition
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        console.log("[iOS-Layout-Fix] Triggering viewport recalculation");
         window.dispatchEvent(new Event("resize"));
         window.scrollTo(0, 0);
+        
+        // Log post-fix dimensions
+        console.log("[iOS-Layout-Fix] Post-fix dimensions:", {
+          innerHeight: window.innerHeight,
+          bodyScrollHeight: document.body.scrollHeight
+        });
       });
     });
   }, [isAuthenticated, user]);
