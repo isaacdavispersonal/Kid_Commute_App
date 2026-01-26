@@ -71,6 +71,7 @@ Preferred communication style: Simple, everyday language.
     - **Automated Data Retention**: Scheduled cleanup service for old data (Messages, GPS/geofence events, audit logs, announcements, device tokens) with configurable retention periods.
     - **BambooHR Payroll Integration**: Automated driver clock-in/out data export with federal/Arizona overtime rules, including employee mapping, pay period selection, preview, batch submission, and audit trail.
     - **Pull-to-Refresh**: Mobile-optimized gesture for manual data refresh on driver and parent pages. Uses single scroll container architecture with RefreshContext for callback management. Integrated pages: driver dashboard/routes/announcements, parent dashboard/tracking/messages.
+    - **iOS Post-Auth Layout Fix**: Addresses WKWebView white bar issue after login/signup by re-applying StatusBar overlay settings and forcing viewport recalculation with double RAF + resize event. Ionic CSS backgrounds are overridden to match app theme.
 
 ## Backlog / Future Features
 
