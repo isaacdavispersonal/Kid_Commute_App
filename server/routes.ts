@@ -471,38 +471,64 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   });
 
-  // Get unread counts for current user (with 3-second cache to reduce DB load)
+  // Get unread counts for current user (with configurable cache to reduce DB load)
+  // TTL is configurable via UNREAD_COUNTS_CACHE_TTL_MS env var (default: 3000ms)
+  const parsedTTL = parseInt(process.env.UNREAD_COUNTS_CACHE_TTL_MS || "3000", 10);
+  const UNREAD_COUNTS_CACHE_TTL = Number.isNaN(parsedTTL) ? 3000 : parsedTTL;
+  
   const getUnreadCountsCached = memoizee(
     async (userId: string, userRole: string) => {
-      const messageCount = await storage.getUnreadMessageCount(userId);
-      const messageCounts = await storage.getUnreadCountsBySender(userId);
-      let announcementCount = 0;
-      let notificationCount = 0;
-      let flaggedChecklistsCount = 0;
-
+      const startTime = Date.now();
+      
+      // Build promise array for parallel execution based on user role
+      // This avoids N+1 sequential queries that degrade under load
+      const promises: Promise<any>[] = [
+        storage.getUnreadMessageCount(userId),
+        storage.getUnreadCountsBySender(userId),
+      ];
+      
+      // Track which promises map to which results
+      const resultMap = {
+        messageCount: 0,
+        messageCounts: 1,
+        announcementCount: -1,
+        notificationCount: -1,
+        flaggedChecklistsCount: -1,
+      };
+      
       if (userRole === "driver" || userRole === "parent") {
-        announcementCount = await storage.getUnreadAnnouncementCount(userId, userRole);
+        resultMap.announcementCount = promises.length;
+        promises.push(storage.getUnreadAnnouncementCount(userId, userRole));
       }
-
+      
       if (userRole === "driver") {
-        notificationCount = await storage.getUnreadDriverNotificationCount(userId);
+        resultMap.notificationCount = promises.length;
+        promises.push(storage.getUnreadDriverNotificationCount(userId));
       }
-
+      
       if (userRole === "admin") {
-        // Use acknowledgement-based count for accurate badge
-        flaggedChecklistsCount = await storage.getUnacknowledgedFlaggedChecklistsCount(userId);
+        resultMap.flaggedChecklistsCount = promises.length;
+        promises.push(storage.getUnacknowledgedFlaggedChecklistsCount(userId));
       }
-
+      
+      // Execute all queries in parallel
+      const results = await Promise.all(promises);
+      
+      const elapsed = Date.now() - startTime;
+      if (elapsed > 500) {
+        console.warn(`[unread-counts] Slow query for user ${userId}: ${elapsed}ms (${promises.length} queries)`);
+      }
+      
       return {
-        messages: messageCount,
-        announcements: announcementCount,
-        notifications: notificationCount,
-        messageBySender: messageCounts,
-        flaggedChecklists: flaggedChecklistsCount,
+        messages: results[resultMap.messageCount] as number,
+        announcements: resultMap.announcementCount >= 0 ? results[resultMap.announcementCount] as number : 0,
+        notifications: resultMap.notificationCount >= 0 ? results[resultMap.notificationCount] as number : 0,
+        messageBySender: results[resultMap.messageCounts] as Record<string, number>,
+        flaggedChecklists: resultMap.flaggedChecklistsCount >= 0 ? results[resultMap.flaggedChecklistsCount] as number : 0,
       };
     },
     {
-      maxAge: 3000, // Cache for 3 seconds
+      maxAge: UNREAD_COUNTS_CACHE_TTL,
       promise: true,
       primitive: true,
     }
