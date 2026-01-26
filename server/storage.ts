@@ -392,6 +392,7 @@ export interface IStorage {
       driverUtilities: number;
       auditLog: number;
       timeManagement: number;
+      routeRequests: number;
     };
   }>;
 
@@ -4378,6 +4379,7 @@ export class DatabaseStorage implements IStorage {
       driverUtilities: number;
       auditLog: number;
       timeManagement: number;
+      routeRequests: number;
     };
   }> {
     // Get unacknowledged flagged checklists (Route Health)
@@ -4463,9 +4465,12 @@ export class DatabaseStorage implements IStorage {
       );
     const timeExceptions = Number(timeExceptionsResult[0]?.count || 0);
     
+    // Get open route requests count
+    const openRouteRequestsCount = await this.getOpenRouteRequestsCount();
+    
     const driverUtilitiesTotal = pendingSupplyRequests + newFeedback;
     const auditLogTotal = openIncidents;
-    const total = flaggedChecklists + driverUtilitiesTotal + auditLogTotal + timeExceptions;
+    const total = flaggedChecklists + driverUtilitiesTotal + auditLogTotal + timeExceptions + openRouteRequestsCount;
     
     return {
       total,
@@ -4474,6 +4479,7 @@ export class DatabaseStorage implements IStorage {
         driverUtilities: driverUtilitiesTotal,
         auditLog: auditLogTotal,
         timeManagement: timeExceptions,
+        routeRequests: openRouteRequestsCount,
       },
     };
   }
