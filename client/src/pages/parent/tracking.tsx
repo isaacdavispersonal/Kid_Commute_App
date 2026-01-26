@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useCallback } from "react";
 import { useRegisterRefresh } from "@/contexts/RefreshContext";
+import { clientConfig } from "@/lib/config";
 
 export default function ParentTracking() {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -13,7 +14,7 @@ export default function ParentTracking() {
 
   const { data: vehicleLocation, isLoading, refetch } = useQuery({
     queryKey: ["/api/parent/vehicle-location"],
-    refetchInterval: 10000,
+    refetchInterval: clientConfig.polling.standard,
   });
 
   // Pull-to-refresh support

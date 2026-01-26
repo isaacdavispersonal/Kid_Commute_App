@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IncompleteProfileBanner } from "@/components/incomplete-profile-banner";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useAuth } from "@/hooks/useAuth";
-import { getLoginUrl } from "@/lib/config";
+import { getLoginUrl, clientConfig } from "@/lib/config";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
@@ -590,7 +590,7 @@ export default function DriverDashboard() {
   
   const { data: clockStatus, isLoading: clockStatusLoading, refetch: refetchClockStatus } = useQuery<ClockStatus>({
     queryKey: ["/api/driver/clock-status"],
-    refetchInterval: 5000, // Refresh every 5 seconds
+    refetchInterval: clientConfig.polling.medium,
   });
 
   const { data: todayShifts, isLoading: shiftsLoading, error, refetch: refetchShifts } = useQuery<EnrichedShift[]>({
@@ -600,7 +600,7 @@ export default function DriverDashboard() {
   const { data: breakStatus, refetch: refetchBreakStatus } = useQuery<{ activeBreak: any }>({
     queryKey: ["/api/driver/break/status"],
     enabled: clockStatus?.isClockedIn,
-    refetchInterval: 5000,
+    refetchInterval: clientConfig.polling.medium,
   });
 
   // Pull-to-refresh support

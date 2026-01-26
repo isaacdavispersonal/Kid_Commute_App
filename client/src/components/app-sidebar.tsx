@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { clientConfig } from "@/lib/config";
 import {
   Sidebar,
   SidebarContent,
@@ -282,7 +283,7 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
     flaggedChecklists?: number;
   }>({
     queryKey: ["/api/user/unread-counts"],
-    refetchInterval: 15000,
+    refetchInterval: clientConfig.polling.slow,
   });
 
   // Fetch activity operations badges for admins
@@ -296,7 +297,7 @@ export function AppSidebar({ userRole = "admin", isLeadDriver = false }: AppSide
     };
   }>({
     queryKey: ["/api/admin/badges/activity-operations"],
-    refetchInterval: 15000,
+    refetchInterval: clientConfig.polling.slow,
     enabled: userRole === "admin",
   });
 

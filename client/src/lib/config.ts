@@ -158,3 +158,23 @@ export function getLoginUrl(): string {
 export function getLogoutUrl(): string {
   return getApiUrl('/api/logout');
 }
+
+// Time constants (milliseconds)
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+
+/**
+ * Client-side configuration for polling/refetch intervals
+ * These control how often data is refreshed from the server
+ */
+export const clientConfig = {
+  // Real-time data polling intervals
+  polling: {
+    fast: 3 * SECOND,         // 3s - active message threads
+    medium: 5 * SECOND,       // 5s - message lists, driver dashboard
+    standard: 10 * SECOND,    // 10s - parent tracking, conversations
+    slow: 15 * SECOND,        // 15s - sidebar badges, route requests
+    slower: 30 * SECOND,      // 30s - children list, assignments
+    background: 2 * MINUTE,   // 2min - fallback with WebSocket
+  },
+} as const;
