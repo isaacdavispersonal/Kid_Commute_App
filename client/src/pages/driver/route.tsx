@@ -119,15 +119,18 @@ export default function DriverRoutePage() {
     setExpandedStops(newExpanded);
   };
 
+  // Type for optimistic update context
+  type AttendanceMutationVars = { studentId: string; status: "riding" | "absent" };
+  type AttendanceMutationContext = { previousData?: ShiftRouteContext };
+
   // Mutation to mark student attendance with optimistic updates
-  const attendanceMutation = useMutation({
-    mutationFn: async ({
-      studentId,
-      status,
-    }: {
-      studentId: string;
-      status: "riding" | "absent";
-    }) => {
+  const attendanceMutation = useMutation<
+    unknown,
+    Error,
+    AttendanceMutationVars,
+    AttendanceMutationContext
+  >({
+    mutationFn: async ({ studentId, status }) => {
       if (!shiftId || !routeContext) throw new Error("Missing shift context");
       return apiRequest("POST", "/api/attendance", {
         studentId,
@@ -137,7 +140,10 @@ export default function DriverRoutePage() {
       });
     },
     // Optimistic update: immediately update UI before server responds
-    onMutate: async ({ studentId, status }) => {
+    onMutate: async ({ studentId, status }): Promise<AttendanceMutationContext> => {
+      // Guard against missing shiftId
+      if (!shiftId) return {};
+
       // Cancel any outgoing refetches to avoid overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: ["/api/driver/route", shiftId] });
 
@@ -171,20 +177,15 @@ export default function DriverRoutePage() {
         description: "Student attendance has been recorded",
       });
     },
-    onError: (error: unknown, _variables, context) => {
+    onError: (error, _variables, context) => {
       console.error("[attendance] Error:", error);
       
       // Rollback to previous data on error
-      if (context?.previousData) {
+      if (context?.previousData && shiftId) {
         queryClient.setQueryData(["/api/driver/route", shiftId], context.previousData);
       }
       
-      let message = "Failed to update attendance";
-      if (error instanceof Error) {
-        message = error.message;
-      } else if (typeof error === 'string') {
-        message = error;
-      }
+      const message = error.message || "Failed to update attendance";
       toast({
         title: "Cannot Update Attendance",
         description: message,
@@ -193,7 +194,9 @@ export default function DriverRoutePage() {
     },
     // Always refetch after error or success to ensure consistency
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/driver/route", shiftId] });
+      if (shiftId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/driver/route", shiftId] });
+      }
     },
   });
 
