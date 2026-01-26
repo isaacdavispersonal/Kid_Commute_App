@@ -1,18 +1,13 @@
 import { samsaraClient } from "./samsara-client";
 import { gpsIngestionPipeline } from "./gps-pipeline";
 import { createLogger } from "./logger";
+import { config } from "./config";
 
 const logger = createLogger("gps-polling");
-
-// Configurable batch size for parallel processing (default: 10)
-// Guards against NaN, zero, or negative values
-const parsedBatchSize = parseInt(process.env.GPS_BATCH_SIZE || "10", 10);
-const GPS_BATCH_SIZE = Number.isNaN(parsedBatchSize) || parsedBatchSize <= 0 ? 10 : parsedBatchSize;
 
 class GPSPollingService {
   private intervalId: NodeJS.Timeout | null = null;
   private isPolling = false;
-  private readonly pollIntervalMs = 30000; // 30 seconds
 
   async start() {
     if (this.intervalId) {
@@ -25,15 +20,16 @@ class GPSPollingService {
       return;
     }
 
-    logger.info("Starting GPS polling service (every 30 seconds)");
+    const intervalSec = config.gps.pollIntervalMs / 1000;
+    logger.info(`Starting GPS polling service (every ${intervalSec} seconds)`);
 
     // Poll immediately on start
     await this.poll();
 
-    // Then poll every 30 seconds
+    // Then poll at configured interval
     this.intervalId = setInterval(() => {
       this.poll();
-    }, this.pollIntervalMs);
+    }, config.gps.pollIntervalMs);
   }
 
   stop() {
@@ -97,7 +93,7 @@ class GPSPollingService {
       }
 
       // Process vehicles in parallel batches for better performance at scale
-      const batches = this.chunk(result.vehicles, GPS_BATCH_SIZE);
+      const batches = this.chunk(result.vehicles, config.gps.batchSize);
       let totalSuccess = 0;
       let totalFailures = 0;
 

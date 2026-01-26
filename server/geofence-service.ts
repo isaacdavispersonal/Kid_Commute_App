@@ -11,6 +11,7 @@ import {
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { calculateDistance } from "./gps-utils";
 import { log } from "./vite";
+import { config } from "./config";
 
 interface GeofenceCheck {
   vehicleId: string;
@@ -36,12 +37,11 @@ type EventListener = (event: GeofenceEvent) => void;
 class GeofenceDetectionService {
   private activeGeofences: Geofence[] = [];
   private lastRefresh = 0;
-  private readonly GEOFENCE_CACHE_TTL = 60000; // 1 minute
   private eventListeners: EventListener[] = [];
 
   async refreshGeofences() {
     const now = Date.now();
-    if (now - this.lastRefresh < this.GEOFENCE_CACHE_TTL) {
+    if (now - this.lastRefresh < config.geofence.cacheTtlMs) {
       return;
     }
 

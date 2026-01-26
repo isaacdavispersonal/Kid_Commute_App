@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { config } from "./config";
 
 const app = express();
 
@@ -132,9 +133,8 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
   });
 
-  // Setup auto-clockout scheduled job
-  // Run every hour to automatically clock out drivers who exceeded grace period
-  const AUTO_CLOCKOUT_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+  // Setup auto-clockout scheduled job using configured interval
+  const AUTO_CLOCKOUT_INTERVAL = config.shifts.autoClockoutIntervalMs;
   
   async function runAutoClockout() {
     try {

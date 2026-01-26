@@ -1,4 +1,5 @@
 // Reference: PostgreSQL database blueprint and Replit Auth blueprint
+import { config } from "./config";
 import {
   users,
   vehicles,
@@ -1007,7 +1008,7 @@ export class DatabaseStorage implements IStorage {
       type: "STOP" as const,
       centerLat: stopData.latitude,
       centerLng: stopData.longitude,
-      radiusMeters: 100, // 100m radius for stop geofences
+      radiusMeters: config.geofence.defaultRadiusMeters,
       scheduleStartTime: null, // Always active
       scheduleEndTime: null, // Always active
       isActive: true,

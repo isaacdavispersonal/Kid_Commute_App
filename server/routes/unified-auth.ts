@@ -13,15 +13,16 @@ import {
   validatePhone
 } from "../utils/jwt-auth";
 import { z } from "zod";
+import { config } from "../config";
 
 const router = Router();
 
 // Cookie settings for web browsers
 const COOKIE_NAME = "auth_token";
 
-// Session durations
-const SESSION_DURATION_DEFAULT = 24 * 60 * 60 * 1000; // 1 day (session-based login)
-const SESSION_DURATION_REMEMBER = 30 * 24 * 60 * 60 * 1000; // 30 days (remember me)
+// Session durations from config
+const SESSION_DURATION_DEFAULT = config.auth.sessionDurationMs;
+const SESSION_DURATION_REMEMBER = config.auth.sessionDurationRememberMs;
 
 // Helper to get cookie options based on request
 function getCookieOptions(req: Request, rememberMe: boolean = false) {
@@ -539,9 +540,9 @@ const resetPasswordSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-// Token expiration: 1 hour for password reset, 24 hours for email verification
-const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000;
-const EMAIL_VERIFICATION_EXPIRY_MS = 24 * 60 * 60 * 1000;
+// Token expiration from config
+const PASSWORD_RESET_EXPIRY_MS = config.auth.passwordResetExpiryMs;
+const EMAIL_VERIFICATION_EXPIRY_MS = config.auth.emailVerificationExpiryMs;
 
 /**
  * POST /api/auth/forgot-password

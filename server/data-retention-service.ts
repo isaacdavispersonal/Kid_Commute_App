@@ -1,15 +1,16 @@
 import { storage } from "./storage";
 import { createLogger } from "./logger";
+import { config } from "./config";
 
 const logger = createLogger("data-retention");
 
-// Default retention periods (in days) based on privacy policy
+// Default retention periods from config (can be overridden via admin settings)
 const DEFAULT_RETENTION_PERIODS = {
-  messages: 90, // Messages retained for 90 days
-  geofenceEvents: 30, // GPS/location data retained for 30 days
-  auditLogs: 365, // Audit logs retained for 1 year
-  dismissedAnnouncements: 90, // Old dismissed announcements retained for 90 days
-  deviceTokens: 180, // Inactive device tokens retained for 6 months
+  messages: config.retention.messagesDays,
+  geofenceEvents: config.retention.geofenceEventsDays,
+  auditLogs: config.retention.auditLogsDays,
+  dismissedAnnouncements: config.retention.dismissedAnnouncementsDays,
+  deviceTokens: config.retention.deviceTokensDays,
 };
 
 export interface RetentionStats {

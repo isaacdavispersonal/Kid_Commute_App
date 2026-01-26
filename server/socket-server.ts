@@ -3,6 +3,7 @@ import { Server, Socket } from "socket.io";
 import { verifyToken } from "./utils/jwt-auth";
 import { storage } from "./storage";
 import { createLogger } from "./logger";
+import { config } from "./config";
 
 const logger = createLogger("socket.io");
 
@@ -49,8 +50,8 @@ export function initSocketServer({ httpServer }: SocketServerOptions): Server {
       credentials: true,
     },
     transports: ["websocket", "polling"],
-    pingTimeout: 60000,
-    pingInterval: 25000,
+    pingTimeout: config.socket.pingTimeoutMs,
+    pingInterval: config.socket.pingIntervalMs,
   });
 
   io.use(async (socket, next) => {
