@@ -256,6 +256,7 @@ class PushNotificationService {
 
     if (allTokens.length === 0) {
       log(`[push] No active tokens found for ${userIds.length} user(s) - notification not sent`, "warn");
+      log(`[push] Users without tokens: ${userIds.join(", ")} - they may not have registered devices`, "debug");
       return;
     }
 

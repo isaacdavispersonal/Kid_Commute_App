@@ -7871,6 +7871,22 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           });
         }
 
+        // Send push notification to recipient (driver or admin)
+        try {
+          const sender = await storage.getUser(senderId);
+          const senderName = sender ? `${sender.firstName} ${sender.lastName}` : "Parent";
+          await pushNotificationService.notifyNewMessage(
+            recipientId,
+            senderName,
+            content,
+            message.id,
+            senderId
+          );
+          console.log(`[push] Sent message notification from parent ${senderId} to ${recipientId}`);
+        } catch (pushError) {
+          console.error("[push] Error sending message notification:", pushError);
+        }
+
         res.json(message);
       } catch (error) {
         console.error("Error sending message:", error);
@@ -8098,20 +8114,18 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           });
         }
 
-        // Send push notification to parent recipient
+        // Send push notification to recipient (parent or admin) - always send, not role-restricted
         try {
-          const recipient = await storage.getUser(recipientId);
-          if (recipient?.role === "parent") {
-            const sender = await storage.getUser(senderId);
-            const senderName = sender ? `${sender.firstName} ${sender.lastName}` : "Driver";
-            await pushNotificationService.notifyNewMessage(
-              recipientId,
-              senderName,
-              content,
-              message.id,
-              senderId
-            );
-          }
+          const sender = await storage.getUser(senderId);
+          const senderName = sender ? `${sender.firstName} ${sender.lastName}` : "Driver";
+          await pushNotificationService.notifyNewMessage(
+            recipientId,
+            senderName,
+            content,
+            message.id,
+            senderId
+          );
+          console.log(`[push] Sent message notification from driver ${senderId} to ${recipientId}`);
         } catch (pushError) {
           console.error("[push] Error sending message notification:", pushError);
         }
@@ -8381,6 +8395,22 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           });
         }
 
+        // Send push notification to recipient (driver or parent)
+        try {
+          const sender = await storage.getUser(senderId);
+          const senderName = sender ? `${sender.firstName} ${sender.lastName}` : "Admin";
+          await pushNotificationService.notifyNewMessage(
+            recipientId,
+            senderName,
+            content,
+            message.id,
+            senderId
+          );
+          console.log(`[push] Sent message notification from admin ${senderId} to ${recipientId}`);
+        } catch (pushError) {
+          console.error("[push] Error sending admin message notification:", pushError);
+        }
+
         res.json(message);
       } catch (error) {
         console.error("Error sending admin message:", error);
@@ -8414,7 +8444,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           forwardedByAdminId: adminId,
         });
 
-        // Create notification for driver
+        // Create notification for driver (in-app notification)
         await storage.createDriverNotification({
           driverId,
           conversationId,
@@ -8434,6 +8464,34 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
               );
             }
           });
+        }
+
+        // Send push notifications to both parent and driver
+        try {
+          const sender = await storage.getUser(adminId);
+          const senderName = sender ? `${sender.firstName} ${sender.lastName}` : "Admin";
+          
+          // Notify parent
+          await pushNotificationService.notifyNewMessage(
+            parentId,
+            senderName,
+            content,
+            message.id,
+            adminId
+          );
+          console.log(`[push] Sent intervention message notification to parent ${parentId}`);
+          
+          // Notify driver
+          await pushNotificationService.notifyNewMessage(
+            driverId,
+            senderName,
+            `Admin message in conversation with parent`,
+            message.id,
+            adminId
+          );
+          console.log(`[push] Sent intervention message notification to driver ${driverId}`);
+        } catch (pushError) {
+          console.error("[push] Error sending intervention message notification:", pushError);
         }
 
         res.json(message);

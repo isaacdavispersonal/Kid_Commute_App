@@ -239,6 +239,30 @@ class NotificationService {
       };
 
       this.broadcastToUsers(notification, parentIds);
+      log(`[notifications] Geofence exit: ${event.geofenceName} (route: ${shift.routeId})`, "info");
+      
+      // Send push notification for route departure (especially school departure)
+      if (event.geofenceType === "SCHOOL") {
+        try {
+          const parentIdArray = Array.from(parentIds);
+          if (parentIdArray.length > 0) {
+            const [route] = await db.select().from(routes).where(eq(routes.id, shift.routeId)).limit(1);
+            const routeName = route?.name || "Your child's route";
+            await pushNotificationService.sendToUsers(parentIdArray, {
+              title: "Route Started",
+              body: `${routeName} has departed from ${event.geofenceName}. Live tracking is now available.`,
+              data: {
+                type: "route_started",
+                routeId: shift.routeId,
+                deeplink: "/tracking",
+              },
+            });
+            log(`[notifications] Sent push notification for route departure to ${parentIdArray.length} parent(s)`, "info");
+          }
+        } catch (pushError) {
+          log(`[notifications] Error sending departure push notification: ${pushError}`, "error");
+        }
+      }
     } catch (error) {
       log(`[notifications] Error handling geofence exit: ${error}`, "error");
     }
@@ -283,6 +307,29 @@ class NotificationService {
       };
 
       this.broadcastToUsers(notification, parentIds);
+      log(`[notifications] Stop completion: ${event.stopName} (route: ${shift.routeId})`, "info");
+      
+      // Send push notification for stop completion (bus arrived at stop)
+      try {
+        const parentIdArray = Array.from(parentIds);
+        if (parentIdArray.length > 0) {
+          const [route] = await db.select().from(routes).where(eq(routes.id, shift.routeId)).limit(1);
+          const routeName = route?.name || "Your child's route";
+          await pushNotificationService.sendToUsers(parentIdArray, {
+            title: "Stop Completed",
+            body: `${routeName} has completed stop at ${event.stopName}.`,
+            data: {
+              type: "stop_completed",
+              routeId: shift.routeId,
+              stopName: event.stopName,
+              deeplink: "/tracking",
+            },
+          });
+          log(`[notifications] Sent push notification for stop completion to ${parentIdArray.length} parent(s)`, "info");
+        }
+      } catch (pushError) {
+        log(`[notifications] Error sending stop completion push notification: ${pushError}`, "error");
+      }
     } catch (error) {
       log(`[notifications] Error handling stop completion: ${error}`, "error");
     }
