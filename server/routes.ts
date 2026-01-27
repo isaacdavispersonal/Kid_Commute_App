@@ -3443,6 +3443,15 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
 
         const assignment = await storage.createDriverAssignment(validatedData);
+        
+        // Emit realtime event so clients update their caches
+        notificationService.publishDataUpdate({
+          resource: "driver-assignments",
+          action: "create",
+          resourceId: assignment.id,
+          affectedUsers: [validatedData.driverId],
+        });
+        
         res.json(assignment);
       } catch (error: any) {
         console.error("Error creating driver assignment:", error);
@@ -3485,6 +3494,15 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
 
         const updated = await storage.updateDriverAssignment(assignmentId, updates);
+        
+        // Emit realtime event so clients update their caches
+        notificationService.publishDataUpdate({
+          resource: "driver-assignments",
+          action: "update",
+          resourceId: assignmentId,
+          affectedUsers: updated?.driverId ? [updated.driverId] : [],
+        });
+        
         res.json(updated);
       } catch (error: any) {
         console.error("Error updating driver assignment:", error);
@@ -3506,7 +3524,22 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req: any, res) => {
       try {
         const assignmentId = req.params.id;
+        
+        // Get assignment before deleting to emit event with driver ID
+        const existingAssignment = await storage.getDriverAssignment(assignmentId);
+        
         await storage.deleteDriverAssignment(assignmentId);
+        
+        // Emit realtime event so clients update their caches
+        if (existingAssignment) {
+          notificationService.publishDataUpdate({
+            resource: "driver-assignments",
+            action: "delete",
+            resourceId: assignmentId,
+            affectedUsers: [existingAssignment.driverId],
+          });
+        }
+        
         res.json({ message: "Driver assignment deleted successfully" });
       } catch (error: any) {
         console.error("Error deleting driver assignment:", error);
@@ -5586,7 +5619,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Get today's route (based on shifts)
+  // Get today's routes (ALL shifts for today, not just the first)
   app.get(
     "/api/driver/today-route",
     requireAuth,
@@ -5597,38 +5630,56 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const today = new Date().toISOString().split("T")[0];
         const shifts = await storage.getShiftsByDate(today, driverId);
 
-        // Get the first shift for today (if any)
-        const shift = shifts[0];
-        if (!shift || !shift.routeId) {
-          return res.json(null);
+        // Return empty array if no shifts
+        if (!shifts || shifts.length === 0) {
+          return res.json([]);
         }
 
-        const route = await storage.getRoute(shift.routeId);
-        const stops = route ? await storage.getRouteStops(route.id) : [];
-        const vehicle = shift.vehicleId ? await storage.getVehicle(shift.vehicleId) : null;
+        // Build enriched data for ALL shifts
+        const allRoutes = await Promise.all(
+          shifts.filter(shift => shift.routeId).map(async (shift) => {
+            const route = await storage.getRoute(shift.routeId!);
+            const stops = route ? await storage.getRouteStops(route.id) : [];
+            const vehicle = shift.vehicleId ? await storage.getVehicle(shift.vehicleId) : null;
 
-        // Fetch group color if route has a groupId
-        let groupColor = null;
-        if (route?.groupId) {
-          const group = await storage.getRouteGroup(route.groupId);
-          groupColor = group?.color || null;
-        }
+            // Fetch group color if route has a groupId
+            let groupColor = null;
+            if (route?.groupId) {
+              const group = await storage.getRouteGroup(route.groupId);
+              groupColor = group?.color || null;
+            }
 
-        res.json({
-          id: shift.id,
-          routeId: shift.routeId,
-          vehicleId: shift.vehicleId,
-          date: shift.date,
-          routeName: route?.name || "Unknown",
-          routeColor: route?.color || null,
-          groupColor,
-          vehicleName: vehicle?.name || "Unknown Vehicle",
-          vehiclePlate: vehicle?.plateNumber || "",
-          stops,
+            return {
+              id: shift.id,
+              routeId: shift.routeId,
+              vehicleId: shift.vehicleId,
+              date: shift.date,
+              plannedStart: shift.plannedStart,
+              plannedEnd: shift.plannedEnd,
+              routeName: route?.name || "Unknown",
+              routeColor: route?.color || null,
+              groupColor,
+              vehicleName: vehicle?.name || "Unknown Vehicle",
+              vehiclePlate: vehicle?.plateNumber || "",
+              stops,
+              status: shift.status,
+              routeStartedAt: shift.routeStartedAt,
+              routeCompletedAt: shift.routeCompletedAt,
+            };
+          })
+        );
+
+        // Sort by planned start time
+        allRoutes.sort((a, b) => {
+          if (!a.plannedStart) return 1;
+          if (!b.plannedStart) return -1;
+          return a.plannedStart.localeCompare(b.plannedStart);
         });
+
+        res.json(allRoutes);
       } catch (error) {
-        console.error("Error fetching today's route:", error);
-        res.status(500).json({ message: "Failed to fetch route" });
+        console.error("Error fetching today's routes:", error);
+        res.status(500).json({ message: "Failed to fetch routes" });
       }
     }
   );

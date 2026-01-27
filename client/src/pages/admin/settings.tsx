@@ -148,7 +148,7 @@ export default function AdminSettings() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden px-4 sm:px-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-lg sm:text-2xl font-semibold flex items-center gap-2">

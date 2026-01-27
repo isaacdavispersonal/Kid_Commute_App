@@ -664,7 +664,7 @@ export default function DriverMessagesPage() {
                     return (
                       <div
                         key={message.id}
-                        className={`flex ${(isOwn || isAdmin) ? "justify-end" : "justify-start"}`}
+                        className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                         data-testid={`message-${message.id}`}
                       >
                         <div
@@ -703,24 +703,27 @@ export default function DriverMessagesPage() {
               </div>
 
               <div className="space-y-3">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Quick Replies</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {quickReplies.map((reply) => (
-                      <Button
-                        key={reply}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleQuickReply(reply)}
-                        disabled={!selectedParent || sendMessageMutation.isPending}
-                        className="text-xs"
-                        data-testid={`button-quick-reply-${reply.toLowerCase().replace(/\s+/g, "-")}`}
-                      >
-                        {reply}
-                      </Button>
-                    ))}
+                {/* Quick replies - only show when chatting with parents, not admins */}
+                {!selectedContactData?.isAdmin && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Quick Replies</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {quickReplies.map((reply) => (
+                        <Button
+                          key={reply}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleQuickReply(reply)}
+                          disabled={!selectedParent || sendMessageMutation.isPending}
+                          className="text-xs"
+                          data-testid={`button-quick-reply-${reply.toLowerCase().replace(/\s+/g, "-")}`}
+                        >
+                          {reply}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="flex gap-2">
                   <Textarea

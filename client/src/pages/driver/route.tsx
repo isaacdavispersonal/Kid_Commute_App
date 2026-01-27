@@ -520,6 +520,138 @@ export default function DriverRoutePage() {
         </Alert>
       )}
 
+      {/* Stop List */}
+      {!inspectionBlocked && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Route Stops</h2>
+          {stops.map((stop, index) => {
+            const isExpanded = expandedStops.has(stop.id);
+            const isCompleted = stop.progress.status === "COMPLETED";
+            const isPending = stop.progress.status === "PENDING";
+            const isActive = progress.activeStopId === stop.routeStopId && isPending;
+            const canComplete = canCompleteStop(stop);
+
+            return (
+              <Collapsible
+                key={stop.id}
+                open={isExpanded}
+                onOpenChange={() => toggleStop(stop.id)}
+              >
+                <Card
+                  className={`${
+                    isCompleted
+                      ? "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800"
+                      : isActive
+                      ? "border-primary"
+                      : ""
+                  }`}
+                  data-testid={`card-stop-${stop.id}`}
+                >
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover-elevate">
+                      <div className="flex items-start gap-3 w-full min-w-0">
+                        {/* Stop number/check indicator */}
+                        <div className="flex-shrink-0 mt-0.5">
+                          {isCompleted ? (
+                            <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <div className="h-6 w-6 rounded-full border-2 border-muted-foreground flex items-center justify-center text-xs font-semibold">
+                              {index + 1}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Stop info - constrained width */}
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-semibold flex items-start gap-1.5" data-testid={`text-stop-name-${stop.id}`}>
+                                <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                <span className="break-words">{stop.name}</span>
+                              </h3>
+                              <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
+                                {stop.address}
+                              </p>
+                            </div>
+                            <ChevronDown className={`h-5 w-5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </div>
+                          
+                          {/* Badges row */}
+                          <div className="flex items-center gap-2 flex-wrap mt-2">
+                            {stop.scheduledTime && (
+                              <Badge variant="outline">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {stop.scheduledTime}
+                              </Badge>
+                            )}
+                            {isPending && stop.stopsAway > 0 && (
+                              <Badge variant="secondary" data-testid={`badge-stops-away-${stop.id}`}>
+                                {stop.stopsAway} stop{stop.stopsAway !== 1 ? "s" : ""} away
+                              </Badge>
+                            )}
+                            {isPending && stop.stopsAway === 0 && (
+                              <Badge variant="default" data-testid={`badge-next-stop-${stop.id}`}>
+                                Next Stop
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {/* Actions */}
+                        {isPending && (
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <Button
+                                className="flex-1"
+                                onClick={() => completeStopMutation.mutate(stop.routeStopId)}
+                                disabled={!canComplete || completeStopMutation.isPending}
+                                data-testid={`button-mark-complete-${stop.id}`}
+                              >
+                                {completeStopMutation.isPending ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Completing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                    Mark Stop Complete
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                            {/* Disabled Reason */}
+                            {!canComplete && !completeStopMutation.isPending && (
+                              <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-muted/50 border border-dashed" data-testid={`text-complete-blocked-${stop.id}`}>
+                                <AlertCircle className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                <span className="text-xs text-muted-foreground">
+                                  Complete previous stops first or process remaining students
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {isCompleted && stop.progress.completedAt && (
+                          <div className="text-sm text-muted-foreground" data-testid={`text-completed-time-${stop.id}`}>
+                            Completed at {new Date(stop.progress.completedAt).toLocaleTimeString()}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            );
+          })}
+        </div>
+      )}
+
       {/* Students Section */}
       {!inspectionBlocked && (
         <Card>
@@ -547,14 +679,14 @@ export default function DriverRoutePage() {
                         hasDisembarked
                           ? "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800"
                           : isAbsent
-                          ? "bg-muted/30"
+                          ? "bg-muted/30 opacity-60"
                           : "bg-card"
                       }`}
                       data-testid={`item-student-${student.id}`}
                     >
                       <div className="flex items-start justify-between gap-3 mb-3 min-w-0">
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium flex items-center gap-2 flex-wrap">
+                          <div className={`font-medium flex items-center gap-2 flex-wrap ${isAbsent ? "text-muted-foreground" : ""}`}>
                             <span className="break-words">{student.firstName} {student.lastName}</span>
                             {hasDisembarked && (
                               <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
@@ -714,138 +846,6 @@ export default function DriverRoutePage() {
             )}
           </CardContent>
         </Card>
-      )}
-
-      {/* Stop List */}
-      {!inspectionBlocked && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold">Route Stops</h2>
-          {stops.map((stop, index) => {
-            const isExpanded = expandedStops.has(stop.id);
-            const isCompleted = stop.progress.status === "COMPLETED";
-            const isPending = stop.progress.status === "PENDING";
-            const isActive = progress.activeStopId === stop.routeStopId && isPending;
-            const canComplete = canCompleteStop(stop);
-
-            return (
-              <Collapsible
-                key={stop.id}
-                open={isExpanded}
-                onOpenChange={() => toggleStop(stop.id)}
-              >
-                <Card
-                  className={`${
-                    isCompleted
-                      ? "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800"
-                      : isActive
-                      ? "border-primary"
-                      : ""
-                  }`}
-                  data-testid={`card-stop-${stop.id}`}
-                >
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover-elevate">
-                      <div className="flex items-start gap-3 w-full min-w-0">
-                        {/* Stop number/check indicator */}
-                        <div className="flex-shrink-0 mt-0.5">
-                          {isCompleted ? (
-                            <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
-                          ) : (
-                            <div className="h-6 w-6 rounded-full border-2 border-muted-foreground flex items-center justify-center text-xs font-semibold">
-                              {index + 1}
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Stop info - constrained width */}
-                        <div className="flex-1 min-w-0 overflow-hidden">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <h3 className="font-semibold flex items-start gap-1.5" data-testid={`text-stop-name-${stop.id}`}>
-                                <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                                <span className="break-words">{stop.name}</span>
-                              </h3>
-                              <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
-                                {stop.address}
-                              </p>
-                            </div>
-                            <ChevronDown className={`h-5 w-5 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                          </div>
-                          
-                          {/* Badges row */}
-                          <div className="flex items-center gap-2 flex-wrap mt-2">
-                            {stop.scheduledTime && (
-                              <Badge variant="outline">
-                                <Clock className="h-3 w-3 mr-1" />
-                                {stop.scheduledTime}
-                              </Badge>
-                            )}
-                            {isPending && stop.stopsAway > 0 && (
-                              <Badge variant="secondary" data-testid={`badge-stops-away-${stop.id}`}>
-                                {stop.stopsAway} stop{stop.stopsAway !== 1 ? "s" : ""} away
-                              </Badge>
-                            )}
-                            {isPending && stop.stopsAway === 0 && (
-                              <Badge variant="default" data-testid={`badge-next-stop-${stop.id}`}>
-                                Next Stop
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {/* Actions */}
-                        {isPending && (
-                          <div className="space-y-2">
-                            <div className="flex gap-2">
-                              <Button
-                                className="flex-1"
-                                onClick={() => completeStopMutation.mutate(stop.routeStopId)}
-                                disabled={!canComplete || completeStopMutation.isPending}
-                                data-testid={`button-mark-complete-${stop.id}`}
-                              >
-                                {completeStopMutation.isPending ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Completing...
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                                    Mark Stop Complete
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                            {/* Disabled Reason */}
-                            {!canComplete && !completeStopMutation.isPending && (
-                              <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-muted/50 border border-dashed" data-testid={`text-complete-blocked-${stop.id}`}>
-                                <AlertCircle className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                                <span className="text-xs text-muted-foreground">
-                                  Complete previous stops first or process remaining students
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {isCompleted && stop.progress.completedAt && (
-                          <div className="text-sm text-muted-foreground" data-testid={`text-completed-time-${stop.id}`}>
-                            Completed at {new Date(stop.progress.completedAt).toLocaleTimeString()}
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
-            );
-          })}
-        </div>
       )}
 
       {/* Report Issue Button - always visible during active route */}

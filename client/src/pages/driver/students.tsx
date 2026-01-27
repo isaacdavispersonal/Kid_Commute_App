@@ -38,6 +38,22 @@ interface Student {
   } | null;
 }
 
+interface GroupedStudent {
+  id: string;
+  firstName: string;
+  lastName: string;
+  guardianPhones: string[];
+  allergies?: string | null;
+  medicalNotes?: string | null;
+  specialNeeds?: string | null;
+  photoUrl?: string | null;
+  routes: Array<{
+    routeId: string;
+    routeName: string;
+    shiftType: "MORNING" | "AFTERNOON" | "EXTRA" | null;
+  }>;
+}
+
 function ShiftTypeBadge({ type }: { type: "MORNING" | "AFTERNOON" | "EXTRA" | null }) {
   if (!type) return null;
   
@@ -57,7 +73,7 @@ function ShiftTypeBadge({ type }: { type: "MORNING" | "AFTERNOON" | "EXTRA" | nu
   );
 }
 
-function StudentCard({ student }: { student: Student }) {
+function StudentCard({ student }: { student: GroupedStudent }) {
   const hasMedical = !!(student.allergies?.trim() || student.medicalNotes?.trim());
   
   return (
@@ -85,22 +101,16 @@ function StudentCard({ student }: { student: Student }) {
             </div>
             
             <div className="flex items-center gap-2 flex-wrap">
-              <ShiftTypeBadge type={student.shiftType} />
-              <Badge variant="outline" className="text-muted-foreground">
-                <RouteIcon className="h-3 w-3 mr-1" />
-                {student.routeName}
-              </Badge>
+              {student.routes.map((route, idx) => (
+                <div key={`${route.routeId}-${idx}`} className="flex items-center gap-1">
+                  <ShiftTypeBadge type={route.shiftType} />
+                  <Badge variant="outline" className="text-muted-foreground">
+                    <RouteIcon className="h-3 w-3 mr-1" />
+                    {route.routeName}
+                  </Badge>
+                </div>
+              ))}
             </div>
-
-            {/* Attendance status */}
-            {student.attendance && (
-              <Badge 
-                variant={student.attendance.status === "riding" ? "default" : "secondary"}
-                className={student.attendance.status === "absent" ? "bg-muted text-muted-foreground" : ""}
-              >
-                {student.attendance.status === "riding" ? "Riding" : "Absent Today"}
-              </Badge>
-            )}
 
             {/* Medical Info Display */}
             {hasMedical && (
@@ -204,21 +214,37 @@ export default function DriverStudents() {
     );
   }
 
-  // Group students by route
-  const studentsByRoute = (students || []).reduce((acc, student) => {
-    const key = `${student.routeId}-${student.shiftType}`;
-    if (!acc[key]) {
-      acc[key] = {
+  // Group students by student ID to deduplicate, showing all their routes
+  const groupedStudents: GroupedStudent[] = Object.values(
+    (students || []).reduce((acc, student) => {
+      if (!acc[student.id]) {
+        acc[student.id] = {
+          id: student.id,
+          firstName: student.firstName,
+          lastName: student.lastName,
+          guardianPhones: student.guardianPhones,
+          allergies: student.allergies,
+          medicalNotes: student.medicalNotes,
+          specialNeeds: student.specialNeeds,
+          photoUrl: student.photoUrl,
+          routes: [],
+        };
+      }
+      acc[student.id].routes.push({
+        routeId: student.routeId,
         routeName: student.routeName,
         shiftType: student.shiftType,
-        students: [],
-      };
-    }
-    acc[key].students.push(student);
-    return acc;
-  }, {} as Record<string, { routeName: string; shiftType: "MORNING" | "AFTERNOON" | "EXTRA" | null; students: Student[] }>);
+      });
+      return acc;
+    }, {} as Record<string, GroupedStudent>)
+  );
 
-  const medicalCount = (students || []).filter(s => s.allergies?.trim() || s.medicalNotes?.trim()).length;
+  // Sort by name
+  groupedStudents.sort((a, b) => 
+    `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`)
+  );
+
+  const medicalCount = groupedStudents.filter(s => s.allergies?.trim() || s.medicalNotes?.trim()).length;
 
   return (
     
@@ -230,7 +256,7 @@ export default function DriverStudents() {
             </h1>
             <Badge variant="secondary">
               <Users className="h-3 w-3 mr-1" />
-              {students?.length || 0}
+              {groupedStudents.length}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -260,25 +286,11 @@ export default function DriverStudents() {
           </div>
         </div>
 
-        {/* Students list */}
-        {Object.keys(studentsByRoute).length > 0 ? (
-          <div className="space-y-6">
-            {Object.entries(studentsByRoute).map(([key, { routeName, shiftType, students: routeStudents }]) => (
-              <div key={key} className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <RouteIcon className="h-5 w-5 text-primary" />
-                  <h2 className="font-semibold">{routeName}</h2>
-                  <ShiftTypeBadge type={shiftType} />
-                  <Badge variant="secondary" className="ml-auto">
-                    {routeStudents.length} student{routeStudents.length !== 1 ? 's' : ''}
-                  </Badge>
-                </div>
-                <div className="grid gap-3">
-                  {routeStudents.map((student) => (
-                    <StudentCard key={student.id} student={student} />
-                  ))}
-                </div>
-              </div>
+        {/* Students list - deduplicated by student with route chips */}
+        {groupedStudents.length > 0 ? (
+          <div className="grid gap-3">
+            {groupedStudents.map((student) => (
+              <StudentCard key={student.id} student={student} />
             ))}
           </div>
         ) : (

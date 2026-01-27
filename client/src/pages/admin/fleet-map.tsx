@@ -189,7 +189,7 @@ export default function AdminFleetMap() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden px-4 sm:px-0">
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold mb-1">Live Fleet Map</h1>
         <p className="text-xs sm:text-sm text-muted-foreground">

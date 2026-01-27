@@ -48,7 +48,7 @@ export const RESOURCE_TO_QUERY_KEYS: Record<
   "route-groups": ["/api/admin/route-groups"],
   stops: ["/api/admin/stops"],
   vehicles: ["/api/admin/vehicles"],
-  "driver-assignments": ["/api/admin/driver-assignments"],
+  "driver-assignments": ["/api/admin/driver-assignments", "/api/driver/today-route", "/api/driver/today-shifts"],
   shifts: ["/api/admin/shifts", "/api/driver/shifts"],
   students: ["/api/admin/students", "/api/parent/students"],
   incidents: ["/api/admin/incidents", "/api/driver/incidents"],
