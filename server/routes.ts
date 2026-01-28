@@ -15,6 +15,7 @@ import { verifyToken } from "./utils/jwt-auth";
 import { pushNotificationService } from "./push-notification-service";
 import { 
   getIO,
+  emitToUser,
   emitRouteRunStarted, 
   emitRouteRunEndedPendingReview, 
   emitRouteRunFinalized,
@@ -3541,6 +3542,259 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(404).json({ message: error.message });
         }
         res.status(500).json({ message: "Failed to delete student route assignment" });
+      }
+    }
+  );
+
+  // ============ Student Service Days routes ============
+
+  // Get all service days rules for a student
+  app.get(
+    "/api/students/:studentId/service-days",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const { studentId } = req.params;
+        const serviceDays = await storage.getStudentServiceDays(studentId);
+        res.json(serviceDays);
+      } catch (error: any) {
+        console.error("Error fetching student service days:", error);
+        res.status(500).json({ message: "Failed to fetch service days" });
+      }
+    }
+  );
+
+  // Get specific service days rule for a student/route/shiftType
+  app.get(
+    "/api/students/:studentId/service-days/:routeId/:shiftType",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const { studentId, routeId, shiftType } = req.params;
+        
+        if (!["MORNING", "AFTERNOON", "EXTRA"].includes(shiftType)) {
+          return res.status(400).json({ message: "Invalid shift type. Must be MORNING, AFTERNOON, or EXTRA" });
+        }
+        
+        const serviceDays = await storage.getStudentServiceDaysForRoute(
+          studentId,
+          routeId,
+          shiftType as "MORNING" | "AFTERNOON" | "EXTRA"
+        );
+        
+        if (!serviceDays) {
+          return res.status(404).json({ message: "Service days rule not found" });
+        }
+        
+        res.json(serviceDays);
+      } catch (error: any) {
+        console.error("Error fetching student service days for route:", error);
+        res.status(500).json({ message: "Failed to fetch service days" });
+      }
+    }
+  );
+
+  // Create or update service days rule
+  app.post(
+    "/api/students/:studentId/service-days",
+    requireAuth,
+    requireAdminOrLeadDriver,
+    async (req: any, res) => {
+      try {
+        const { studentId } = req.params;
+        const { insertStudentServiceDaysSchema } = await import("@shared/schema");
+        
+        // Validate student exists
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        // Validate request body
+        const validatedData = insertStudentServiceDaysSchema.parse({
+          ...req.body,
+          studentId,
+          updatedByUserId: req.user.id,
+        });
+        
+        // Check if rule already exists for this student/route/shiftType
+        const existingRule = await storage.getStudentServiceDaysForRoute(
+          studentId,
+          validatedData.routeId,
+          validatedData.shiftType
+        );
+        
+        let result;
+        if (existingRule) {
+          // Update existing rule
+          result = await storage.updateStudentServiceDays(existingRule.id, {
+            serviceDaysBitmask: validatedData.serviceDaysBitmask,
+            effectiveStartDate: validatedData.effectiveStartDate,
+            effectiveEndDate: validatedData.effectiveEndDate,
+            updatedByUserId: req.user.id,
+          });
+        } else {
+          // Create new rule
+          result = await storage.createStudentServiceDays(validatedData);
+        }
+        
+        // Emit realtime event to parents of this student
+        const parents = await storage.getParentsForStudent(studentId);
+        for (const parent of parents) {
+          emitToUser(parent.id, "student.service_days_updated", {
+            studentId,
+            serviceDays: result,
+          });
+        }
+        
+        res.json(result);
+      } catch (error: any) {
+        console.error("Error creating/updating student service days:", error);
+        if (error.name === "ZodError") {
+          return res.status(400).json({ message: "Invalid data", errors: error.errors });
+        }
+        res.status(500).json({ message: "Failed to save service days" });
+      }
+    }
+  );
+
+  // Delete service days rule
+  app.delete(
+    "/api/students/:studentId/service-days/:id",
+    requireAuth,
+    requireAdminOrLeadDriver,
+    async (req: any, res) => {
+      try {
+        const { studentId, id } = req.params;
+        
+        await storage.deleteStudentServiceDays(id);
+        
+        // Emit realtime event to parents of this student
+        const parents = await storage.getParentsForStudent(studentId);
+        for (const parent of parents) {
+          emitToUser(parent.id, "student.service_days_deleted", {
+            studentId,
+            serviceDaysId: id,
+          });
+        }
+        
+        res.json({ message: "Service days rule deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting student service days:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to delete service days" });
+      }
+    }
+  );
+
+  // ============ Student Service Day Overrides routes ============
+
+  // Get service day overrides for a student
+  app.get(
+    "/api/students/:studentId/service-day-overrides",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const { studentId } = req.params;
+        const { routeId, shiftType, date } = req.query;
+        
+        if (!routeId || !shiftType) {
+          return res.status(400).json({ message: "routeId and shiftType query params are required" });
+        }
+        
+        if (!["MORNING", "AFTERNOON", "EXTRA"].includes(shiftType as string)) {
+          return res.status(400).json({ message: "Invalid shift type. Must be MORNING, AFTERNOON, or EXTRA" });
+        }
+        
+        const overrides = await storage.getStudentServiceDayOverrides(
+          studentId,
+          routeId as string,
+          shiftType as "MORNING" | "AFTERNOON" | "EXTRA",
+          date as string | undefined
+        );
+        
+        res.json(overrides);
+      } catch (error: any) {
+        console.error("Error fetching student service day overrides:", error);
+        res.status(500).json({ message: "Failed to fetch service day overrides" });
+      }
+    }
+  );
+
+  // Create a service day override
+  app.post(
+    "/api/students/:studentId/service-day-overrides",
+    requireAuth,
+    requireAdminOrLeadDriver,
+    async (req: any, res) => {
+      try {
+        const { studentId } = req.params;
+        const { insertStudentServiceDayOverrideSchema } = await import("@shared/schema");
+        
+        // Validate student exists
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+        
+        // Validate request body
+        const validatedData = insertStudentServiceDayOverrideSchema.parse({
+          ...req.body,
+          studentId,
+          createdByUserId: req.user.id,
+        });
+        
+        const result = await storage.createServiceDayOverride(validatedData);
+        
+        // Emit realtime event to parents of this student
+        const parents = await storage.getParentsForStudent(studentId);
+        for (const parent of parents) {
+          emitToUser(parent.id, "student.service_day_override_created", {
+            studentId,
+            override: result,
+          });
+        }
+        
+        res.json(result);
+      } catch (error: any) {
+        console.error("Error creating student service day override:", error);
+        if (error.name === "ZodError") {
+          return res.status(400).json({ message: "Invalid data", errors: error.errors });
+        }
+        res.status(500).json({ message: "Failed to create service day override" });
+      }
+    }
+  );
+
+  // Delete a service day override
+  app.delete(
+    "/api/students/:studentId/service-day-overrides/:id",
+    requireAuth,
+    requireAdminOrLeadDriver,
+    async (req: any, res) => {
+      try {
+        const { studentId, id } = req.params;
+        
+        await storage.deleteServiceDayOverride(id);
+        
+        // Emit realtime event to parents of this student
+        const parents = await storage.getParentsForStudent(studentId);
+        for (const parent of parents) {
+          emitToUser(parent.id, "student.service_day_override_deleted", {
+            studentId,
+            overrideId: id,
+          });
+        }
+        
+        res.json({ message: "Service day override deleted successfully" });
+      } catch (error: any) {
+        console.error("Error deleting student service day override:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to delete service day override" });
       }
     }
   );

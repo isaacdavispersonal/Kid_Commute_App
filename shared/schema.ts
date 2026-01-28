@@ -991,6 +991,113 @@ export type InsertShift = z.infer<typeof insertShiftSchema>;
 export type UpdateShift = z.infer<typeof updateShiftSchema>;
 export type Shift = typeof shifts.$inferSelect;
 
+// ============ Student Service Days Tables ============
+
+// Service day override type enum
+export const serviceDayOverrideTypeEnum = pgEnum("service_day_override_type", [
+  "FORCE_RIDING",      // Student rides even though not scheduled
+  "FORCE_NOT_RIDING",  // Student doesn't ride even though scheduled
+]);
+
+// Student service days table - Stores which days of the week a student rides for each route/shift
+// Uses bitmask: Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
+// Example: Mon+Wed+Fri = 1+4+16 = 21
+export const studentServiceDays = pgTable("student_service_days", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  studentId: varchar("student_id")
+    .notNull()
+    .references(() => students.id, { onDelete: "cascade" }),
+  routeId: varchar("route_id")
+    .notNull()
+    .references(() => routes.id, { onDelete: "cascade" }),
+  shiftType: shiftTypeEnum("shift_type").notNull(), // MORNING, AFTERNOON, EXTRA
+  serviceDaysBitmask: integer("service_days_bitmask").notNull().default(31), // Default: Mon-Fri (1+2+4+8+16=31)
+  effectiveStartDate: varchar("effective_start_date"), // YYYY-MM-DD, optional
+  effectiveEndDate: varchar("effective_end_date"), // YYYY-MM-DD, optional
+  updatedByUserId: varchar("updated_by_user_id")
+    .references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_student_service_days_student").on(table.studentId),
+  index("idx_student_service_days_route").on(table.routeId),
+  uniqueIndex("idx_student_service_days_unique").on(table.studentId, table.routeId, table.shiftType),
+]);
+
+export const insertStudentServiceDaysSchema = createInsertSchema(studentServiceDays).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  shiftType: z.enum(["MORNING", "AFTERNOON", "EXTRA"]),
+  serviceDaysBitmask: z.number().int().min(0).max(127), // 0-127 (7 bits for 7 days)
+});
+
+export const updateStudentServiceDaysSchema = createInsertSchema(studentServiceDays).omit({
+  id: true,
+  studentId: true,
+  routeId: true,
+  shiftType: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  serviceDaysBitmask: z.number().int().min(0).max(127).optional(),
+}).partial();
+
+export type InsertStudentServiceDays = z.infer<typeof insertStudentServiceDaysSchema>;
+export type UpdateStudentServiceDays = z.infer<typeof updateStudentServiceDaysSchema>;
+export type StudentServiceDays = typeof studentServiceDays.$inferSelect;
+
+// Student service day overrides table - One-off date-specific overrides
+export const studentServiceDayOverrides = pgTable("student_service_day_overrides", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  studentId: varchar("student_id")
+    .notNull()
+    .references(() => students.id, { onDelete: "cascade" }),
+  routeId: varchar("route_id")
+    .notNull()
+    .references(() => routes.id, { onDelete: "cascade" }),
+  shiftType: shiftTypeEnum("shift_type").notNull(),
+  serviceDate: varchar("service_date").notNull(), // YYYY-MM-DD
+  overrideType: serviceDayOverrideTypeEnum("override_type").notNull(),
+  reason: text("reason"),
+  createdByUserId: varchar("created_by_user_id")
+    .references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_service_day_overrides_student").on(table.studentId),
+  index("idx_service_day_overrides_date").on(table.serviceDate),
+  uniqueIndex("idx_service_day_overrides_unique").on(table.studentId, table.routeId, table.shiftType, table.serviceDate),
+]);
+
+export const insertStudentServiceDayOverrideSchema = createInsertSchema(studentServiceDayOverrides).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  shiftType: z.enum(["MORNING", "AFTERNOON", "EXTRA"]),
+  overrideType: z.enum(["FORCE_RIDING", "FORCE_NOT_RIDING"]),
+  serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD format"),
+});
+
+export type InsertStudentServiceDayOverride = z.infer<typeof insertStudentServiceDayOverrideSchema>;
+export type StudentServiceDayOverride = typeof studentServiceDayOverrides.$inferSelect;
+
+// Helper constants for service day bitmask
+export const SERVICE_DAY_BITS = {
+  MONDAY: 1,
+  TUESDAY: 2,
+  WEDNESDAY: 4,
+  THURSDAY: 8,
+  FRIDAY: 16,
+  SATURDAY: 32,
+  SUNDAY: 64,
+} as const;
+
+// Weekdays only (Mon-Fri) = 31
+export const WEEKDAYS_BITMASK = 31;
+// All days (Mon-Sun) = 127
+export const ALL_DAYS_BITMASK = 127;
+
 // Clock event type enum
 export const clockEventTypeEnum = pgEnum("clock_event_type", ["IN", "OUT", "BREAK_START", "BREAK_END"]);
 

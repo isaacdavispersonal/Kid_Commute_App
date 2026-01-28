@@ -147,6 +147,13 @@ import {
   type InsertGeofence,
   type GeofenceEvent,
   type InsertGeofenceEvent,
+  studentServiceDays,
+  studentServiceDayOverrides,
+  type StudentServiceDays,
+  type InsertStudentServiceDays,
+  type UpdateStudentServiceDays,
+  type StudentServiceDayOverride,
+  type InsertStudentServiceDayOverride,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray, isNotNull, isNull } from "drizzle-orm";
@@ -544,6 +551,19 @@ export interface IStorage {
   logAttendanceChange(log: InsertAttendanceChangeLog): Promise<AttendanceChangeLog>;
   getAttendanceChangeLogs(routeRunId: string): Promise<AttendanceChangeLog[]>;
   getAttendanceChangeLogsByStudent(studentId: string): Promise<AttendanceChangeLog[]>;
+
+  // Student service days operations
+  getStudentServiceDays(studentId: string): Promise<StudentServiceDays[]>;
+  getStudentServiceDaysForRoute(studentId: string, routeId: string, shiftType: "MORNING" | "AFTERNOON" | "EXTRA"): Promise<StudentServiceDays | undefined>;
+  createStudentServiceDays(data: InsertStudentServiceDays): Promise<StudentServiceDays>;
+  updateStudentServiceDays(id: string, data: UpdateStudentServiceDays): Promise<StudentServiceDays>;
+  deleteStudentServiceDays(id: string): Promise<void>;
+
+  // Student service day overrides operations
+  getStudentServiceDayOverrides(studentId: string, routeId: string, shiftType: "MORNING" | "AFTERNOON" | "EXTRA", date?: string): Promise<StudentServiceDayOverride[]>;
+  getServiceDayOverrideForDate(studentId: string, routeId: string, shiftType: "MORNING" | "AFTERNOON" | "EXTRA", date: string): Promise<StudentServiceDayOverride | undefined>;
+  createServiceDayOverride(data: InsertStudentServiceDayOverride): Promise<StudentServiceDayOverride>;
+  deleteServiceDayOverride(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3870,6 +3890,7 @@ export class DatabaseStorage implements IStorage {
   // Get students for a route with attendance data for a specific date and optionally shift
   // When shiftId is provided, returns attendance for that specific shift (AM or PM)
   // When shiftId is null/undefined, returns per-shift attendance with fallback to date-level
+  // Also includes service day scheduling info to determine if student rides on this day
   async getStudentsByRouteForDate(routeId: string, date: string, shiftId?: string): Promise<any[]> {
     // Get students from direct assignment
     const directStudents = await db
@@ -3895,8 +3916,66 @@ export class DatabaseStorage implements IStorage {
       return lastCmp !== 0 ? lastCmp : (a.firstName || '').localeCompare(b.firstName || '');
     });
     
-    // Get attendance records for these students on this date
     const studentIds = routeStudents.map(s => s.id);
+    
+    // Determine shift type for service day filtering
+    let shiftType: "MORNING" | "AFTERNOON" | "EXTRA" | null = null;
+    if (shiftId) {
+      const shift = await this.getShift(shiftId);
+      if (shift) {
+        shiftType = shift.shiftType;
+      }
+    }
+    
+    // Get service day rules for all students on this route
+    let serviceDaysMap = new Map<string, number>(); // studentId -> bitmask
+    let overridesMap = new Map<string, "FORCE_RIDING" | "FORCE_NOT_RIDING">(); // studentId -> override type
+    
+    if (studentIds.length > 0 && shiftType) {
+      // Get service days rules
+      const serviceDaysRecords = await db
+        .select()
+        .from(studentServiceDays)
+        .where(
+          and(
+            eq(studentServiceDays.routeId, routeId),
+            eq(studentServiceDays.shiftType, shiftType),
+            or(...studentIds.map(id => eq(studentServiceDays.studentId, id)))
+          )
+        );
+      
+      serviceDaysRecords.forEach(record => {
+        serviceDaysMap.set(record.studentId, record.serviceDaysBitmask);
+      });
+      
+      // Get overrides for this specific date
+      const overrideRecords = await db
+        .select()
+        .from(studentServiceDayOverrides)
+        .where(
+          and(
+            eq(studentServiceDayOverrides.routeId, routeId),
+            eq(studentServiceDayOverrides.shiftType, shiftType),
+            eq(studentServiceDayOverrides.serviceDate, date),
+            or(...studentIds.map(id => eq(studentServiceDayOverrides.studentId, id)))
+          )
+        );
+      
+      overrideRecords.forEach(record => {
+        overridesMap.set(record.studentId, record.overrideType);
+      });
+    }
+    
+    // Calculate weekday bit for the given date
+    // JavaScript getDay(): 0=Sun, 1=Mon, ..., 6=Sat
+    // Our bitmask: Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
+    const dateObj = new Date(date + 'T12:00:00Z'); // Use noon UTC to avoid timezone issues
+    const jsDay = dateObj.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    // Convert to our bitmask: Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
+    const dayBits = [64, 1, 2, 4, 8, 16, 32]; // Index by JS day (Sun=0, Mon=1, ...)
+    const todayBit = dayBits[jsDay];
+    
+    // Get attendance records for these students on this date
     let attendanceRecords: StudentAttendance[] = [];
     
     if (studentIds.length > 0) {
@@ -3938,10 +4017,36 @@ export class DatabaseStorage implements IStorage {
       });
     }
     
-    return routeStudents.map(student => ({
-      ...student,
-      attendance: attendanceMap.get(student.id)?.status || null,
-    }));
+    return routeStudents.map(student => {
+      // Determine if student is scheduled to ride today
+      let isScheduledToday = true; // Default: student rides if no service days rule exists
+      
+      if (shiftType) {
+        const override = overridesMap.get(student.id);
+        
+        if (override === "FORCE_RIDING") {
+          isScheduledToday = true;
+        } else if (override === "FORCE_NOT_RIDING") {
+          isScheduledToday = false;
+        } else {
+          // Check service days bitmask
+          const bitmask = serviceDaysMap.get(student.id);
+          if (bitmask !== undefined) {
+            // Student has a service days rule - check if today is included
+            isScheduledToday = (bitmask & todayBit) !== 0;
+          }
+          // If no service days rule, default to true (rides all days)
+        }
+      }
+      
+      return {
+        ...student,
+        attendance: attendanceMap.get(student.id)?.status || null,
+        isScheduledToday,
+        serviceDaysBitmask: serviceDaysMap.get(student.id) ?? null,
+        serviceDayOverride: overridesMap.get(student.id) ?? null,
+      };
+    });
   }
 
   async getAttendanceOverview(date: string): Promise<{ pending: number; riding: number; absent: number; total: number }> {
@@ -6133,6 +6238,121 @@ export class DatabaseStorage implements IStorage {
       .from(attendanceChangeLogs)
       .where(eq(attendanceChangeLogs.studentId, studentId))
       .orderBy(desc(attendanceChangeLogs.createdAt));
+  }
+
+  // ============ Student Service Days operations ============
+
+  async getStudentServiceDays(studentId: string): Promise<StudentServiceDays[]> {
+    return await db
+      .select()
+      .from(studentServiceDays)
+      .where(eq(studentServiceDays.studentId, studentId));
+  }
+
+  async getStudentServiceDaysForRoute(
+    studentId: string,
+    routeId: string,
+    shiftType: "MORNING" | "AFTERNOON" | "EXTRA"
+  ): Promise<StudentServiceDays | undefined> {
+    const [result] = await db
+      .select()
+      .from(studentServiceDays)
+      .where(
+        and(
+          eq(studentServiceDays.studentId, studentId),
+          eq(studentServiceDays.routeId, routeId),
+          eq(studentServiceDays.shiftType, shiftType)
+        )
+      );
+    return result;
+  }
+
+  async createStudentServiceDays(data: InsertStudentServiceDays): Promise<StudentServiceDays> {
+    const [created] = await db.insert(studentServiceDays).values(data).returning();
+    return created;
+  }
+
+  async updateStudentServiceDays(id: string, data: UpdateStudentServiceDays): Promise<StudentServiceDays> {
+    const [updated] = await db
+      .update(studentServiceDays)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(studentServiceDays.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("StudentServiceDays not found");
+    }
+    return updated;
+  }
+
+  async deleteStudentServiceDays(id: string): Promise<void> {
+    await db.delete(studentServiceDays).where(eq(studentServiceDays.id, id));
+  }
+
+  // ============ Student Service Day Overrides operations ============
+
+  async getStudentServiceDayOverrides(
+    studentId: string,
+    routeId: string,
+    shiftType: "MORNING" | "AFTERNOON" | "EXTRA",
+    date?: string
+  ): Promise<StudentServiceDayOverride[]> {
+    const conditions = [
+      eq(studentServiceDayOverrides.studentId, studentId),
+      eq(studentServiceDayOverrides.routeId, routeId),
+      eq(studentServiceDayOverrides.shiftType, shiftType),
+    ];
+    if (date) {
+      conditions.push(eq(studentServiceDayOverrides.serviceDate, date));
+    }
+    return await db
+      .select()
+      .from(studentServiceDayOverrides)
+      .where(and(...conditions));
+  }
+
+  async getServiceDayOverrideForDate(
+    studentId: string,
+    routeId: string,
+    shiftType: "MORNING" | "AFTERNOON" | "EXTRA",
+    date: string
+  ): Promise<StudentServiceDayOverride | undefined> {
+    const [result] = await db
+      .select()
+      .from(studentServiceDayOverrides)
+      .where(
+        and(
+          eq(studentServiceDayOverrides.studentId, studentId),
+          eq(studentServiceDayOverrides.routeId, routeId),
+          eq(studentServiceDayOverrides.shiftType, shiftType),
+          eq(studentServiceDayOverrides.serviceDate, date)
+        )
+      );
+    return result;
+  }
+
+  async createServiceDayOverride(data: InsertStudentServiceDayOverride): Promise<StudentServiceDayOverride> {
+    const [created] = await db
+      .insert(studentServiceDayOverrides)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [
+          studentServiceDayOverrides.studentId,
+          studentServiceDayOverrides.routeId,
+          studentServiceDayOverrides.shiftType,
+          studentServiceDayOverrides.serviceDate,
+        ],
+        set: {
+          overrideType: data.overrideType,
+          reason: data.reason,
+          createdByUserId: data.createdByUserId,
+        },
+      })
+      .returning();
+    return created;
+  }
+
+  async deleteServiceDayOverride(id: string): Promise<void> {
+    await db.delete(studentServiceDayOverrides).where(eq(studentServiceDayOverrides.id, id));
   }
 }
 

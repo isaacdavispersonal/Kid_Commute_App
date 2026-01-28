@@ -1,0 +1,191 @@
+Yep — you’ll want this as a **“service days” rule** on each student (per route/shift), and it should flow into **route roster generation + attendance defaults + what drivers see (grayed out vs active)**.
+
+Here’s the clean way to implement it so it doesn’t create more “missing student / extra student” bugs.
+
+---
+
+## Feature: Student Riding Schedule (Recurring Days-of-Week)
+
+### Goal
+
+Some students ride only on specific days (ex: **Mon/Tue/Fri**). Admins + Lead Drivers can edit this on the student profile. The system should automatically:
+
+* include the student in the route roster only on their ride days
+* default them to “Not riding today” (grayed out) on non-ride days
+* allow admins/lead drivers to override for one-off cases
+
+---
+
+# 1) Data Model (recommended)
+
+## A) Per-student, per-route, per-shift rule (best)
+
+Create a table like `student_route_service_days` (or extend existing “student route assignment” table).
+
+**Fields**
+
+* `id`
+* `student_id`
+* `route_id`
+* `shift_type` (`AM|PM`) *(if your routes split by shift)*
+* `service_days_bitmask` (int) **or** boolean columns for each day
+
+  * bitmask example: Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
+* `effective_start_date` (optional)
+* `effective_end_date` (optional)
+* `updated_by_user_id`
+* `updated_at`
+
+Why per-route/shift? Because a student might ride:
+
+* AM only
+* PM only
+* or different days for different routes
+
+---
+
+# 2) How Rosters Should Be Built (critical to avoid bugs)
+
+## A) For each RouteRun (today + AM/PM)
+
+Roster inclusion should be computed as:
+
+**Included if:**
+
+1. student is assigned to the route
+2. AND today’s weekday is in `service_days`
+3. AND student is active (not deleted, not ended, etc.)
+
+**If not included:**
+
+* student should either:
+
+  * not appear at all (clean roster), OR
+  * appear as “Not riding today” (grayed out) if you want drivers to see consistency
+
+### Recommendation
+
+* On the *stop attendance screen*, show:
+
+  * students scheduled to ride today (active)
+  * optionally, show non-ride-day students in a collapsed “Not riding today” section
+
+This reduces clutter but keeps transparency.
+
+---
+
+# 3) Attendance Defaults + Overrides
+
+## A) Default status
+
+* If today is not a service day → status default: **NOT_RIDING_TODAY**
+* If today is a service day → status default: **EXPECTED**
+
+## B) Override rules (one-off)
+
+Admins/Lead Drivers should be able to override for a specific date:
+
+* “Riding today even though not scheduled”
+* “Not riding today even though scheduled”
+
+Implement overrides as a separate table so you don’t mutate the recurring rule:
+
+**Table: `student_service_day_overrides`**
+
+* `id`
+* `student_id`
+* `route_run_id` (or `service_date` + route_id + shift_type)
+* `override_type`: `FORCE_RIDING` | `FORCE_NOT_RIDING`
+* `reason`
+* `created_by_user_id`
+* `created_at`
+
+---
+
+# 4) UI Requirements (Student Page)
+
+## Where it lives
+
+Student Profile → “Transportation” section → “Riding Schedule”
+
+### Display
+
+* Days of week chips: M T W T F S S
+* Highlight selected days
+* Show which route/shift this applies to (if needed)
+
+### Editing permissions
+
+* Admin: can edit
+* Lead Driver: can edit
+* Driver/Parent: view only (unless you later allow parent requests)
+
+### What happens when saved
+
+* Updates recurring service days
+* Logs an audit event
+* Triggers realtime update so:
+
+  * drivers see roster updates without refresh
+  * admin schedule view updates
+
+---
+
+# 5) Realtime + Badges + Audit
+
+## Realtime events
+
+Emit:
+
+* `student.service_days_updated` with payload:
+
+  * student_id, route_id, shift_type, new_days
+
+## Audit log entry
+
+Store:
+
+* old value → new value
+* who changed it
+* timestamp
+* optional reason
+
+---
+
+# 6) Acceptance Tests (must pass)
+
+1. Student scheduled Mon/Tue/Fri only
+
+* On Wednesday: student appears as **Not riding today** (or not listed if you choose that behavior)
+* On Monday: student appears as **Expected** and is markable
+
+2. Override test
+
+* Student not scheduled on Wed, admin sets “Riding today” override
+* Student appears as expected **for that date only**
+
+3. Permissions
+
+* Regular driver cannot edit schedule
+* Lead driver can edit
+
+4. Sync
+
+* Admin changes schedule on desktop
+* Driver sees roster update without force closing the app (via realtime + query invalidation fallback)
+
+---
+
+## Recommendation summary
+
+✅ Implement as **service days per student-route-shift**
+✅ Use **date-specific overrides** for one-offs
+✅ Tie it into **RouteRun roster generation** so it doesn’t create “missing/extra students”
+✅ Show as **grayed out** or in a “Not riding today” section to keep clarity
+
+If you want, I can turn this into a **Replit AI pasteable spec** with:
+
+* exact SQL migration (bitmask or booleans)
+* endpoint definitions (`PATCH /students/:id/service-days`)
+* query logic for roster generation
+* UI checklist for the Student page

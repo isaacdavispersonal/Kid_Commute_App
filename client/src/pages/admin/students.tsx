@@ -56,6 +56,7 @@ import {
   Clock,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RidingScheduleEditor } from "@/components/riding-schedule-editor";
 
 interface EnrichedStudent {
   id: string;
@@ -1297,6 +1298,35 @@ export default function AdminStudentsPage() {
                 </Button>
               )}
             </div>
+
+            {/* Riding Schedule Section */}
+            {studentRouteAssignments && studentRouteAssignments.length > 0 && (
+              <div className="space-y-2 sm:space-y-3">
+                <Label className="text-sm sm:text-base font-semibold">Riding Schedule</Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Select which days this student rides for each route.
+                </p>
+                <div className="space-y-4">
+                  {studentRouteAssignments.map((assignment: any) => {
+                    const route = routes?.find(r => r.id === assignment.routeId);
+                    const shiftType = route?.routeType || "MORNING";
+                    return (
+                      <div key={`schedule-${assignment.id}`} className="border rounded-lg p-3 sm:p-4 space-y-2" data-testid={`schedule-section-${assignment.id}`}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">{route?.name || "Unknown Route"}</span>
+                          <RouteTypeBadge routeType={route?.routeType || null} />
+                        </div>
+                        <RidingScheduleEditor
+                          studentId={selectedStudent!.id}
+                          routeId={assignment.routeId}
+                          shiftType={shiftType as "MORNING" | "AFTERNOON" | "EXTRA"}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end pt-2">
               <Button variant="outline" onClick={handleCloseDialog} data-testid="button-close">
