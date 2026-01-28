@@ -57,6 +57,9 @@ Preferred communication style: Simple, everyday language.
     - **iOS Post-Auth Layout Fix**: Addresses WKWebView layout issues after login/signup.
     - **iOS Debug Overlay**: Toggleable overlay for debugging layout and platform information.
     - **RouteRun System**: Multi-driver route execution tracking with real-time coordination, supporting multiple participant roles and a defined status flow.
+    - **Student Not At Stop Notification**: Drivers can notify parents when students are not at their pickup stop, with in-app messaging and push notifications with deep link to chat.
+    - **Expandable Student Cards**: Driver route page shows expandable student cards with color-coded icons for allergies, medical notes, special needs, and general notes.
+    - **Parent Stop Change Requests**: Parents can request pickup/dropoff stop changes with admin approval workflow, status tracking, and history view.
 
 ## External Dependencies
 
