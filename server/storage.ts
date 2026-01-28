@@ -298,7 +298,7 @@ export interface IStorage {
   getUnreadDriverNotificationCount(driverId: string): Promise<number>;
 
   // Announcement operations
-  createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement[]>;
+  createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement>;
   getAnnouncementsByRole(role: "driver" | "parent"): Promise<Announcement[]>;
   getNonDismissedAnnouncementsByRole(userId: string, role: "driver" | "parent"): Promise<Announcement[]>;
   getDismissedAnnouncementsByRole(userId: string, role: "driver" | "parent"): Promise<Announcement[]>;
@@ -1294,6 +1294,8 @@ export class DatabaseStorage implements IStorage {
       .select({
         id: households.id,
         primaryPhone: households.primaryPhone,
+        isPlaceholder: households.isPlaceholder,
+        placeholderSource: households.placeholderSource,
         notes: households.notes,
         createdAt: households.createdAt,
       })
@@ -1305,6 +1307,8 @@ export class DatabaseStorage implements IStorage {
     return result[0] ? {
       id: result[0].id,
       primaryPhone: result[0].primaryPhone,
+      isPlaceholder: result[0].isPlaceholder,
+      placeholderSource: result[0].placeholderSource,
       notes: result[0].notes,
       createdAt: result[0].createdAt,
     } : undefined;
@@ -1690,13 +1694,18 @@ export class DatabaseStorage implements IStorage {
             continue;
           }
 
-          // Create the stop
-          const [newStop] = await tx.insert(stops).values({
+          // Create the stop - only include lat/lng if provided, converting numbers to strings
+          const stopValues: { name: string; address: string; latitude?: string; longitude?: string } = {
             name: stopInput.name,
             address: stopInput.address,
-            latitude: stopInput.latitude ?? null,
-            longitude: stopInput.longitude ?? null,
-          }).returning();
+          };
+          if (stopInput.latitude !== undefined && stopInput.latitude !== null) {
+            stopValues.latitude = String(stopInput.latitude);
+          }
+          if (stopInput.longitude !== undefined && stopInput.longitude !== null) {
+            stopValues.longitude = String(stopInput.longitude);
+          }
+          const [newStop] = await tx.insert(stops).values(stopValues).returning();
 
           created.push(newStop);
         } catch (error) {
@@ -2058,7 +2067,7 @@ export class DatabaseStorage implements IStorage {
     // Determine which stop field to use based on shift type
     const isPickup = shift.shiftType === "MORNING";
     
-    // Enrich each stop with progress (no students here anymore)
+    // Enrich each stop with progress and students
     const enrichedStops = await Promise.all(
       routeStopsData.map(async (stop, index) => {
         // Get progress for this stop
@@ -2071,8 +2080,24 @@ export class DatabaseStorage implements IStorage {
           return !prog || prog.status === "PENDING";
         }).length;
 
+        // Get students for this stop
+        const stopStudents = allStudents.filter(student => {
+          const plannedStopId = isPickup ? student.pickupStopId : student.dropoffStopId;
+          return plannedStopId === stop.id;
+        }).map(student => ({
+          id: student.id,
+          firstName: student.firstName,
+          lastName: student.lastName,
+          attendance: student.attendance ? {
+            status: student.attendance.status || "PENDING",
+            markedByUserId: student.attendance.markedByUserId || "",
+            createdAt: student.attendance.createdAt || new Date().toISOString(),
+          } : null,
+        }));
+
         return {
           ...stop,
+          students: stopStudents,
           progress: {
             status,
             completedAt: progress?.completedAt || null,
@@ -2101,12 +2126,12 @@ export class DatabaseStorage implements IStorage {
         plannedStopId,
         plannedStopName: plannedStop?.name || null,
         plannedStopOrder: plannedStop?.stopOrder || null,
-        boardEvent: events?.board ? {
+        boardEvent: events?.board && events.board.recordedAt ? {
           stopId: events.board.actualStopId,
           stopName: routeStopsData.find(s => s.id === events.board!.actualStopId)?.name || null,
           recordedAt: events.board.recordedAt,
         } : null,
-        deboardEvent: events?.deboard ? {
+        deboardEvent: events?.deboard && events.deboard.recordedAt ? {
           stopId: events.deboard.actualStopId,
           stopName: routeStopsData.find(s => s.id === events.deboard!.actualStopId)?.name || null,
           recordedAt: events.deboard.recordedAt,
@@ -2621,7 +2646,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(timeEntries.driverId, driverId),
-          eq(timeEntries.clockOut, null)
+          isNull(timeEntries.clockOut)
         )
       )
       .orderBy(desc(timeEntries.clockIn))
@@ -2668,8 +2693,8 @@ export class DatabaseStorage implements IStorage {
           .where(eq(messages.senderId, userId))
       );
 
-    const userIds = [...new Set(messageUsers.map((m) => m.userId))].filter(
-      (id) => id !== userId
+    const userIds = Array.from(new Set(messageUsers.map((m) => m.userId))).filter(
+      (id): id is string => id !== null && id !== userId
     );
 
     if (userIds.length === 0) return [];
@@ -2884,7 +2909,7 @@ export class DatabaseStorage implements IStorage {
 
     // Build summaries for each user
     const result = [];
-    for (const userId of allUserIds) {
+    for (const userId of Array.from(allUserIds)) {
       const msgs = await this.getMessagesBetweenUsers(adminId, userId);
       if (msgs.length > 0) {
         const user = await this.getUser(userId);
@@ -3191,7 +3216,7 @@ export class DatabaseStorage implements IStorage {
     const currentTimeEntries = await db
       .select()
       .from(timeEntries)
-      .where(eq(timeEntries.clockOut, null));
+      .where(isNull(timeEntries.clockOut));
 
     const activeDriverIds = new Set(currentTimeEntries.map((e) => e.driverId));
 
@@ -3457,7 +3482,7 @@ export class DatabaseStorage implements IStorage {
         pushFailureCount: announcements.pushFailureCount,
         lastPushError: announcements.lastPushError,
         createdAt: announcements.createdAt,
-        adminName: users.name,
+        adminName: sql<string | null>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
         routeName: routes.name,
       })
       .from(announcements)
@@ -3759,7 +3784,7 @@ export class DatabaseStorage implements IStorage {
       if (markedBy && (markedBy.role === "driver" || markedBy.role === "parent")) {
         const student = await this.getStudent(attendance.studentId);
         const shift = attendance.shiftId ? await this.getShift(attendance.shiftId) : null;
-        const shiftLabel = shift?.shiftType === "AM" ? " (AM)" : shift?.shiftType === "PM" ? " (PM)" : "";
+        const shiftLabel = shift?.shiftType === "MORNING" ? " (AM)" : shift?.shiftType === "AFTERNOON" ? " (PM)" : "";
         await this.createAuditLog({
           userId: markedBy.id,
           userRole: markedBy.role,
@@ -5248,10 +5273,12 @@ export class DatabaseStorage implements IStorage {
     // Group clock events by shift ID
     const eventsByShift = new Map<string, ClockEvent[]>();
     for (const event of allEvents) {
-      if (!eventsByShift.has(event.shiftId)) {
-        eventsByShift.set(event.shiftId, []);
+      if (event.shiftId) {
+        if (!eventsByShift.has(event.shiftId)) {
+          eventsByShift.set(event.shiftId, []);
+        }
+        eventsByShift.get(event.shiftId)!.push(event);
       }
-      eventsByShift.get(event.shiftId)!.push(event);
     }
 
     // Track daily hours for overtime calculation
