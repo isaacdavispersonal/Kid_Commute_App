@@ -2111,6 +2111,10 @@ export class DatabaseStorage implements IStorage {
           stopName: routeStopsData.find(s => s.id === events.deboard!.actualStopId)?.name || null,
           recordedAt: events.deboard.recordedAt,
         } : null,
+        notes: student.notes || null,
+        allergies: student.allergies || null,
+        medicalNotes: student.medicalNotes || null,
+        specialNeeds: student.specialNeeds || null,
       };
     });
 

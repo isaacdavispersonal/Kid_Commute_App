@@ -1,0 +1,522 @@
+Below is a **grouped-by-implementation** breakdown of every bug/feature you listed, with a **detailed analysis + likely root cause + concrete fix plan + acceptance checks**. This is written so you can paste sections into Replit AI by module.
+
+---
+
+# Group 1 — Scheduling + Assignments + “Today” Resolution
+
+## 1) Route assignment changes don’t reflect on the schedule (stale old route)
+
+**Symptom**
+
+* Admin changes a driver’s route assignment
+* Schedule still shows the previous route
+
+**Likely root causes**
+
+* Schedule view is pulling from a **cached** source (TanStack Query key not invalidated)
+* Assignment change endpoint updates one table, but schedule reads from a different source of truth
+* The schedule is based on **Route templates** while assignment updates affect **RouteRuns** (or vice versa)
+* Missing realtime emit: clients never receive “assignment.updated”
+
+**Fix plan**
+
+1. Identify source of truth:
+
+   * Assignments should reference `driver_id + route_id + service_date + shift_type`
+2. On assignment update:
+
+   * Update DB record(s)
+   * Emit realtime event: `assignment.updated` to `user:<driverId>` and `org:<orgId>`
+3. Frontend:
+
+   * Invalidate queries:
+
+     * `schedule:today`, `driver:todayRoutes`, `admin:assignments`
+   * If using socket events, update local store immediately (optimistic refresh)
+
+**Acceptance checks**
+
+* Change assignment → schedule updates without refresh within 2s
+* Driver “My Routes” updates without closing app
+* No old route remains after a hard refresh either (confirms backend consistency)
+
+---
+
+## 2) Driver “My Routes” shows only the first assigned route
+
+**Symptom**
+
+* Driver has multiple routes today
+* UI only displays the first route
+
+**Likely root causes**
+
+* API returns array but UI uses `[0]` or `.find()` instead of mapping
+* Backend query includes `LIMIT 1`
+* Frontend grouping logic collapses multiple runs into one
+
+**Fix plan**
+
+* Backend: ensure endpoint returns **all** assigned routes for today (AM + PM)
+* Frontend: render list; clearly label `AM/PM`
+* Add empty state: “No routes assigned today”
+
+**Acceptance checks**
+
+* Driver with 2+ routes sees all routes
+* Routes sorted by start time / shift
+* Selecting each route loads correct stops/students
+
+---
+
+# Group 2 — Driver Route Execution Flow + Attendance + Stop Completion
+
+## 3) Route management screen is inverted (students at top, stops below; card expands to complete route)
+
+**What you want (authoritative behavior)**
+
+* Students are tied to the **route stop**
+* Flow should be: **Arrive stop → mark students → complete stop → next stop**
+* Completing the **route** should be separate and only possible after all stops done (or with confirmation + pending review)
+
+**Likely root causes**
+
+* UI is built around a “global student list” not stop-scoped roster
+* Stop completion logic isn’t enforcing “attendance marked”
+
+**Fix plan**
+
+1. Data:
+
+   * Each student must have a stop association for pickup/dropoff (for that route/run)
+2. UI:
+
+   * Primary view = **current stop card**
+   * Inside it: list of students assigned to that stop
+   * Only allow “Complete Stop” if:
+
+     * all non-absent students are marked
+3. Route completion:
+
+   * Only after last stop is complete, OR driver confirms “end early” → sends to Pending Review
+
+**Acceptance checks**
+
+* Arriving at stop unlocks attendance
+* Stop cannot complete until attendance done (except grayed-out absents)
+* Completing route triggers summary, not a hard lock
+
+---
+
+## 4) Students should show even if absent (grayed out) and don’t require marking
+
+**Symptom**
+
+* Missing/incorrect behavior around absents
+
+**Likely root causes**
+
+* Filtering absent students out of the list instead of displaying them disabled
+
+**Fix plan**
+
+* Always render all students assigned to the stop
+* If `is_absent=true`:
+
+  * show disabled/grayed
+  * show reason/source if available (admin/parent)
+  * exclude from completion-required count
+
+**Acceptance checks**
+
+* Absent students visible and disabled
+* Stop completion works without marking them
+
+---
+
+## 5) “Student isn’t at the stop” action that notifies parent + push + deep link to chat
+
+**This is a feature (and also solves a bug)**
+**Desired behavior**
+
+* Driver at stop
+* If student supposed to ride but no-show:
+
+  * driver taps: “Student isn’t at stop”
+  * parent receives:
+
+    * in-app notification card
+    * push notification
+  * tapping it takes them to communication area with a clear CTA: **Message Driver**
+
+**Implementation approach**
+
+* Create an event type: `NO_SHOW_AT_STOP`
+* Backend:
+
+  * Create notification record
+  * Emit socket event to parent
+  * Send push to parent devices
+* Deep link payload includes:
+
+  * `type=no_show`
+  * `route_run_id`
+  * `student_id`
+  * `thread_id` (or driver chat id)
+
+**Acceptance checks**
+
+* Parent receives push while app closed
+* Tap push opens app → navigates to driver chat
+* In-app shows message “Driver arrived… departing in a few minutes” + button “Message Driver”
+
+---
+
+## 6) Student cards in driver attendance should expand to show additional profile info (admin/parent notes)
+
+**Symptom**
+
+* Clicking attendance student should show more details, but doesn’t
+
+**Likely root causes**
+
+* Student detail payload not included in attendance endpoint
+* UI card lacks expandable panel
+
+**Fix plan**
+
+* Backend: include safe subset of student profile fields (notes, emergency info if allowed)
+* Frontend: expandable card:
+
+  * notes
+  * parent instructions
+  * medical alerts (only if you decide to show to drivers)
+* Ensure role-based field filtering
+
+**Acceptance checks**
+
+* Expand shows correct notes
+* No sensitive fields leak to wrong role
+
+---
+
+# Group 3 — Driver “My Students” Duplicates + Profile Expand
+
+## 7) My Students shows duplicate entries for the same student across multiple routes
+
+**Symptom**
+
+* Same student appears multiple times
+
+**Likely root causes**
+
+* Query returns (student × route) rows and UI renders them directly
+
+**Fix plan**
+
+* Backend or frontend grouping:
+
+  * group by `student_id`
+  * show student once
+  * show routes as a list/chips under student (AM/PM, route names)
+
+**Acceptance checks**
+
+* Each student appears once
+* Routes list is accurate and clickable
+
+---
+
+## 8) Student cards expandable in My Students to show additional info
+
+**Fix plan**
+
+* Same expandable component as attendance; reuse UI component for consistency
+
+**Acceptance checks**
+
+* Expand works, shows same info as attendance expand
+
+---
+
+# Group 4 — Messaging, Notifications, Push, Badges, Notification Cards
+
+## 9) Messages send but no in-app notification and no push
+
+**Symptom**
+
+* Message was sent
+* Recipient gets neither in-app notification nor push
+
+**Likely root causes**
+
+* Message writes to DB but no “notify” pipeline triggers
+* Device tokens not registered / not associated with user
+* Push payload missing / failing silently
+* Socket event not emitted or recipient not subscribed to correct room
+* Notification permissions/token refresh not handled on iOS
+
+**Fix plan (minimum)**
+
+1. On message create:
+
+   * Write message to DB
+   * Create `notification` record for recipient
+   * Emit socket event `message.created` to `user:<recipientId>`
+   * Attempt push:
+
+     * fetch all device tokens for recipient
+     * send via FCM
+     * log per-token response, revoke invalid tokens
+2. Client:
+
+   * ensure FCM token registration after login
+   * ensure notification router handles deep links to thread
+
+**Acceptance checks**
+
+* Send message while recipient app closed → push arrives
+* Open app → unread badge increments
+* Tap push → opens correct thread
+
+---
+
+## 10) Sidebar badge for unresolved/unread messages
+
+**Fix plan**
+
+* Server-derived unread counts endpoint OR socket-driven counts
+* Badge should reflect:
+
+  * unread threads count OR unread messages total (pick one)
+* Clear when thread opened and `last_read_at` updated on server
+
+**Acceptance checks**
+
+* Badge increments on new message
+* Badge clears after reading
+* Badge persists correctly after restart
+
+---
+
+## 11) Notification cards should appear at top, auto-dismiss after inactivity
+
+**Symptom**
+
+* Cards appear at bottom
+* Should be at top and auto dismiss
+
+**Likely root causes**
+
+* Toast/notification container positioned bottom
+* No TTL dismissal logic
+
+**Fix plan**
+
+* Use a single Notification/Toast manager:
+
+  * position: top
+  * auto-dismiss after X seconds (e.g., 4–6s)
+  * pause dismissal on hover/interaction (optional)
+* Ensure notifications stack and don’t block nav
+
+**Acceptance checks**
+
+* New card appears at top
+* Disappears after timeout if not interacted
+* Multiple notifications stack cleanly
+
+---
+
+## 12) Drivers do not need quick replies when talking to admins
+
+**Fix plan**
+
+* Hide quick replies when `thread.participant_role === ADMIN` OR when thread type is `admin_support`
+* Keep quick replies for parent communications only (if that’s the intent)
+
+**Acceptance checks**
+
+* Admin chats show no quick replies
+* Parent chats still show quick replies (if desired)
+
+---
+
+## 13) Driver messaging UI: admin messages appear on same side as driver messages
+
+**Symptom**
+
+* Confusing who said what
+
+**Likely root causes**
+
+* Message bubble alignment based on wrong field (e.g., role vs sender_id)
+* Sender id resolution incorrect
+
+**Fix plan**
+
+* Align based on `message.sender_user_id === current_user_id`
+
+  * current user = right
+  * others = left
+* Add label/avatar for admins if needed
+
+**Acceptance checks**
+
+* Driver’s messages always on right, admin on left
+* Works across all threads
+
+---
+
+# Group 5 — Admin UI Clarity + Mobile Layout Issues
+
+## 14) Admin Students page: “Today’s Attendance” button looks identical to “Assigned Routes”
+
+**Symptom**
+
+* Two controls look the same; hard to distinguish
+
+**Fix plan**
+
+* Change hierarchy:
+
+  * Make “Today’s Attendance” primary CTA (filled button)
+  * “Assigned Routes” secondary (outline)
+  * Or move to separate card sections with icons and descriptions
+* Add microcopy under each
+
+**Acceptance checks**
+
+* Quick glance makes them distinguishable
+* No horizontal scroll introduced
+
+---
+
+## 15) Admin pages allow horizontal scrolling (should be vertical only)
+
+**Affected**
+
+* Settings
+* Vehicle management
+* Activity & Ops (audit section)
+
+**Likely root causes**
+
+* Containers wider than viewport (tables, fixed widths, min-widths)
+* Missing `overflow-x: hidden` at correct parent
+* Using desktop tables without responsive wrapping
+* Long text not wrapping
+
+**Fix plan**
+
+1. Global:
+
+   * Ensure a single scroll container with `overflow-x:hidden`
+2. Per page:
+
+   * convert tables to cards on mobile
+   * wrap long strings
+   * avoid fixed pixel widths
+3. Add CSS:
+
+   * `max-width: 100%` on cards, tables, wrappers
+   * `word-break: break-word` for long tokens
+
+**Acceptance checks**
+
+* No horizontal scroll on iPhone
+* All content accessible with vertical scroll only
+
+---
+
+# Group 6 — Parent Pickup Stop Management With Admin Approval
+
+## 16) Parent can request pickup stop changes; needs admin approval; admin changes apply immediately
+
+**Feature**
+**Required behavior**
+
+* Parent submits stop change request → status = PENDING
+* Admin approves → applied to route/route-run
+* Admin direct change → applied immediately (no pending)
+
+**Implementation plan**
+
+* Extend the Route Request system with a type:
+
+  * `PICKUP_STOP_CHANGE_REQUEST`
+* Data:
+
+  * request includes `old_stop_id`, `requested_stop_id`
+* Admin UI:
+
+  * approve/deny with reason
+* On approval:
+
+  * update student stop assignment (and any active RouteRun mapping if applicable)
+  * emit realtime update to driver + parent
+
+**Acceptance checks**
+
+* Parent request doesn’t immediately change driver view until approved
+* Admin approval updates all relevant views live
+* Audit log contains the change + actor + reason
+
+---
+
+# Group 7 — UI/UX Consolidation Work Items
+
+## 17) Driver route UI should be stop-driven, not route-driven global student list
+
+This ties back to Group 2, but treat it as a UI re-architecture task:
+
+* current stop focus
+* list of students per stop
+* completion gating
+* proper route completion flow
+
+**Acceptance checks**
+
+* Driver can operate route without confusion
+* No “complete route from stop card expand” without review flow
+
+---
+
+# Suggested implementation grouping (how to assign tasks)
+
+### A) Backend Data + APIs
+
+* Assignment schedule refresh + events
+* RouteRun stop/student binding + attendance enforcement logic
+* No-show notification event pipeline
+* Message notification pipeline (in-app + push)
+* Pickup stop change request workflow
+
+### B) Realtime + Notifications
+
+* Socket events for assignments/messages/route updates
+* Unread badge counts + read receipts
+* Push deep linking
+
+### C) Driver UI
+
+* My Routes list (show all)
+* Route execution UI (stop-driven)
+* Student expandable cards (attendance + my students)
+* My Students dedupe + routes list
+* Messaging alignment + quick replies removal
+
+### D) Admin UI (Mobile)
+
+* Button differentiation (Today’s attendance vs assigned routes)
+* Horizontal scroll fixes: settings/vehicle/activity-ops
+* Activity badges + drill-down (if still relevant)
+
+### E) Parent UI
+
+* Stop management request UI + pending status
+* No-show notifications landing in comms with “Message Driver”
+
+---
+
+If you want, I can turn each group into a **Replit AI “one-paste prompt”** with: exact files to touch, expected endpoints/events, and a QA checklist your testers can follow.

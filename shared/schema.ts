@@ -472,6 +472,10 @@ export type ShiftRouteContext = {
       stopName: string | null;
       recordedAt: Date;
     } | null;
+    notes: string | null;
+    allergies: string | null;
+    medicalNotes: string | null;
+    specialNeeds: string | null;
   }>;
   stops: Array<RouteStopWithMetadata & {
     students: Array<{
@@ -1952,6 +1956,11 @@ export const auditActionEnum = pgEnum("audit_action", [
   "updated_profile",
   "changed_phone",
   "updated_student",
+  "ROUTE_REQUEST_CREATED",
+  "ROUTE_REQUEST_UPDATED",
+  "STOP_CHANGE_APPROVED",
+  "STOP_CHANGE_DENIED",
+  "STUDENT_REMOVED_FROM_ROUTE",
 ]);
 
 // Audit log entity enum - tracks what type of entity was affected
@@ -1961,6 +1970,9 @@ export const auditEntityEnum = pgEnum("audit_entity", [
   "incident",
   "profile",
   "user",
+  "route_request",
+  "stop_change_request",
+  "student_route_assignment",
 ]);
 
 // Audit logs table - tracks all user changes for admin review

@@ -1234,7 +1234,7 @@ export default function DriverRoutePage() {
         onOpenChange={setShowReportIssueDialog}
         routeRunId={activeRouteRunId || ""}
         routeId={routeContext?.route?.id}
-        students={routeContext?.assignedStudents?.map((s) => ({ id: s.id, name: s.name })) || []}
+        students={routeContext?.students?.map((s: any) => ({ id: s.id, name: `${s.firstName} ${s.lastName}` })) || []}
       />
     </div>
     
