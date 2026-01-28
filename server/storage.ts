@@ -4017,9 +4017,12 @@ export class DatabaseStorage implements IStorage {
       });
     }
     
+    // Default bitmask for students without a service days rule (weekdays: Mon-Fri = 31)
+    const DEFAULT_BITMASK = 31;
+    
     return routeStudents.map(student => {
       // Determine if student is scheduled to ride today
-      let isScheduledToday = true; // Default: student rides if no service days rule exists
+      let isScheduledToday = true; // Default if no shiftType context
       
       if (shiftType) {
         const override = overridesMap.get(student.id);
@@ -4029,13 +4032,10 @@ export class DatabaseStorage implements IStorage {
         } else if (override === "FORCE_NOT_RIDING") {
           isScheduledToday = false;
         } else {
-          // Check service days bitmask
-          const bitmask = serviceDaysMap.get(student.id);
-          if (bitmask !== undefined) {
-            // Student has a service days rule - check if today is included
-            isScheduledToday = (bitmask & todayBit) !== 0;
-          }
-          // If no service days rule, default to true (rides all days)
+          // Check service days bitmask (use default weekdays if no rule exists)
+          const bitmask = serviceDaysMap.get(student.id) ?? DEFAULT_BITMASK;
+          // Check if today is included in the bitmask
+          isScheduledToday = (bitmask & todayBit) !== 0;
         }
       }
       

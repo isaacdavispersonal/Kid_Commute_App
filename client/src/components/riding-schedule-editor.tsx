@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 
 export const MONDAY = 1;
 export const TUESDAY = 2;
@@ -50,7 +50,7 @@ export function RidingScheduleEditor({
   const [bitmask, setBitmask] = useState<number>(currentBitmask);
   const [hasChanges, setHasChanges] = useState(false);
 
-  const { data: serviceDays, isLoading } = useQuery<{ serviceDaysBitmask: number }>({
+  const { data: serviceDays, isLoading, isError, refetch } = useQuery<{ serviceDaysBitmask: number }>({
     queryKey: ["/api/students", studentId, "service-days", routeId, shiftType],
     queryFn: async () => {
       const response = await fetch(
@@ -116,6 +116,23 @@ export function RidingScheduleEditor({
       <div className="flex items-center gap-2 py-2">
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         <span className="text-sm text-muted-foreground">Loading schedule...</span>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center gap-2 py-2 text-destructive" data-testid="error-schedule">
+        <AlertCircle className="h-4 w-4" />
+        <span className="text-sm">Failed to load schedule.</span>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => refetch()}
+          data-testid="button-retry-schedule"
+        >
+          Retry
+        </Button>
       </div>
     );
   }
