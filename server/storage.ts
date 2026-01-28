@@ -137,6 +137,9 @@ import {
   type InsertRouteRunEvent,
   type RouteRequest,
   type InsertRouteRequest,
+  stopChangeRequests,
+  type StopChangeRequest,
+  type InsertStopChangeRequest,
   type AttendanceChangeLog,
   type InsertAttendanceChangeLog,
   attendanceChangeLogs,
@@ -4766,6 +4769,164 @@ export class DatabaseStorage implements IStorage {
       .where(eq(routeRequests.id, id))
       .returning();
     return updated;
+  }
+
+  // ============ Stop Change Request operations (Parent Pickup/Dropoff Changes) ============
+
+  async createStopChangeRequest(request: InsertStopChangeRequest): Promise<StopChangeRequest> {
+    const [newRequest] = await db
+      .insert(stopChangeRequests)
+      .values(request)
+      .returning();
+    return newRequest;
+  }
+
+  async getStopChangeRequest(id: string): Promise<StopChangeRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(stopChangeRequests)
+      .where(eq(stopChangeRequests.id, id));
+    return request;
+  }
+
+  async getStopChangeRequestsByParent(parentUserId: string): Promise<any[]> {
+    const requests = await db
+      .select()
+      .from(stopChangeRequests)
+      .where(eq(stopChangeRequests.requestedByUserId, parentUserId))
+      .orderBy(desc(stopChangeRequests.createdAt));
+    
+    const enriched = await Promise.all(requests.map(async (req) => {
+      const student = await this.getStudent(req.studentId);
+      const route = await this.getRoute(req.routeId);
+      const currentStop = req.currentStopId ? await this.getStop(req.currentStopId) : null;
+      const requestedStop = await this.getStop(req.requestedStopId);
+      return {
+        ...req,
+        studentName: student ? `${student.firstName} ${student.lastName}` : 'Unknown',
+        routeName: route?.name || 'Unknown',
+        currentStopName: currentStop?.name || 'N/A',
+        requestedStopName: requestedStop?.name || 'Unknown',
+      };
+    }));
+    return enriched;
+  }
+
+  async getPendingStopChangeRequests(): Promise<any[]> {
+    const requests = await db
+      .select()
+      .from(stopChangeRequests)
+      .where(eq(stopChangeRequests.status, 'pending'))
+      .orderBy(stopChangeRequests.effectiveDate);
+    
+    const enriched = await Promise.all(requests.map(async (req) => {
+      const student = await this.getStudent(req.studentId);
+      const route = await this.getRoute(req.routeId);
+      const currentStop = req.currentStopId ? await this.getStop(req.currentStopId) : null;
+      const requestedStop = await this.getStop(req.requestedStopId);
+      const requestedBy = await this.getUser(req.requestedByUserId);
+      return {
+        ...req,
+        studentName: student ? `${student.firstName} ${student.lastName}` : 'Unknown',
+        routeName: route?.name || 'Unknown',
+        currentStopName: currentStop?.name || 'N/A',
+        requestedStopName: requestedStop?.name || 'Unknown',
+        requestedByName: requestedBy ? `${requestedBy.firstName} ${requestedBy.lastName}` : 'Unknown',
+      };
+    }));
+    return enriched;
+  }
+
+  async getAllStopChangeRequests(): Promise<any[]> {
+    const requests = await db
+      .select()
+      .from(stopChangeRequests)
+      .orderBy(desc(stopChangeRequests.createdAt));
+    
+    const enriched = await Promise.all(requests.map(async (req) => {
+      const student = await this.getStudent(req.studentId);
+      const route = await this.getRoute(req.routeId);
+      const currentStop = req.currentStopId ? await this.getStop(req.currentStopId) : null;
+      const requestedStop = await this.getStop(req.requestedStopId);
+      const requestedBy = await this.getUser(req.requestedByUserId);
+      const reviewedBy = req.reviewedByUserId ? await this.getUser(req.reviewedByUserId) : null;
+      return {
+        ...req,
+        studentName: student ? `${student.firstName} ${student.lastName}` : 'Unknown',
+        routeName: route?.name || 'Unknown',
+        currentStopName: currentStop?.name || 'N/A',
+        requestedStopName: requestedStop?.name || 'Unknown',
+        requestedByName: requestedBy ? `${requestedBy.firstName} ${requestedBy.lastName}` : 'Unknown',
+        reviewedByName: reviewedBy ? `${reviewedBy.firstName} ${reviewedBy.lastName}` : null,
+      };
+    }));
+    return enriched;
+  }
+
+  async updateStopChangeRequestStatus(
+    id: string,
+    status: "approved" | "denied",
+    reviewedByUserId: string,
+    reviewNotes?: string
+  ): Promise<StopChangeRequest> {
+    const [updated] = await db
+      .update(stopChangeRequests)
+      .set({
+        status,
+        reviewedByUserId,
+        reviewNotes,
+        reviewedAt: new Date(),
+      })
+      .where(eq(stopChangeRequests.id, id))
+      .returning();
+    return updated;
+  }
+
+  async applyStopChange(requestId: string): Promise<void> {
+    const request = await this.getStopChangeRequest(requestId);
+    if (!request || request.status !== 'approved') {
+      throw new Error('Cannot apply stop change: request not found or not approved');
+    }
+
+    if (request.requestType === 'pickup') {
+      await db
+        .update(studentRoutes)
+        .set({ pickupStopId: request.requestedStopId })
+        .where(
+          and(
+            eq(studentRoutes.studentId, request.studentId),
+            eq(studentRoutes.routeId, request.routeId)
+          )
+        );
+      await db
+        .update(students)
+        .set({ pickupStopId: request.requestedStopId })
+        .where(
+          and(
+            eq(students.id, request.studentId),
+            eq(students.assignedRouteId, request.routeId)
+          )
+        );
+    } else if (request.requestType === 'dropoff') {
+      await db
+        .update(studentRoutes)
+        .set({ dropoffStopId: request.requestedStopId })
+        .where(
+          and(
+            eq(studentRoutes.studentId, request.studentId),
+            eq(studentRoutes.routeId, request.routeId)
+          )
+        );
+      await db
+        .update(students)
+        .set({ dropoffStopId: request.requestedStopId })
+        .where(
+          and(
+            eq(students.id, request.studentId),
+            eq(students.assignedRouteId, request.routeId)
+          )
+        );
+    }
   }
 
   // ============ Driver Feedback operations ============

@@ -9,6 +9,7 @@ import {
   jsonb,
   pgTable,
   timestamp,
+  date,
   varchar,
   text,
   boolean,
@@ -1283,6 +1284,58 @@ export const insertRouteRequestSchema = createInsertSchema(routeRequests).omit({
 export type InsertRouteRequest = z.infer<typeof insertRouteRequestSchema>;
 export type RouteRequest = typeof routeRequests.$inferSelect;
 
+// ============ Stop Change Requests (Parent Pickup/Dropoff Changes) ============
+
+export const stopChangeRequestStatusEnum = pgEnum("stop_change_request_status", [
+  "pending",
+  "approved", 
+  "denied"
+]);
+
+export const stopChangeRequestTypeEnum = pgEnum("stop_change_request_type", [
+  "pickup",
+  "dropoff"
+]);
+
+export const stopChangeRequests = pgTable("stop_change_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  studentId: varchar("student_id")
+    .notNull()
+    .references(() => students.id, { onDelete: "cascade" }),
+  routeId: varchar("route_id")
+    .notNull()
+    .references(() => routes.id, { onDelete: "cascade" }),
+  requestType: stopChangeRequestTypeEnum("request_type").notNull(),
+  currentStopId: varchar("current_stop_id")
+    .references(() => stops.id, { onDelete: "set null" }),
+  requestedStopId: varchar("requested_stop_id")
+    .notNull()
+    .references(() => stops.id, { onDelete: "cascade" }),
+  effectiveDate: date("effective_date").notNull(),
+  reason: text("reason"),
+  status: stopChangeRequestStatusEnum("status").notNull().default("pending"),
+  requestedByUserId: varchar("requested_by_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  reviewedByUserId: varchar("reviewed_by_user_id")
+    .references(() => users.id, { onDelete: "set null" }),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+});
+
+export const insertStopChangeRequestSchema = createInsertSchema(stopChangeRequests).omit({
+  id: true,
+  status: true,
+  reviewedByUserId: true,
+  reviewNotes: true,
+  createdAt: true,
+  reviewedAt: true,
+});
+
+export type InsertStopChangeRequest = z.infer<typeof insertStopChangeRequestSchema>;
+export type StopChangeRequest = typeof stopChangeRequests.$inferSelect;
+
 // Admin settings table - stores system configuration
 export const adminSettings = pgTable("admin_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2332,6 +2385,37 @@ export const attendanceChangeLogsRelations = relations(attendanceChangeLogs, ({ 
   actor: one(users, {
     fields: [attendanceChangeLogs.actorUserId],
     references: [users.id],
+  }),
+}));
+
+export const stopChangeRequestsRelations = relations(stopChangeRequests, ({ one }) => ({
+  student: one(students, {
+    fields: [stopChangeRequests.studentId],
+    references: [students.id],
+  }),
+  route: one(routes, {
+    fields: [stopChangeRequests.routeId],
+    references: [routes.id],
+  }),
+  currentStop: one(stops, {
+    fields: [stopChangeRequests.currentStopId],
+    references: [stops.id],
+    relationName: "currentStop",
+  }),
+  requestedStop: one(stops, {
+    fields: [stopChangeRequests.requestedStopId],
+    references: [stops.id],
+    relationName: "requestedStop",
+  }),
+  requestedBy: one(users, {
+    fields: [stopChangeRequests.requestedByUserId],
+    references: [users.id],
+    relationName: "stopChangeRequester",
+  }),
+  reviewedBy: one(users, {
+    fields: [stopChangeRequests.reviewedByUserId],
+    references: [users.id],
+    relationName: "stopChangeReviewer",
   }),
 }));
 

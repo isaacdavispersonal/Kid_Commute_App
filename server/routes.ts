@@ -1483,6 +1483,159 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // ============ Stop Change Requests (Parent Pickup/Dropoff Changes) ============
+
+  // Parent: Create a stop change request
+  app.post(
+    "/api/parent/stop-change-requests",
+    requireAuth,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.id;
+        const { studentId, routeId, requestType, currentStopId, requestedStopId, effectiveDate, reason } = req.body;
+
+        // Validate parent has access to this student
+        const parentStudents = await storage.getStudentsByParent(parentId);
+        const hasAccess = parentStudents.some(s => s.id === studentId);
+        if (!hasAccess) {
+          return res.status(403).json({ message: "You don't have access to this student" });
+        }
+
+        const request = await storage.createStopChangeRequest({
+          studentId,
+          routeId,
+          requestType,
+          currentStopId: currentStopId || null,
+          requestedStopId,
+          effectiveDate,
+          reason: reason || null,
+          requestedByUserId: parentId,
+        });
+
+        res.status(201).json(request);
+      } catch (error) {
+        console.error("Error creating stop change request:", error);
+        res.status(500).json({ message: "Failed to create stop change request" });
+      }
+    }
+  );
+
+  // Parent: Get their stop change requests
+  app.get(
+    "/api/parent/stop-change-requests",
+    requireAuth,
+    requireRole("parent"),
+    async (req: any, res) => {
+      try {
+        const parentId = req.user.id;
+        const requests = await storage.getStopChangeRequestsByParent(parentId);
+        res.json(requests);
+      } catch (error) {
+        console.error("Error fetching stop change requests:", error);
+        res.status(500).json({ message: "Failed to fetch stop change requests" });
+      }
+    }
+  );
+
+  // Admin: Get all pending stop change requests
+  app.get(
+    "/api/admin/stop-change-requests/pending",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const requests = await storage.getPendingStopChangeRequests();
+        res.json(requests);
+      } catch (error) {
+        console.error("Error fetching pending stop change requests:", error);
+        res.status(500).json({ message: "Failed to fetch pending requests" });
+      }
+    }
+  );
+
+  // Admin: Get all stop change requests
+  app.get(
+    "/api/admin/stop-change-requests",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const requests = await storage.getAllStopChangeRequests();
+        res.json(requests);
+      } catch (error) {
+        console.error("Error fetching stop change requests:", error);
+        res.status(500).json({ message: "Failed to fetch stop change requests" });
+      }
+    }
+  );
+
+  // Admin: Get count of pending stop change requests
+  app.get(
+    "/api/admin/stop-change-requests/count",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const pending = await storage.getPendingStopChangeRequests();
+        res.json({ count: pending.length });
+      } catch (error) {
+        console.error("Error getting pending count:", error);
+        res.status(500).json({ message: "Failed to get count" });
+      }
+    }
+  );
+
+  // Admin: Review (approve/deny) a stop change request
+  app.patch(
+    "/api/admin/stop-change-requests/:id",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const adminId = req.user.id;
+        const { id } = req.params;
+        const { status, reviewNotes } = req.body;
+
+        if (!["approved", "denied"].includes(status)) {
+          return res.status(400).json({ message: "Invalid status" });
+        }
+
+        const existing = await storage.getStopChangeRequest(id);
+        if (!existing) {
+          return res.status(404).json({ message: "Request not found" });
+        }
+        if (existing.status !== "pending") {
+          return res.status(400).json({ message: "Request has already been reviewed" });
+        }
+
+        const updated = await storage.updateStopChangeRequestStatus(
+          id,
+          status,
+          adminId,
+          reviewNotes
+        );
+
+        // If approved, apply the stop change
+        if (status === "approved") {
+          await storage.applyStopChange(id);
+        }
+
+        // Create audit log
+        await storage.createAuditLog({
+          userId: adminId,
+          action: status === "approved" ? "STOP_CHANGE_APPROVED" : "STOP_CHANGE_DENIED",
+          details: `${status === "approved" ? "Approved" : "Denied"} stop change request ${id}`,
+        });
+
+        res.json(updated);
+      } catch (error) {
+        console.error("Error updating stop change request:", error);
+        res.status(500).json({ message: "Failed to update stop change request" });
+      }
+    }
+  );
+
   // ============ Audit Log Routes ============
 
   // Get all audit logs

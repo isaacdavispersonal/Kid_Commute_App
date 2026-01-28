@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -30,6 +31,10 @@ import {
   Clock,
   Loader2,
   AlertCircle,
+  Bus,
+  ArrowRight,
+  Calendar,
+  MessageSquare,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -68,7 +73,9 @@ const statusColors: Record<string, string> = {
   RESOLVED: "bg-gray-500",
 };
 
-export default function RouteRequestsSection() {
+import { StopChangeRequestsSection } from "./stop-change-requests-section";
+
+function DriverRouteRequests() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("OPEN");
   const [selectedRequest, setSelectedRequest] = useState<RouteRequest | null>(null);
@@ -348,5 +355,39 @@ export default function RouteRequestsSection() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function RouteRequestsSection() {
+  const { data: stopChangeCount } = useQuery<{ count: number }>({
+    queryKey: ["/api/admin/stop-change-requests/count"],
+  });
+
+  const pendingStopChanges = stopChangeCount?.count || 0;
+
+  return (
+    <Tabs defaultValue="driver-requests" className="w-full">
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="driver-requests" className="flex items-center gap-2" data-testid="tab-driver-requests">
+          <Bus className="w-4 h-4" />
+          Driver Requests
+        </TabsTrigger>
+        <TabsTrigger value="stop-changes" className="flex items-center gap-2" data-testid="tab-stop-changes">
+          <MapPin className="w-4 h-4" />
+          Stop Changes
+          {pendingStopChanges > 0 && (
+            <Badge variant="destructive" className="ml-1 h-4 min-w-4 px-1 text-[10px]">
+              {pendingStopChanges}
+            </Badge>
+          )}
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="driver-requests" className="mt-4">
+        <DriverRouteRequests />
+      </TabsContent>
+      <TabsContent value="stop-changes" className="mt-4">
+        <StopChangeRequestsSection />
+      </TabsContent>
+    </Tabs>
   );
 }

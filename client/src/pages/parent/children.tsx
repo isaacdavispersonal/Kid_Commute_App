@@ -772,6 +772,268 @@ function PickupStopSelector({ student }: { student: EnrichedStudent }) {
   );
 }
 
+function StopChangeRequestHistory() {
+  const { data: requests, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/parent/stop-change-requests"],
+  });
+
+  if (isLoading) {
+    return <Skeleton className="h-20 w-full" />;
+  }
+
+  if (!requests || requests.length === 0) {
+    return null;
+  }
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "pending":
+        return <Badge variant="secondary">Pending</Badge>;
+      case "approved":
+        return <Badge variant="default" className="bg-green-600">Approved</Badge>;
+      case "denied":
+        return <Badge variant="destructive">Denied</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  return (
+    <Card className="mt-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Calendar className="h-4 w-4" />
+          Your Stop Change Requests
+        </CardTitle>
+        <CardDescription>Track the status of your submitted requests</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {requests.map((req: any) => (
+            <div 
+              key={req.id} 
+              className={`p-3 rounded-md border ${
+                req.status === "pending" ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800" :
+                req.status === "approved" ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800" :
+                "bg-muted/30"
+              }`}
+              data-testid={`item-request-${req.id}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium">{req.studentName}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {req.requestType === "pickup" ? "Pickup" : "Dropoff"}
+                    </span>
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    <span>{req.currentStopName}</span>
+                    <span className="mx-1">→</span>
+                    <span className="font-medium text-foreground">{req.requestedStopName}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Effective: {formatDate(req.effectiveDate)} • Submitted: {formatDate(req.createdAt)}
+                  </div>
+                  {req.reviewNotes && req.status !== "pending" && (
+                    <div className="text-xs mt-2 p-2 bg-muted rounded">
+                      <span className="font-medium">Admin Note: </span>{req.reviewNotes}
+                    </div>
+                  )}
+                </div>
+                {getStatusBadge(req.status)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StopChangeRequestDialog({ student }: { student: EnrichedStudent }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [requestType, setRequestType] = useState<"pickup" | "dropoff">("pickup");
+  const [selectedStopId, setSelectedStopId] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [reason, setReason] = useState("");
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const minDate = tomorrow.toISOString().split("T")[0];
+
+  const { data: availableStops, isLoading: stopsLoading } = useQuery<Stop[]>({
+    queryKey: ["/api/parent/students", student.id, "available-stops"],
+    queryFn: async () => {
+      const response = await fetch(`/api/parent/students/${student.id}/available-stops`);
+      if (!response.ok) throw new Error("Failed to fetch stops");
+      return response.json();
+    },
+    enabled: open && !!student.assignedRouteId,
+  });
+
+  const { data: existingRequests } = useQuery<any[]>({
+    queryKey: ["/api/parent/stop-change-requests"],
+    enabled: open,
+  });
+
+  const submitMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/parent/stop-change-requests", {
+        studentId: student.id,
+        routeId: student.assignedRouteId,
+        requestType,
+        currentStopId: requestType === "pickup" ? student.pickupStop?.id : student.dropoffStop?.id,
+        requestedStopId: selectedStopId,
+        effectiveDate,
+        reason: reason || null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/stop-change-requests"] });
+      setOpen(false);
+      setSelectedStopId("");
+      setEffectiveDate("");
+      setReason("");
+      toast({
+        title: "Request Submitted",
+        description: "Your stop change request has been submitted for approval",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to submit request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (!student.assignedRouteId) {
+    return null;
+  }
+
+  const currentStop = requestType === "pickup" ? student.pickupStop : student.dropoffStop;
+  const hasPendingRequest = existingRequests?.some(
+    (r) => r.studentId === student.id && r.status === "pending"
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" data-testid={`button-request-stop-change-${student.id}`}>
+          <Calendar className="h-4 w-4 mr-2" />
+          Request Stop Change
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Request Stop Change</DialogTitle>
+          <DialogDescription>
+            Submit a request to change {student.firstName}'s pickup or dropoff stop. 
+            Requests require admin approval.
+          </DialogDescription>
+        </DialogHeader>
+        
+        {hasPendingRequest && (
+          <Alert variant="default" className="bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800 dark:text-amber-200">
+              You already have a pending request for this student.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Change Type</label>
+            <Select value={requestType} onValueChange={(v) => setRequestType(v as "pickup" | "dropoff")}>
+              <SelectTrigger data-testid="select-request-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pickup">Pickup Stop</SelectItem>
+                <SelectItem value="dropoff">Dropoff Stop</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Current Stop</label>
+            <p className="text-sm text-muted-foreground">
+              {currentStop?.name || "Not assigned"}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">New Stop</label>
+            {stopsLoading ? (
+              <Skeleton className="h-10 w-full" />
+            ) : (
+              <Select value={selectedStopId} onValueChange={setSelectedStopId}>
+                <SelectTrigger data-testid="select-new-stop">
+                  <SelectValue placeholder="Select a stop" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableStops?.map((stop) => (
+                    <SelectItem key={stop.id} value={stop.id} data-testid={`option-new-stop-${stop.id}`}>
+                      {stop.name}
+                      {stop.scheduledTime && ` - ${stop.scheduledTime}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Effective Date</label>
+            <Input
+              type="date"
+              value={effectiveDate}
+              onChange={(e) => setEffectiveDate(e.target.value)}
+              min={minDate}
+              data-testid="input-effective-date"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Reason (Optional)</label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Why are you requesting this change?"
+              data-testid="input-reason"
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setOpen(false)} data-testid="button-cancel-request">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => submitMutation.mutate()}
+              disabled={!selectedStopId || !effectiveDate || submitMutation.isPending || hasPendingRequest}
+              data-testid="button-submit-request"
+            >
+              {submitMutation.isPending ? "Submitting..." : "Submit Request"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AttendanceSection({ student }: { student: EnrichedStudent }) {
   const { toast } = useToast();
   const [showDateRangeDialog, setShowDateRangeDialog] = useState(false);
@@ -1105,7 +1367,10 @@ export default function ConnectChildrenPage() {
                     <ManageRoutesSection student={student} />
 
                     {student.assignedRouteId && (
-                      <PickupStopSelector student={student} />
+                      <>
+                        <PickupStopSelector student={student} />
+                        <StopChangeRequestDialog student={student} />
+                      </>
                     )}
 
                     <AttendanceSection student={student} />
@@ -1118,6 +1383,9 @@ export default function ConnectChildrenPage() {
               </Card>
             ))}
           </div>
+          
+          {/* Stop Change Request History */}
+          <StopChangeRequestHistory />
         </div>
       )}
 
