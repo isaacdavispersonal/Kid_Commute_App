@@ -60,6 +60,7 @@ Preferred communication style: Simple, everyday language.
     - **Student Not At Stop Notification**: Drivers can notify parents when students are not at their pickup stop, with in-app messaging and push notifications with deep link to chat.
     - **Expandable Student Cards**: Driver route page shows expandable student cards with color-coded icons for allergies, medical notes, special needs, and general notes.
     - **Parent Stop Change Requests**: Parents can request pickup/dropoff stop changes with admin approval workflow, status tracking, and history view.
+    - **Student Riding Schedule**: Bitmask-based system for defining which days of the week students ride on specific routes/shifts (Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64, weekdays default=31). Supports date-specific overrides (FORCE_RIDING/FORCE_NOT_RIDING) for holidays or special occasions. UI integration in admin student management with day chips (M T W T F S S).
 
 ## External Dependencies
 
