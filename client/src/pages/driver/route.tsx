@@ -31,10 +31,14 @@ import {
 import {
   AlertCircle,
   AlertTriangle,
+  Bell,
   Bus,
   CheckCircle2,
   ChevronDown,
+  ChevronUp,
   Clock,
+  Heart,
+  Info,
   Loader2,
   MapPin,
   User,
@@ -87,6 +91,7 @@ export default function DriverRoutePage() {
   });
 
   const [expandedStops, setExpandedStops] = useState<Set<string>>(new Set());
+  const [expandedStudents, setExpandedStudents] = useState<Set<string>>(new Set());
   const [rideEventDialog, setRideEventDialog] = useState<RideEventDialog>(null);
   const [showReportIssueDialog, setShowReportIssueDialog] = useState(false);
   const [selectedStopId, setSelectedStopId] = useState<string>("");
@@ -232,6 +237,38 @@ export default function DriverRoutePage() {
       const message = error?.message || "Failed to record ride event";
       toast({
         title: "Cannot Record Ride Event",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation to report student not at stop
+  const notAtStopMutation = useMutation({
+    mutationFn: async ({
+      studentId,
+      stopName,
+    }: {
+      studentId: string;
+      stopName: string;
+    }) => {
+      if (!shiftId) throw new Error("No shift ID");
+      return apiRequest("POST", "/api/driver/student-not-at-stop", {
+        shiftId,
+        studentId,
+        stopName,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Parent notified",
+        description: "A message has been sent to the parent",
+      });
+    },
+    onError: (error: any) => {
+      const message = error?.message || "Failed to notify parent";
+      toast({
+        title: "Cannot Send Notification",
         description: message,
         variant: "destructive",
       });
@@ -671,6 +708,20 @@ export default function DriverRoutePage() {
                   const isAbsent = student.attendance === "absent";
                   const hasBoarded = student.boardEvent !== null;
                   const hasDisembarked = student.deboardEvent !== null;
+                  const isExpanded = expandedStudents.has(student.id);
+                  const hasAdditionalInfo = student.notes || student.allergies || student.medicalNotes || student.specialNeeds;
+
+                  const toggleExpanded = () => {
+                    setExpandedStudents(prev => {
+                      const next = new Set(prev);
+                      if (next.has(student.id)) {
+                        next.delete(student.id);
+                      } else {
+                        next.add(student.id);
+                      }
+                      return next;
+                    });
+                  };
 
                   return (
                     <div
@@ -691,6 +742,21 @@ export default function DriverRoutePage() {
                             {hasDisembarked && (
                               <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
                             )}
+                            {hasAdditionalInfo && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={toggleExpanded}
+                                data-testid={`button-expand-${student.id}`}
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="h-4 w-4" />
+                                ) : (
+                                  <Info className="h-4 w-4 text-blue-500" />
+                                )}
+                              </Button>
+                            )}
                           </div>
                           {student.plannedStopName && (
                             <div className="text-sm text-muted-foreground mt-1 flex items-start gap-1 min-w-0">
@@ -709,6 +775,48 @@ export default function DriverRoutePage() {
                           {isRiding ? "Riding" : "Absent"}
                         </Badge>
                       </div>
+
+                      {/* Expandable Student Info */}
+                      {isExpanded && hasAdditionalInfo && (
+                        <div className="mb-3 p-3 rounded-md bg-muted/50 space-y-2 text-sm">
+                          {student.allergies && (
+                            <div className="flex items-start gap-2">
+                              <Heart className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-medium text-red-600 dark:text-red-400">Allergies: </span>
+                                <span className="text-muted-foreground">{student.allergies}</span>
+                              </div>
+                            </div>
+                          )}
+                          {student.medicalNotes && (
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-medium text-amber-600 dark:text-amber-400">Medical: </span>
+                                <span className="text-muted-foreground">{student.medicalNotes}</span>
+                              </div>
+                            </div>
+                          )}
+                          {student.specialNeeds && (
+                            <div className="flex items-start gap-2">
+                              <Info className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-medium text-blue-600 dark:text-blue-400">Special Needs: </span>
+                                <span className="text-muted-foreground">{student.specialNeeds}</span>
+                              </div>
+                            </div>
+                          )}
+                          {student.notes && (
+                            <div className="flex items-start gap-2">
+                              <Flag className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-medium">Notes: </span>
+                                <span className="text-muted-foreground">{student.notes}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Ride Events */}
                       {(hasBoarded || hasDisembarked) && (
@@ -801,6 +909,28 @@ export default function DriverRoutePage() {
                               <LogIn className="h-4 w-4 mr-1" />
                             )}
                             Board
+                          </Button>
+                        )}
+                        {/* Not at Stop button - only show for students who haven't boarded */}
+                        {isRiding && !hasBoarded && !routeCompleted && (
+                          <Button
+                            size="touch"
+                            variant="outline"
+                            onClick={() =>
+                              notAtStopMutation.mutate({
+                                studentId: student.id,
+                                stopName: student.plannedStopName || "the stop",
+                              })
+                            }
+                            disabled={notAtStopMutation.isPending}
+                            data-testid={`button-not-at-stop-${student.id}`}
+                          >
+                            {notAtStopMutation.isPending ? (
+                              <Clock className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <Bell className="h-4 w-4 mr-1" />
+                            )}
+                            Not at Stop
                           </Button>
                         )}
                         {hasBoarded && !hasDisembarked && !routeCompleted && (

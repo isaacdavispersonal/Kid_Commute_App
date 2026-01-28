@@ -211,6 +211,7 @@ export interface IStorage {
   getStudentsByParent(parentId: string): Promise<Student[]>;
   getStudentsByHousehold(householdId: string): Promise<Student[]>;
   findStudentsByGuardianPhone(phone: string): Promise<Student[]>;
+  getParentsForStudent(studentId: string): Promise<User[]>;
   getStudent(id: string): Promise<Student | undefined>;
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: string, updates: Partial<InsertStudent>): Promise<Student>;
@@ -1400,6 +1401,37 @@ export class DatabaseStorage implements IStorage {
       .from(students)
       .where(sql`EXISTS (SELECT 1 FROM unnest(${students.guardianPhones}) AS gp WHERE regexp_replace(gp, '[^0-9]', '', 'g') = ${normalizedPhone})`)
       .orderBy(desc(students.createdAt));
+  }
+
+  async getParentsForStudent(studentId: string): Promise<User[]> {
+    // Get the student first
+    const student = await this.getStudent(studentId);
+    if (!student || !student.householdId) {
+      return [];
+    }
+
+    // Get all household members for this student's household
+    const members = await db
+      .select()
+      .from(householdMembers)
+      .where(eq(householdMembers.householdId, student.householdId));
+
+    if (members.length === 0) {
+      return [];
+    }
+
+    // Get parent users from household members
+    const parentUsers = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          inArray(users.id, members.map(m => m.userId)),
+          eq(users.role, "parent")
+        )
+      );
+
+    return parentUsers;
   }
 
   async createStudent(student: InsertStudent): Promise<Student> {

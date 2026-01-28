@@ -5169,6 +5169,108 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Report student not at stop - sends message and push notification to parents
+  app.post(
+    "/api/driver/student-not-at-stop",
+    requireAuth,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.id;
+        const { shiftId, studentId, stopName } = req.body;
+
+        // Verify shift belongs to this driver
+        const shift = await storage.getShift(shiftId);
+        if (!shift) {
+          return res.status(404).json({ message: "Shift not found" });
+        }
+        if (shift.driverId !== driverId) {
+          return res.status(403).json({ message: "Not authorized for this shift" });
+        }
+        if (!shift.routeStartedAt) {
+          return res.status(400).json({ 
+            message: "Route must be started before reporting student not at stop" 
+          });
+        }
+        if (shift.routeCompletedAt) {
+          return res.status(400).json({ 
+            message: "Route has already been completed" 
+          });
+        }
+
+        // Get student info
+        const student = await storage.getStudent(studentId);
+        if (!student) {
+          return res.status(404).json({ message: "Student not found" });
+        }
+
+        const studentName = `${student.firstName} ${student.lastName}`;
+        const driver = await storage.getUser(driverId);
+        const driverName = driver ? `${driver.firstName} ${driver.lastName}` : "Your Driver";
+
+        // Get parents for this student
+        const parents = await storage.getParentsForStudent(studentId);
+        
+        if (parents.length === 0) {
+          return res.status(400).json({ 
+            message: "No parents found for this student" 
+          });
+        }
+
+        // Send message to each parent from the driver
+        const messageContent = `${studentName} was not at the stop (${stopName}). Please contact me if you have any questions.`;
+        
+        const messagePromises = parents.map(async (parent) => {
+          const message = await storage.createMessage({
+            senderId: driverId,
+            recipientId: parent.id,
+            content: messageContent,
+          });
+          
+          // Broadcast via WebSocket
+          if (wss) {
+            wss.clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(
+                  JSON.stringify({
+                    type: "new_message",
+                    message: { ...message, currentUserId: driverId },
+                  })
+                );
+              }
+            });
+          }
+          
+          return message;
+        });
+
+        await Promise.all(messagePromises);
+
+        // Send push notifications to all parents
+        try {
+          const parentIds = parents.map(p => p.id);
+          await pushNotificationService.notifyStudentNotAtStop(
+            parentIds,
+            studentName,
+            stopName,
+            driverId
+          );
+          console.log(`[push] Sent student-not-at-stop notification to ${parentIds.length} parent(s)`);
+        } catch (pushError) {
+          console.error("[push] Error sending student-not-at-stop notification:", pushError);
+        }
+
+        res.json({ 
+          success: true, 
+          message: `Notification sent to ${parents.length} parent(s) for ${studentName}` 
+        });
+      } catch (error) {
+        console.error("Error reporting student not at stop:", error);
+        res.status(500).json({ message: "Failed to report student not at stop" });
+      }
+    }
+  );
+
   // Finish route (requires all stops complete and all students processed)
   app.post(
     "/api/driver/shift/:shiftId/finish-route",

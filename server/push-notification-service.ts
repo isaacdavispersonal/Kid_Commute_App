@@ -378,6 +378,21 @@ class PushNotificationService {
   }
 
   /**
+   * Send notification when student is not at stop
+   */
+  async notifyStudentNotAtStop(parentUserIds: string[], studentName: string, stopName: string, driverId: string): Promise<void> {
+    const data = {
+      type: "student_not_at_stop",
+      deeplink: buildDeepLink("new_message", { threadId: driverId }),
+    };
+    await this.sendToUsers(parentUserIds, {
+      title: "Student Not at Stop",
+      body: `${studentName} was not at the stop (${stopName}). Please check your messages.`,
+      data,
+    });
+  }
+
+  /**
    * Cleanup inactive tokens older than 90 days
    */
   async cleanupOldTokens(): Promise<void> {
