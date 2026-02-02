@@ -91,7 +91,7 @@ function Router() {
   const { triggerRefresh, isRefreshing } = useRefresh();
   
   // Socket.IO for real-time sync - useSocket handles init, we just cleanup on logout
-  const { connectionState, isReconnecting } = useSocket();
+  const { connectionState } = useSocket();
   useAnnouncementSocket(); // Listen for org-wide announcements
   
   // Disconnect socket on logout
@@ -214,14 +214,7 @@ function Router() {
           <header className="border-b bg-background shrink-0 z-20 pt-[env(safe-area-inset-top,0px)]">
             {/* Header content with touch targets - safe area applied as padding above */}
             <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <SidebarTrigger data-testid="button-sidebar-toggle" />
-                {isReconnecting && (
-                  <span className="text-xs text-muted-foreground animate-pulse" data-testid="text-reconnecting">
-                    Reconnecting...
-                  </span>
-                )}
-              </div>
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
               <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="touch" className="gap-2" data-testid="button-user-menu">
