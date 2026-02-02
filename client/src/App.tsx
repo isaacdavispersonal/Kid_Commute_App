@@ -265,7 +265,7 @@ function Router() {
             </DropdownMenu>
             </div>
           </header>
-          <main ref={mainRef} className="relative flex-1 overflow-y-auto bg-background p-6 pt-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <main ref={mainRef} className="relative flex-1 overflow-y-auto bg-background p-6 pt-8 pb-6">
             <PullToRefresh 
               onRefresh={triggerRefresh} 
               isRefreshing={isRefreshing} 
