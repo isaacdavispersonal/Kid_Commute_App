@@ -21,7 +21,8 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle,
-  ChevronDown
+  ChevronDown,
+  Wrench
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -239,6 +240,28 @@ export default function TimeManagementSection() {
       toast({
         title: "Error",
         description: error.message || "Failed to run auto-clockout",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Fix stuck shifts mutation
+  const fixStuckShiftsMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/admin/maintenance/fix-stuck-shifts", {});
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/driver"] });
+      toast({
+        title: "Stuck Shifts Fixed",
+        description: data.message || `Fixed ${data.fixedCount} stuck shift(s)`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fix stuck shifts",
         variant: "destructive",
       });
     },
@@ -647,23 +670,43 @@ export default function TimeManagementSection() {
                 Review and resolve unresolved clock events
               </p>
             </div>
-            <Button
-              onClick={() => autoClockoutMutation.mutate(2)}
-              disabled={autoClockoutMutation.isPending}
-              data-testid="button-auto-clockout"
-            >
-              {autoClockoutMutation.isPending ? (
-                <>
-                  <Clock className="h-4 w-4 mr-2 animate-spin" />
-                  Running...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Run Auto-Clockout
-                </>
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => fixStuckShiftsMutation.mutate()}
+                disabled={fixStuckShiftsMutation.isPending}
+                data-testid="button-fix-stuck-shifts"
+              >
+                {fixStuckShiftsMutation.isPending ? (
+                  <>
+                    <Clock className="h-4 w-4 mr-2 animate-spin" />
+                    Fixing...
+                  </>
+                ) : (
+                  <>
+                    <Wrench className="h-4 w-4 mr-2" />
+                    Fix Stuck Shifts
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={() => autoClockoutMutation.mutate(2)}
+                disabled={autoClockoutMutation.isPending}
+                data-testid="button-auto-clockout"
+              >
+                {autoClockoutMutation.isPending ? (
+                  <>
+                    <Clock className="h-4 w-4 mr-2 animate-spin" />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Run Auto-Clockout
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
           {isLoadingUnresolved ? (
