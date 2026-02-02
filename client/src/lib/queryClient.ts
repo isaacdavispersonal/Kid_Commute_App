@@ -23,6 +23,31 @@ async function throwIfResNotOk(res: Response) {
     } catch (e) {
       // If JSON parsing fails, use the raw text with status code
     }
+    
+    // Handle session expiration (401 Unauthorized)
+    if (res.status === 401) {
+      // Clear any cached auth state
+      debugLog('Received 401 - session may have expired');
+      
+      // Check if this is a session expiration vs invalid credentials
+      const isSessionExpired = errorMessage.toLowerCase().includes('unauthorized') || 
+                               errorMessage.toLowerCase().includes('no token') ||
+                               errorMessage.toLowerCase().includes('invalid token') ||
+                               errorMessage.toLowerCase().includes('expired');
+      
+      if (isSessionExpired) {
+        errorMessage = "Your session has expired. Please log in again.";
+        
+        // Redirect to login after a short delay (allows toast to show)
+        setTimeout(() => {
+          // Only redirect if not already on login/landing page
+          if (window.location.pathname !== '/' && !window.location.pathname.includes('/login')) {
+            window.location.href = '/?expired=true';
+          }
+        }, 1500);
+      }
+    }
+    
     throw new Error(errorMessage);
   }
 }

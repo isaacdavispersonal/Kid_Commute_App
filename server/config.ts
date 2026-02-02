@@ -46,6 +46,7 @@ export const config = {
   auth: {
     sessionDurationMs: parseIntEnv("SESSION_DURATION_MS", DAY),
     sessionDurationRememberMs: parseIntEnv("SESSION_DURATION_REMEMBER_MS", 30 * DAY),
+    driverSessionDurationMs: parseIntEnv("DRIVER_SESSION_DURATION_MS", 7 * DAY), // Drivers get 7 days by default
     passwordResetExpiryMs: parseIntEnv("PASSWORD_RESET_EXPIRY_MS", HOUR),
     emailVerificationExpiryMs: parseIntEnv("EMAIL_VERIFICATION_EXPIRY_MS", DAY),
     replitSessionTtlMs: parseIntEnv("REPLIT_SESSION_TTL_MS", 7 * DAY),
@@ -64,7 +65,7 @@ export const config = {
   // Shift & Time Tracking
   shifts: {
     autoClockoutIntervalMs: parseIntEnv("AUTO_CLOCKOUT_INTERVAL_MS", HOUR),
-    maxShiftHours: parseIntEnv("MAX_SHIFT_HOURS", 12),
+    maxShiftHours: parseIntEnv("MAX_SHIFT_HOURS", 12), // Auto clock-out after 12 hours
     longBreakThresholdHours: parseIntEnv("LONG_BREAK_THRESHOLD_HOURS", 4),
     longShiftThresholdHours: parseIntEnv("LONG_SHIFT_THRESHOLD_HOURS", 12),
     defaultRouteWindowHours: parseIntEnv("DEFAULT_ROUTE_WINDOW_HOURS", 8),

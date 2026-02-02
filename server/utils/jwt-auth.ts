@@ -18,6 +18,7 @@ if (!JWT_SECRET) {
 
 const JWT_EXPIRES_DEFAULT = "1d"; // Token valid for 1 day (session-based login)
 const JWT_EXPIRES_REMEMBER = "30d"; // Token valid for 30 days (remember me)
+const JWT_EXPIRES_DRIVER = "7d"; // Drivers get 7 days by default to avoid clock-out issues (matches config.auth.driverSessionDurationMs)
 
 export interface JwtPayload {
   userId: string;
@@ -52,8 +53,15 @@ export function generateToken(userId: string, role: string, rememberMe: boolean 
     userId,
     role,
   };
-  const expiresIn = rememberMe ? JWT_EXPIRES_REMEMBER : JWT_EXPIRES_DEFAULT;
-  return jwt.sign(payload, effectiveSecret, { expiresIn });
+  // Drivers get extended session (7 days) to prevent clock-out authorization issues
+  // Remember me extends to 30 days for all users
+  let expiresIn = JWT_EXPIRES_DEFAULT;
+  if (rememberMe) {
+    expiresIn = JWT_EXPIRES_REMEMBER;
+  } else if (role === "driver") {
+    expiresIn = JWT_EXPIRES_DRIVER;
+  }
+  return jwt.sign(payload, effectiveSecret, { expiresIn: expiresIn as string });
 }
 
 /**

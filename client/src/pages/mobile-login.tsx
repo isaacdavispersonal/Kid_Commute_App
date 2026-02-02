@@ -1,5 +1,5 @@
 // Mobile login screen for Capacitor apps (JWT-based auth)
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,20 @@ export default function MobileLogin({ onLoginSuccess }: MobileLoginProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+
+  // Show session expired message if redirected from expired session
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('expired') === 'true') {
+      toast({
+        title: "Session Expired",
+        description: "Your session has expired. Please log in again to continue.",
+        variant: "destructive",
+      });
+      // Clean up the URL parameter
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [toast]);
 
   // Login form state
   const [loginIdentifier, setLoginIdentifier] = useState("");

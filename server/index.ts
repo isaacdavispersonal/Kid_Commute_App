@@ -144,9 +144,9 @@ app.use((req, res, next) => {
       const graceSetting = await storage.getAdminSetting("auto_clockout_grace_hours");
       const graceHours = graceSetting ? parseFloat(graceSetting.settingValue) : 1;
       
-      // Get max shift duration from admin settings, default to 10 hours
+      // Get max shift duration from admin settings, default to 12 hours (from config)
       const maxShiftSetting = await storage.getAdminSetting("max_shift_duration_hours");
-      const maxShiftHours = maxShiftSetting ? parseFloat(maxShiftSetting.settingValue) : 10;
+      const maxShiftHours = maxShiftSetting ? parseFloat(maxShiftSetting.settingValue) : config.shifts.maxShiftHours;
       
       const result = await storage.autoClockoutOrphanedShifts(graceHours, maxShiftHours);
       

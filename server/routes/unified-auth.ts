@@ -28,16 +28,26 @@ const COOKIE_NAME = "auth_token";
 // Session durations from config
 const SESSION_DURATION_DEFAULT = config.auth.sessionDurationMs;
 const SESSION_DURATION_REMEMBER = config.auth.sessionDurationRememberMs;
+const SESSION_DURATION_DRIVER = config.auth.driverSessionDurationMs;
 
-// Helper to get cookie options based on request
-function getCookieOptions(req: Request, rememberMe: boolean = false) {
+// Helper to get cookie options based on request and user role
+function getCookieOptions(req: Request, rememberMe: boolean = false, role?: string) {
   // Always use secure cookies on HTTPS (Replit always serves over HTTPS)
   const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === "production";
+  
+  // Determine session duration: rememberMe > driver role > default
+  let maxAge = SESSION_DURATION_DEFAULT;
+  if (rememberMe) {
+    maxAge = SESSION_DURATION_REMEMBER;
+  } else if (role === "driver") {
+    maxAge = SESSION_DURATION_DRIVER; // Drivers get extended sessions (7 days) to prevent clock-out issues
+  }
+  
   return {
     httpOnly: true,
     secure: isSecure,
     sameSite: "lax" as const,
-    maxAge: rememberMe ? SESSION_DURATION_REMEMBER : SESSION_DURATION_DEFAULT,
+    maxAge,
     path: "/",
   };
 }
@@ -130,8 +140,8 @@ router.post("/login", authRateLimiter, async (req, res) => {
     // Generate JWT token (with extended expiry if remember me is checked)
     const token = generateToken(user.id, user.role, rememberMe);
 
-    // Set cookie for web browsers (longer duration if remember me is checked)
-    res.cookie(COOKIE_NAME, token, getCookieOptions(req, rememberMe));
+    // Set cookie for web browsers (longer duration if remember me is checked or if driver)
+    res.cookie(COOKIE_NAME, token, getCookieOptions(req, rememberMe, user.role));
 
     res.json({
       token,
@@ -268,8 +278,8 @@ router.post("/register", registrationRateLimiter, async (req, res) => {
     // Generate JWT token
     const token = generateToken(user.id, user.role);
 
-    // Set cookie for web browsers
-    res.cookie(COOKIE_NAME, token, getCookieOptions(req));
+    // Set cookie for web browsers (pass role for driver-specific session duration)
+    res.cookie(COOKIE_NAME, token, getCookieOptions(req, false, user.role));
 
     res.status(201).json({
       token,
@@ -983,8 +993,8 @@ router.post("/test-login", async (req, res) => {
     // Generate JWT token
     const token = generateToken(user.id, user.role);
 
-    // Set cookie for web browsers
-    res.cookie(COOKIE_NAME, token, getCookieOptions(req));
+    // Set cookie for web browsers (pass role for driver-specific session duration)
+    res.cookie(COOKIE_NAME, token, getCookieOptions(req, false, user.role));
 
     console.log(`[Test Auth] Test login as ${user.role}: ${user.email || user.firstName}`);
 
