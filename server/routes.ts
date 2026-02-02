@@ -448,6 +448,40 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   });
 
+  // ============ Admin Maintenance Endpoints ============
+
+  // Fix stuck shifts - marks old ACTIVE shifts as COMPLETED (admin only)
+  app.post("/api/admin/maintenance/fix-stuck-shifts", requireRole("admin"), async (req: any, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Find all ACTIVE shifts from before today
+      const result = await db.execute(sql`
+        UPDATE shifts 
+        SET status = 'COMPLETED', 
+            route_completed_at = COALESCE(route_started_at, NOW()),
+            updated_at = NOW()
+        WHERE status = 'ACTIVE' 
+          AND date < ${today}
+        RETURNING id, date, shift_type, driver_id
+      `);
+      
+      const fixedShifts = result.rows || [];
+      
+      console.log(`[Admin Maintenance] Fixed ${fixedShifts.length} stuck shifts`);
+      
+      res.json({ 
+        success: true, 
+        message: `Fixed ${fixedShifts.length} stuck shift(s)`,
+        fixedCount: fixedShifts.length,
+        shifts: fixedShifts
+      });
+    } catch (error: any) {
+      console.error("Error fixing stuck shifts:", error);
+      res.status(500).json({ message: "Failed to fix stuck shifts", error: error.message });
+    }
+  });
+
   // Get users with registered device tokens (admin only)
   app.get("/api/admin/push-tokens/users", requireRole("admin"), async (req: any, res) => {
     try {
