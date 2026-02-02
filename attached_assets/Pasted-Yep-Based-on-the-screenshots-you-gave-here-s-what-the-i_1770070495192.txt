@@ -1,0 +1,129 @@
+Yep. Based on the screenshots you gave, here’s what the issue **actually is**, why it **only happens on first login**, and **exactly where it lives** in your UI.
+
+---
+
+## What the issue is
+
+Those “white bars” at the **top** and **bottom** aren’t random iOS glitches — they’re coming from your **web layout intentionally adding safe-area space** using `env(safe-area-inset-*)`.
+
+On iPhones with a notch / Dynamic Island / home indicator, iOS provides safe-area measurements:
+
+* `env(safe-area-inset-top)` → height of the status bar/notch area
+* `env(safe-area-inset-bottom)` → height needed to avoid the home indicator
+
+Your app is using these values **as real layout spacing**, so when iOS reports a non-zero inset, you get visible “extra space” (the bars).
+
+---
+
+## Where it’s happening (top bar)
+
+From your DOM inspector screenshot, this is the key element:
+
+```html
+<header class="border-b bg-card ...">
+  <div class="h-[env(safe-area-inset-top,0px)]"></div>
+  ...
+</header>
+```
+
+### What that means:
+
+* You have a **real empty `<div>`** inserted at the top of your header.
+* Its height is set to:
+  `env(safe-area-inset-top,0px)`
+* When that value becomes something like **44px**, that div becomes 44px tall.
+
+### Why it shows as a “white bar”:
+
+* Your `<header>` uses `bg-card`, and in your theme that’s likely a **light/white surface**.
+* So the empty spacer div becomes a visible white strip.
+
+✅ **Location:** your **header component / app shell layout** (where the header is rendered).
+
+---
+
+## Why it appears “only after first login” then disappears after reopening
+
+This is the biggest clue you gave.
+
+That behavior happens when the safe-area value changes between renders:
+
+* On first render (often login screen), the webview may report `safe-area-inset-top = 0`
+* After auth/navigation and the app layout mounts, iOS recalculates and reports the correct inset (like 44px)
+* The spacer div suddenly gains height → bar “appears”
+* After a full app relaunch, the safe-area is known immediately, so the layout is stable and the effect doesn’t look as abrupt
+
+So this is a **timing/layout transition issue** where the safe-area value is “settling” after the initial login navigation.
+
+---
+
+## Where it’s happening (bottom bar)
+
+You mentioned this line (or similar) and that toggling it made the bottom bar disappear:
+
+```css
+html, body, #root {
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+}
+```
+
+This isn’t “wrong” by itself — but here’s what’s likely happening:
+
+### What the bottom bar usually is in this setup
+
+1. You have **padding** on your scrolling container (`<main>`) that uses `env(safe-area-inset-bottom)`
+
+   * e.g. something like:
+
+   ```tsx
+   pb-[max(1.5rem,env(safe-area-inset-bottom))]
+   ```
+2. Or your scroll container ends before the full viewport height and the “rest” of the viewport shows the background of a different element (often `html`/`body`).
+3. If any of those layers has a lighter background or border, you see a “bar” at the bottom.
+
+Your note (“disabling/enabling this part made it disappear at the bottom”) suggests the **height definition is influencing which element is painting the bottom region**. When you toggle it, the viewport height recalculates and the bar shifts/disappears because a different layer is filling that space.
+
+✅ **Likely location(s):**
+
+* Your `<main>` container (because it uses bottom safe-area padding)
+* Possibly a wrapper div with `overflow-hidden` + height constraints
+* And the global CSS block for `html/body/#root` sizing (because it controls the overall painted region)
+
+---
+
+## The “two specific problems” you have
+
+### Problem 1: Top safe-area implemented as a visible spacer element
+
+* **File location:** wherever your header layout is built
+* **DOM evidence:** the empty safe-area spacer div inside `<header>`
+* **Cause:** `h-[env(safe-area-inset-top)]` + header `bg-card` + status bar inset appears after login
+
+### Problem 2: Bottom safe-area/viewport height causes a visible strip
+
+* **File location:** your global viewport CSS (`index.css`) + main layout padding
+* **Cause:** one of these is creating extra space:
+
+  * bottom inset padding
+  * mismatched backgrounds between layers
+  * vh/svh/dvh height interaction with overflow-hidden wrappers
+* **Symptom:** “bottom border”/strip appears and is affected by toggling the height CSS
+
+---
+
+## Summary (in plain English)
+
+Your app is **adding extra layout space** at the top and bottom to account for iPhone notches/home-indicator using `env(safe-area-inset-*)`.
+
+On first login, iOS reports or recalculates those safe-area values a moment later, so the space “pops in” and looks like bars.
+
+These bars are not bugs in Capacitor — they’re coming from:
+
+* a top spacer `<div>` in your header using `env(safe-area-inset-top)`
+* bottom padding/height rules that create visible space at the bottom
+
+---
+
+If you paste the **header component file** (or tell me what it’s named), I can point to the exact JSX lines where that safe-area div is being inserted, and I can tell you whether the bottom inset is coming from `<main>` padding or from the global CSS + wrappers.
