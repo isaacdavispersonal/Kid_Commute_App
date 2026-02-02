@@ -21,7 +21,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, CheckCircle, XCircle, Users, AlertTriangle, Calendar, Clock, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { Download, CheckCircle, XCircle, Users, AlertTriangle, Calendar, Clock, ChevronLeft, ChevronRight, Info, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format, startOfWeek, endOfWeek, subWeeks, addWeeks } from "date-fns";
 
 type PayPeriodPreset = "current" | "previous" | "custom";
@@ -425,6 +427,22 @@ export default function AdminPayrollExports() {
         <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2">Payroll Exports</h1>
         <p className="text-xs sm:text-base text-muted-foreground">Export driver hours to BambooHR</p>
       </div>
+
+      <Alert className="border-primary/50 bg-primary/5" data-testid="alert-new-export-workflow">
+        <Info className="h-4 w-4" />
+        <AlertTitle>New Export Workflow Available</AlertTitle>
+        <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <span>
+            Use the new timesheet-based export for improved tracking, previews, and retry capabilities.
+          </span>
+          <Link href="/admin/timesheets">
+            <Button variant="outline" size="sm" className="w-fit" data-testid="button-go-to-timesheets">
+              Go to Timesheets
+              <ArrowRight className="w-4 h-4 ml-1" />
+            </Button>
+          </Link>
+        </AlertDescription>
+      </Alert>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* Scrollable tabs for mobile */}

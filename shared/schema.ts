@@ -2259,6 +2259,230 @@ export interface PayrollCalculationResult {
   };
 }
 
+// ============ Timesheet System (BambooHR Payroll Integration) ============
+
+// Pay period status enum
+export const payPeriodStatusEnum = pgEnum("pay_period_status", [
+  "OPEN",      // Period is open for clock events
+  "LOCKED",    // Period is locked for review (no more clock events)
+  "APPROVED",  // Entries approved by admin
+  "EXPORTED",  // Successfully exported to BambooHR
+]);
+
+// Time entry status enum  
+export const timeEntryStatusEnum = pgEnum("time_entry_status", [
+  "DRAFT",     // Missing clock-out or needs review
+  "READY",     // Complete and ready for approval
+  "APPROVED",  // Approved by admin
+  "EXPORTED",  // Exported to BambooHR
+]);
+
+// Time entry source enum
+export const timeEntrySourceEnum = pgEnum("time_entry_source", [
+  "CLOCK",       // Derived from clock events
+  "ADMIN_EDIT",  // Created/edited by admin
+  "IMPORT",      // Imported from external source
+]);
+
+// Pay periods table - tracks biweekly pay periods
+export const payPeriods = pgTable("pay_periods", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  status: payPeriodStatusEnum("status").notNull().default("OPEN"),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  exportScheduledAt: timestamp("export_scheduled_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  dateRangeIdx: index("idx_pay_periods_date_range").on(table.startDate, table.endDate),
+  statusIdx: index("idx_pay_periods_status").on(table.status),
+}));
+
+export const insertPayPeriodSchema = createInsertSchema(payPeriods).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPayPeriod = z.infer<typeof insertPayPeriodSchema>;
+export type PayPeriod = typeof payPeriods.$inferSelect;
+
+// Timesheet entries table - durable time records derived from clock events
+export const timesheetEntries = pgTable("timesheet_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  payPeriodId: varchar("pay_period_id")
+    .references(() => payPeriods.id, { onDelete: "set null" }),
+  startAtUtc: timestamp("start_at_utc").notNull(),
+  endAtUtc: timestamp("end_at_utc"),  // Nullable while clock-out is missing
+  breakMinutes: integer("break_minutes").default(0),
+  status: timeEntryStatusEnum("status").notNull().default("DRAFT"),
+  source: timeEntrySourceEnum("source").notNull().default("CLOCK"),
+  shiftId: varchar("shift_id").references(() => shifts.id, { onDelete: "set null" }),
+  routeRunId: varchar("route_run_id"),  // Optional link to route run
+  notes: text("notes"),
+  // Calculated fields for quick access
+  regularHours: decimal("regular_hours", { precision: 10, scale: 2 }),
+  overtimeHours: decimal("overtime_hours", { precision: 10, scale: 2 }),
+  doubleTimeHours: decimal("double_time_hours", { precision: 10, scale: 2 }),
+  totalHours: decimal("total_hours", { precision: 10, scale: 2 }),
+  // Tracking
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  driverPayPeriodIdx: index("idx_timesheet_entries_driver_period").on(table.driverId, table.payPeriodId),
+  startAtIdx: index("idx_timesheet_entries_start").on(table.startAtUtc),
+  statusIdx: index("idx_timesheet_entries_status").on(table.status),
+  shiftIdx: index("idx_timesheet_entries_shift").on(table.shiftId),
+}));
+
+export const insertTimesheetEntrySchema = createInsertSchema(timesheetEntries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertTimesheetEntry = z.infer<typeof insertTimesheetEntrySchema>;
+export type TimesheetEntry = typeof timesheetEntries.$inferSelect;
+
+// Timesheet entry edits - audit trail for all changes
+export const timesheetEntryEdits = pgTable("timesheet_entry_edits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  timesheetEntryId: varchar("timesheet_entry_id")
+    .notNull()
+    .references(() => timesheetEntries.id, { onDelete: "cascade" }),
+  editorUserId: varchar("editor_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  previousValues: jsonb("previous_values").notNull(),  // Snapshot of fields before edit
+  newValues: jsonb("new_values").notNull(),  // Snapshot of fields after edit
+  reason: text("reason").notNull(),  // Required explanation for the edit
+  editType: varchar("edit_type").notNull().default("UPDATE"),  // UPDATE, CREATE, APPROVE, etc.
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertTimesheetEntryEditSchema = createInsertSchema(timesheetEntryEdits).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTimesheetEntryEdit = z.infer<typeof insertTimesheetEntryEditSchema>;
+export type TimesheetEntryEdit = typeof timesheetEntryEdits.$inferSelect;
+
+// BambooHR employee mapping - maps internal users to Bamboo employee IDs
+export const bambooEmployeeMap = pgTable("bamboo_employee_map", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  bambooEmployeeId: varchar("bamboo_employee_id").notNull(),
+  effectiveFrom: date("effective_from"),  // When this mapping became active
+  effectiveTo: date("effective_to"),  // When this mapping ended (null = current)
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("idx_bamboo_employee_map_user").on(table.userId),
+  bambooIdIdx: index("idx_bamboo_employee_map_bamboo").on(table.bambooEmployeeId),
+  activeIdx: index("idx_bamboo_employee_map_active").on(table.isActive),
+}));
+
+export const insertBambooEmployeeMapSchema = createInsertSchema(bambooEmployeeMap).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertBambooEmployeeMap = z.infer<typeof insertBambooEmployeeMapSchema>;
+export type BambooEmployeeMap = typeof bambooEmployeeMap.$inferSelect;
+
+// Payroll export job status enum
+export const payrollExportJobStatusEnum = pgEnum("payroll_export_job_status", [
+  "QUEUED",     // Job created, waiting to run
+  "RUNNING",    // Currently processing
+  "SUCCESS",    // All entries exported successfully
+  "PARTIAL",    // Some entries failed
+  "FAILED",     // Export failed completely
+]);
+
+// Payroll export jobs table - tracks each export attempt
+export const payrollExportJobs = pgTable("payroll_export_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  payPeriodId: varchar("pay_period_id")
+    .notNull()
+    .references(() => payPeriods.id, { onDelete: "cascade" }),
+  status: payrollExportJobStatusEnum("status").notNull().default("QUEUED"),
+  mode: varchar("mode").notNull().default("MANUAL"),  // MANUAL or SCHEDULED
+  requestedByUserId: varchar("requested_by_user_id")
+    .references(() => users.id, { onDelete: "set null" }),
+  scheduledFor: timestamp("scheduled_for"),  // For scheduled exports
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+  totalEntries: integer("total_entries").default(0),
+  successfulEntries: integer("successful_entries").default(0),
+  failedEntries: integer("failed_entries").default(0),
+  errorSummary: text("error_summary"),
+  bambooResponse: jsonb("bamboo_response"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  payPeriodIdx: index("idx_payroll_export_jobs_period").on(table.payPeriodId),
+  statusIdx: index("idx_payroll_export_jobs_status").on(table.status),
+  scheduledIdx: index("idx_payroll_export_jobs_scheduled").on(table.scheduledFor),
+}));
+
+export const insertPayrollExportJobSchema = createInsertSchema(payrollExportJobs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPayrollExportJob = z.infer<typeof insertPayrollExportJobSchema>;
+export type PayrollExportJob = typeof payrollExportJobs.$inferSelect;
+
+// Payroll export job entries - individual entries per employee/date
+export const payrollExportJobEntries = pgTable("payroll_export_job_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id")
+    .notNull()
+    .references(() => payrollExportJobs.id, { onDelete: "cascade" }),
+  timesheetEntryId: varchar("timesheet_entry_id")
+    .references(() => timesheetEntries.id, { onDelete: "set null" }),
+  driverId: varchar("driver_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  bambooEmployeeId: varchar("bamboo_employee_id").notNull(),
+  date: date("date").notNull(),
+  regularHours: decimal("regular_hours", { precision: 10, scale: 2 }).notNull(),
+  overtimeHours: decimal("overtime_hours", { precision: 10, scale: 2 }).default("0"),
+  doubleTimeHours: decimal("double_time_hours", { precision: 10, scale: 2 }).default("0"),
+  totalHours: decimal("total_hours", { precision: 10, scale: 2 }).notNull(),
+  payloadJson: jsonb("payload_json"),  // What was sent to Bamboo
+  bambooResponseJson: jsonb("bamboo_response_json"),  // Response from Bamboo
+  bambooEntryId: varchar("bamboo_entry_id"),  // ID returned by Bamboo
+  idempotencyKey: varchar("idempotency_key").notNull(),  // Prevent duplicate exports
+  status: payrollExportJobStatusEnum("status").notNull().default("QUEUED"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  jobIdx: index("idx_payroll_export_job_entries_job").on(table.jobId),
+  idempotencyIdx: index("idx_payroll_export_job_entries_idempotency").on(table.idempotencyKey),
+  driverDateIdx: index("idx_payroll_export_job_entries_driver_date").on(table.driverId, table.date),
+}));
+
+export const insertPayrollExportJobEntrySchema = createInsertSchema(payrollExportJobEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPayrollExportJobEntry = z.infer<typeof insertPayrollExportJobEntrySchema>;
+export type PayrollExportJobEntry = typeof payrollExportJobEntries.$inferSelect;
+
 // ============ Relations ============
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -2270,8 +2494,88 @@ export const usersRelations = relations(users, ({ many }) => ({
   receivedMessages: many(messages, { relationName: "receivedMessages" }),
   incidents: many(incidents),
   timeEntries: many(timeEntries),
+  timesheetEntries: many(timesheetEntries),
   vehicleInspections: many(vehicleInspections),
   deviceTokens: many(deviceTokens),
+  bambooMappings: many(bambooEmployeeMap),
+}));
+
+// Timesheet system relations
+export const payPeriodsRelations = relations(payPeriods, ({ one, many }) => ({
+  lockedByUser: one(users, {
+    fields: [payPeriods.lockedBy],
+    references: [users.id],
+    relationName: "payPeriodLockedBy",
+  }),
+  approvedByUser: one(users, {
+    fields: [payPeriods.approvedBy],
+    references: [users.id],
+    relationName: "payPeriodApprovedBy",
+  }),
+  timesheetEntries: many(timesheetEntries),
+  exportJobs: many(payrollExportJobs),
+}));
+
+export const timesheetEntriesRelations = relations(timesheetEntries, ({ one, many }) => ({
+  driver: one(users, {
+    fields: [timesheetEntries.driverId],
+    references: [users.id],
+  }),
+  payPeriod: one(payPeriods, {
+    fields: [timesheetEntries.payPeriodId],
+    references: [payPeriods.id],
+  }),
+  shift: one(shifts, {
+    fields: [timesheetEntries.shiftId],
+    references: [shifts.id],
+  }),
+  edits: many(timesheetEntryEdits),
+  exportEntries: many(payrollExportJobEntries),
+}));
+
+export const timesheetEntryEditsRelations = relations(timesheetEntryEdits, ({ one }) => ({
+  timesheetEntry: one(timesheetEntries, {
+    fields: [timesheetEntryEdits.timesheetEntryId],
+    references: [timesheetEntries.id],
+  }),
+  editor: one(users, {
+    fields: [timesheetEntryEdits.editorUserId],
+    references: [users.id],
+  }),
+}));
+
+export const bambooEmployeeMapRelations = relations(bambooEmployeeMap, ({ one }) => ({
+  user: one(users, {
+    fields: [bambooEmployeeMap.userId],
+    references: [users.id],
+  }),
+}));
+
+export const payrollExportJobsRelations = relations(payrollExportJobs, ({ one, many }) => ({
+  payPeriod: one(payPeriods, {
+    fields: [payrollExportJobs.payPeriodId],
+    references: [payPeriods.id],
+  }),
+  requestedBy: one(users, {
+    fields: [payrollExportJobs.requestedByUserId],
+    references: [users.id],
+  }),
+  entries: many(payrollExportJobEntries),
+}));
+
+export const payrollExportJobEntriesRelations = relations(payrollExportJobEntries, ({ one }) => ({
+  job: one(payrollExportJobs, {
+    fields: [payrollExportJobEntries.jobId],
+    references: [payrollExportJobs.id],
+  }),
+  timesheetEntry: one(timesheetEntries, {
+    fields: [payrollExportJobEntries.timesheetEntryId],
+    references: [timesheetEntries.id],
+  }),
+  driver: one(users, {
+    fields: [payrollExportJobEntries.driverId],
+    references: [users.id],
+  }),
 }));
 
 export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({

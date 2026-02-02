@@ -1,0 +1,303 @@
+Yep — the workflow you’re describing is exactly how payroll integrations *should* work: **capture time → review/adjust → approve → export/sync on a schedule (and manually)**. If you design it this way, you’ll avoid “missing clock events” and make BambooHR syncing predictable.
+
+Below is a **detailed overhaul plan** you can hand to Replit AI, broken into stages with the exact pieces each stage needs.
+
+---
+
+## What BambooHR can accept
+
+BambooHR’s API includes **Time Tracking** endpoints (including clock-in/out entries and hour entries) and an **Hours API** area in their docs. ([BambooHR][1])
+So you can either:
+
+1. send **clock entries** (clock-in/clock-out timestamps), or
+2. send **hour entries** (total hours for a day/project), or
+3. do both if your Bamboo setup expects it.
+
+(Your plan of “payload every X days” fits either approach.)
+
+---
+
+# Stage 1 — Make Kid Commute timekeeping a proper “Timesheet” system
+
+### Goal
+
+Clock-in/out must produce **durable, audit-friendly timesheet records** that can be exported cleanly.
+
+### Required backend data model
+
+You need *at minimum* these entities:
+
+**A) `time_entries` (raw events or segments)**
+
+* `id`
+* `employee_id` (your internal user/driver id)
+* `source` (`mobile_clock`, `admin_edit`, `import`, etc.)
+* `start_at` (timestamp)
+* `end_at` (timestamp nullable while active)
+* `break_minutes` (optional)
+* `route_run_id` (optional, but extremely useful for reconciliation)
+* `notes` (optional)
+* `status` (`DRAFT`, `SUBMITTED`, `APPROVED`, `EXPORTED`)
+* `created_at`, `updated_at`
+
+**B) `time_entry_edits` (audit trail)**
+
+* `id`
+* `time_entry_id`
+* `actor_user_id`
+* `old_values_json`
+* `new_values_json`
+* `reason`
+* `created_at`
+
+**C) `pay_periods`**
+
+* `id`
+* `org_id`
+* `start_date`
+* `end_date`
+* `status` (`OPEN`, `LOCKED`, `EXPORTED`)
+* `export_scheduled_at` (optional)
+* `created_at`
+
+**D) `bamboo_employee_map`**
+
+* `id`
+* `org_id`
+* `internal_user_id`
+* `bamboo_employee_id`
+* `active`
+
+Why this matters: it gives you a single source of truth and makes “adjust before export” easy.
+
+### Rules (must implement)
+
+* Prevent overlaps: a driver can’t have two open time entries at once.
+* If an “end_at” is missing, the entry stays `DRAFT` and should show as “Needs review.”
+* Always store timestamps in UTC, but display/edit in America/Phoenix (or org timezone).
+
+---
+
+# Stage 2 — Admin Timesheets Tab (review + adjust + approve)
+
+### Goal
+
+Admins can review a pay period, adjust times, and approve before anything is sent to Bamboo.
+
+### Admin UI requirements
+
+Add a dedicated Admin area: **Admin → Payroll → Time Tracking** (or “Clock In/Out”).
+
+It should include:
+
+**A) Pay period selector**
+
+* current pay period
+* past pay periods (read-only)
+
+**B) Employee list view**
+For each driver:
+
+* total hours in period
+* number of shifts/entries
+* “needs review” count (missing clock-out, overlaps, suspicious duration)
+* export status (not exported / exported)
+
+**C) Employee detail view**
+For a single driver:
+
+* day-by-day timeline (segments)
+* ability to edit:
+
+  * start time
+  * end time
+  * breaks
+  * notes
+* edits require a reason (short text)
+* show audit log of edits
+
+**D) Approval controls**
+
+* “Submit for export” (locks driver timesheet)
+* “Approve pay period” (locks entire pay period)
+* “Unlock” (admin-only; logs event)
+
+### Acceptance checks
+
+* Admin can edit a clock time and it recalculates totals immediately
+* Every edit creates a `time_entry_edits` row
+* After “Approve pay period,” entries become immutable unless admin unlocks
+
+---
+
+# Stage 3 — BambooHR Export Pipeline (scheduled + manual)
+
+### Goal
+
+Send a **consistent payload** to Bamboo every X days / per pay period, with a manual “push now” option.
+
+### Core concept: Export Jobs
+
+Create an export job table so you can track what was sent and retry safely.
+
+**Table: `bamboo_exports`**
+
+* `id`
+* `org_id`
+* `pay_period_id`
+* `status` (`QUEUED`, `RUNNING`, `SUCCESS`, `FAILED`, `PARTIAL`)
+* `mode` (`SCHEDULED`, `MANUAL`)
+* `requested_by_user_id`
+* `started_at`, `finished_at`
+* `error_summary`
+
+**Table: `bamboo_export_items`**
+
+* `id`
+* `bamboo_export_id`
+* `time_entry_id`
+* `bamboo_employee_id`
+* `payload_json`
+* `bamboo_response_json`
+* `status` (`SENT`, `FAILED`, `SKIPPED`)
+* `idempotency_key` (critical)
+
+### Scheduling
+
+Admins should be able to configure:
+
+* export frequency (e.g., every 7 days, biweekly, etc.)
+* the “cutoff time” in org timezone
+* whether to auto-lock pay period at export time
+
+Implementation options:
+
+* a cron-like scheduler
+* or a simple “daily runner” that checks which orgs are due
+
+### Manual push
+
+Admin can click “Export to Bamboo now” which:
+
+* validates pay period is approved (or warns if not)
+* queues a job immediately
+* shows a progress view: sent/failed counts
+
+### Idempotency (non-negotiable)
+
+If a job retries, Bamboo should not receive duplicates.
+
+* Use `idempotency_key` per time entry + pay period
+* If already exported successfully, skip unless admin forces “resend”
+
+---
+
+# Stage 4 — Payload design (hours vs clock entries)
+
+### Decide what Bamboo needs
+
+Two good models:
+
+**Option A: Hour-based export (simpler)**
+
+* per employee per day:
+
+  * date
+  * total hours
+  * optional notes
+
+**Option B: Clock-based export (more exact)**
+
+* clock-in timestamp
+* clock-out timestamp
+
+Bamboo’s time tracking docs include endpoints specifically for timesheet clock-in/clock-out entries and also endpoints for hour entries. ([BambooHR][2])
+
+**Recommendation:** Start with **hour-based** unless you *need* exact clock timestamps in Bamboo for compliance/reporting. Hour exports are typically less brittle.
+
+---
+
+# Stage 5 — Error handling, reconciliation, and “fix before export”
+
+### What must be blocked before export
+
+* Missing clock-out entries (unless admin confirms auto-close)
+* Negative durations / overlaps
+* Entries exceeding a max duration (e.g., 16 hours) unless flagged and approved
+
+### Admin tools that prevent payroll disasters
+
+* “Auto-resolve missing clock-out” (set end time = scheduled end OR last activity time, with reason)
+* “Flag suspicious entries” queue
+* “Export preview” before pushing to Bamboo:
+
+  * totals per employee
+  * totals per day
+  * list of exceptions
+
+### Post-export behavior
+
+* Mark entries as `EXPORTED`
+* Keep them visible but locked
+* Allow corrections by:
+
+  * creating an “adjustment export” for Bamboo (if Bamboo supports edits)
+  * or requiring admin to fix in Bamboo manually with a log note
+    (Which approach depends on Bamboo’s exact behavior for updating/deleting entries in your configuration.)
+
+---
+
+# Stage 6 — Mapping & setup on the Admin side
+
+### Admin settings page needed
+
+**Admin → Integrations → BambooHR**
+
+* API credentials storage (secure env/secret storage)
+* company domain
+* test connection button
+* employee mapping UI:
+
+  * internal user ↔ bamboo employee id
+* export configuration:
+
+  * pay period length
+  * export schedule
+  * auto-lock settings
+
+Bamboo’s API docs include general “getting started” guidance and auth patterns—make sure Replit AI follows their docs for authentication and access permissions. ([BambooHR][3])
+
+---
+
+# What you should ask Replit AI to implement first (fastest path)
+
+1. Fix timekeeping data model + audit trail (Stage 1)
+2. Build Admin Timesheets tab w/ edits + approval state (Stage 2)
+3. Add Bamboo export job pipeline + manual push (Stage 3)
+4. Add scheduled export runner + settings UI (Stage 6)
+
+Then polish:
+
+* export preview
+* exception queues
+* reconciliation reports
+
+---
+
+## Quick “Definition of Done” checklist
+
+* ✅ Admin can view total hours per driver per pay period
+* ✅ Admin can edit clock-in/out times with audit logs
+* ✅ Pay period can be locked/approved
+* ✅ Export can be scheduled + manually triggered
+* ✅ Exports are idempotent and produce a job log
+* ✅ Errors are visible and don’t silently fail
+* ✅ Bamboo mapping exists (internal driver ↔ Bamboo employee)
+
+---
+
+If you paste your current Bamboo export code (or the existing “payroll exports” area), I can tailor this into a **Replit AI step-by-step build order with exact endpoints, tables, and UI components**, matching your current schema and stack.
+
+[1]: https://documentation.bamboohr.com/reference/time-tracking-1?utm_source=chatgpt.com "Time Tracking"
+[2]: https://documentation.bamboohr.com/reference/time-off?utm_source=chatgpt.com "Time Off"
+[3]: https://documentation.bamboohr.com/docs/getting-started?utm_source=chatgpt.com "Getting Started With The API - BambooHR"

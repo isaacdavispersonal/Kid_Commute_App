@@ -154,6 +154,24 @@ import {
   type UpdateStudentServiceDays,
   type StudentServiceDayOverride,
   type InsertStudentServiceDayOverride,
+  payPeriods,
+  timesheetEntries,
+  timesheetEntryEdits,
+  bambooEmployeeMap,
+  payrollExportJobs,
+  payrollExportJobEntries,
+  type PayPeriod,
+  type InsertPayPeriod,
+  type TimesheetEntry,
+  type InsertTimesheetEntry,
+  type TimesheetEntryEdit,
+  type InsertTimesheetEntryEdit,
+  type BambooEmployeeMap,
+  type InsertBambooEmployeeMap,
+  type PayrollExportJob,
+  type InsertPayrollExportJob,
+  type PayrollExportJobEntry,
+  type InsertPayrollExportJobEntry,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, sql, gte, lte, ne, lt, inArray, isNotNull, isNull } from "drizzle-orm";
@@ -564,6 +582,45 @@ export interface IStorage {
   getServiceDayOverrideForDate(studentId: string, routeId: string, shiftType: "MORNING" | "AFTERNOON" | "EXTRA", date: string): Promise<StudentServiceDayOverride | undefined>;
   createServiceDayOverride(data: InsertStudentServiceDayOverride): Promise<StudentServiceDayOverride>;
   deleteServiceDayOverride(id: string): Promise<void>;
+
+  // Pay Period operations
+  getPayPeriods(limit?: number): Promise<PayPeriod[]>;
+  getPayPeriod(id: string): Promise<PayPeriod | undefined>;
+  createPayPeriod(payPeriod: InsertPayPeriod): Promise<PayPeriod>;
+  updatePayPeriod(id: string, updates: Partial<InsertPayPeriod>): Promise<PayPeriod>;
+  getCurrentPayPeriod(): Promise<PayPeriod | undefined>;
+  getPayPeriodByDate(date: string): Promise<PayPeriod | undefined>;
+
+  // Timesheet Entry operations
+  getTimesheetEntries(filters?: { payPeriodId?: string; driverId?: string; status?: string }): Promise<TimesheetEntry[]>;
+  getTimesheetEntry(id: string): Promise<TimesheetEntry | undefined>;
+  createTimesheetEntry(entry: InsertTimesheetEntry): Promise<TimesheetEntry>;
+  updateTimesheetEntry(id: string, updates: Partial<InsertTimesheetEntry>): Promise<TimesheetEntry>;
+  getTimesheetEntriesForPayPeriod(payPeriodId: string): Promise<TimesheetEntry[]>;
+
+  // Timesheet Entry Edit operations
+  createTimesheetEntryEdit(edit: InsertTimesheetEntryEdit): Promise<TimesheetEntryEdit>;
+  getTimesheetEntryEdits(timesheetEntryId: string): Promise<TimesheetEntryEdit[]>;
+
+  // Bamboo Employee Map operations
+  getBambooMapping(userId: string): Promise<BambooEmployeeMap | undefined>;
+  createBambooMapping(mapping: InsertBambooEmployeeMap): Promise<BambooEmployeeMap>;
+  updateBambooMapping(id: string, updates: Partial<InsertBambooEmployeeMap>): Promise<BambooEmployeeMap>;
+  getActiveBambooMappings(): Promise<BambooEmployeeMap[]>;
+
+  // Payroll Export Job operations
+  createPayrollExportJob(job: InsertPayrollExportJob): Promise<PayrollExportJob>;
+  getPayrollExportJobs(payPeriodId?: string): Promise<PayrollExportJob[]>;
+  getPayrollExportJob(id: string): Promise<PayrollExportJob | undefined>;
+  updatePayrollExportJob(id: string, updates: Partial<InsertPayrollExportJob>): Promise<PayrollExportJob>;
+
+  // Payroll Export Job Entry operations
+  createPayrollExportJobEntry(entry: InsertPayrollExportJobEntry): Promise<PayrollExportJobEntry>;
+  getPayrollExportJobEntries(jobId: string): Promise<PayrollExportJobEntry[]>;
+  getPayrollExportJobEntriesByStatus(jobId: string, status: string): Promise<PayrollExportJobEntry[]>;
+  updatePayrollExportJobEntry(id: string, updates: Partial<InsertPayrollExportJobEntry>): Promise<PayrollExportJobEntry>;
+  findSuccessfulExportByIdempotencyKey(idempotencyKey: string): Promise<PayrollExportJobEntry | undefined>;
+  findSuccessfulExportsByIdempotencyKeys(idempotencyKeys: string[]): Promise<PayrollExportJobEntry[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6353,6 +6410,311 @@ export class DatabaseStorage implements IStorage {
 
   async deleteServiceDayOverride(id: string): Promise<void> {
     await db.delete(studentServiceDayOverrides).where(eq(studentServiceDayOverrides.id, id));
+  }
+
+  // ============ Pay Period operations ============
+
+  async getPayPeriods(limit?: number): Promise<PayPeriod[]> {
+    const query = db
+      .select()
+      .from(payPeriods)
+      .orderBy(desc(payPeriods.startDate));
+    
+    if (limit) {
+      return await query.limit(limit);
+    }
+    return await query;
+  }
+
+  async getPayPeriod(id: string): Promise<PayPeriod | undefined> {
+    const [result] = await db
+      .select()
+      .from(payPeriods)
+      .where(eq(payPeriods.id, id));
+    return result;
+  }
+
+  async createPayPeriod(payPeriod: InsertPayPeriod): Promise<PayPeriod> {
+    const [created] = await db
+      .insert(payPeriods)
+      .values(payPeriod)
+      .returning();
+    return created;
+  }
+
+  async updatePayPeriod(id: string, updates: Partial<InsertPayPeriod>): Promise<PayPeriod> {
+    const [updated] = await db
+      .update(payPeriods)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(payPeriods.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("PayPeriod not found");
+    }
+    return updated;
+  }
+
+  async getCurrentPayPeriod(): Promise<PayPeriod | undefined> {
+    const today = new Date().toISOString().split('T')[0];
+    const [result] = await db
+      .select()
+      .from(payPeriods)
+      .where(
+        and(
+          lte(payPeriods.startDate, today),
+          gte(payPeriods.endDate, today)
+        )
+      );
+    return result;
+  }
+
+  async getPayPeriodByDate(date: string): Promise<PayPeriod | undefined> {
+    const [result] = await db
+      .select()
+      .from(payPeriods)
+      .where(
+        and(
+          lte(payPeriods.startDate, date),
+          gte(payPeriods.endDate, date)
+        )
+      );
+    return result;
+  }
+
+  // ============ Timesheet Entry operations ============
+
+  async getTimesheetEntries(filters?: { payPeriodId?: string; driverId?: string; status?: string }): Promise<TimesheetEntry[]> {
+    const conditions = [];
+    
+    if (filters?.payPeriodId) {
+      conditions.push(eq(timesheetEntries.payPeriodId, filters.payPeriodId));
+    }
+    if (filters?.driverId) {
+      conditions.push(eq(timesheetEntries.driverId, filters.driverId));
+    }
+    if (filters?.status) {
+      conditions.push(eq(timesheetEntries.status, filters.status as any));
+    }
+    
+    const query = db
+      .select()
+      .from(timesheetEntries)
+      .orderBy(desc(timesheetEntries.startAtUtc));
+    
+    if (conditions.length > 0) {
+      return await query.where(and(...conditions));
+    }
+    return await query;
+  }
+
+  async getTimesheetEntry(id: string): Promise<TimesheetEntry | undefined> {
+    const [result] = await db
+      .select()
+      .from(timesheetEntries)
+      .where(eq(timesheetEntries.id, id));
+    return result;
+  }
+
+  async createTimesheetEntry(entry: InsertTimesheetEntry): Promise<TimesheetEntry> {
+    const [created] = await db
+      .insert(timesheetEntries)
+      .values(entry)
+      .returning();
+    return created;
+  }
+
+  async updateTimesheetEntry(id: string, updates: Partial<InsertTimesheetEntry>): Promise<TimesheetEntry> {
+    const [updated] = await db
+      .update(timesheetEntries)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(timesheetEntries.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("TimesheetEntry not found");
+    }
+    return updated;
+  }
+
+  async getTimesheetEntriesForPayPeriod(payPeriodId: string): Promise<TimesheetEntry[]> {
+    return await db
+      .select()
+      .from(timesheetEntries)
+      .where(eq(timesheetEntries.payPeriodId, payPeriodId))
+      .orderBy(desc(timesheetEntries.startAtUtc));
+  }
+
+  // ============ Timesheet Entry Edit operations ============
+
+  async createTimesheetEntryEdit(edit: InsertTimesheetEntryEdit): Promise<TimesheetEntryEdit> {
+    const [created] = await db
+      .insert(timesheetEntryEdits)
+      .values(edit)
+      .returning();
+    return created;
+  }
+
+  async getTimesheetEntryEdits(timesheetEntryId: string): Promise<TimesheetEntryEdit[]> {
+    return await db
+      .select()
+      .from(timesheetEntryEdits)
+      .where(eq(timesheetEntryEdits.timesheetEntryId, timesheetEntryId))
+      .orderBy(desc(timesheetEntryEdits.createdAt));
+  }
+
+  // ============ Bamboo Employee Map operations ============
+
+  async getBambooMapping(userId: string): Promise<BambooEmployeeMap | undefined> {
+    const [result] = await db
+      .select()
+      .from(bambooEmployeeMap)
+      .where(
+        and(
+          eq(bambooEmployeeMap.userId, userId),
+          eq(bambooEmployeeMap.isActive, true)
+        )
+      );
+    return result;
+  }
+
+  async createBambooMapping(mapping: InsertBambooEmployeeMap): Promise<BambooEmployeeMap> {
+    const [created] = await db
+      .insert(bambooEmployeeMap)
+      .values(mapping)
+      .returning();
+    return created;
+  }
+
+  async updateBambooMapping(id: string, updates: Partial<InsertBambooEmployeeMap>): Promise<BambooEmployeeMap> {
+    const [updated] = await db
+      .update(bambooEmployeeMap)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(bambooEmployeeMap.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("BambooEmployeeMap not found");
+    }
+    return updated;
+  }
+
+  async getActiveBambooMappings(): Promise<BambooEmployeeMap[]> {
+    return await db
+      .select()
+      .from(bambooEmployeeMap)
+      .where(eq(bambooEmployeeMap.isActive, true));
+  }
+
+  // ============ Payroll Export Job operations ============
+
+  async createPayrollExportJob(job: InsertPayrollExportJob): Promise<PayrollExportJob> {
+    const [created] = await db
+      .insert(payrollExportJobs)
+      .values(job)
+      .returning();
+    return created;
+  }
+
+  async getPayrollExportJobs(payPeriodId?: string): Promise<PayrollExportJob[]> {
+    if (payPeriodId) {
+      return await db
+        .select()
+        .from(payrollExportJobs)
+        .where(eq(payrollExportJobs.payPeriodId, payPeriodId))
+        .orderBy(desc(payrollExportJobs.createdAt));
+    }
+    return await db
+      .select()
+      .from(payrollExportJobs)
+      .orderBy(desc(payrollExportJobs.createdAt));
+  }
+
+  async getPayrollExportJob(id: string): Promise<PayrollExportJob | undefined> {
+    const [result] = await db
+      .select()
+      .from(payrollExportJobs)
+      .where(eq(payrollExportJobs.id, id));
+    return result;
+  }
+
+  async updatePayrollExportJob(id: string, updates: Partial<InsertPayrollExportJob>): Promise<PayrollExportJob> {
+    const [updated] = await db
+      .update(payrollExportJobs)
+      .set(updates)
+      .where(eq(payrollExportJobs.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("PayrollExportJob not found");
+    }
+    return updated;
+  }
+
+  // ============ Payroll Export Job Entry operations ============
+
+  async createPayrollExportJobEntry(entry: InsertPayrollExportJobEntry): Promise<PayrollExportJobEntry> {
+    const [created] = await db
+      .insert(payrollExportJobEntries)
+      .values(entry)
+      .returning();
+    return created;
+  }
+
+  async getPayrollExportJobEntries(jobId: string): Promise<PayrollExportJobEntry[]> {
+    return await db
+      .select()
+      .from(payrollExportJobEntries)
+      .where(eq(payrollExportJobEntries.jobId, jobId))
+      .orderBy(payrollExportJobEntries.date);
+  }
+
+  async updatePayrollExportJobEntry(id: string, updates: Partial<InsertPayrollExportJobEntry>): Promise<PayrollExportJobEntry> {
+    const [updated] = await db
+      .update(payrollExportJobEntries)
+      .set(updates)
+      .where(eq(payrollExportJobEntries.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundError("PayrollExportJobEntry not found");
+    }
+    return updated;
+  }
+
+  async getPayrollExportJobEntriesByStatus(jobId: string, status: string): Promise<PayrollExportJobEntry[]> {
+    return await db
+      .select()
+      .from(payrollExportJobEntries)
+      .where(
+        and(
+          eq(payrollExportJobEntries.jobId, jobId),
+          eq(payrollExportJobEntries.status, status as any)
+        )
+      )
+      .orderBy(payrollExportJobEntries.date);
+  }
+
+  async findSuccessfulExportByIdempotencyKey(idempotencyKey: string): Promise<PayrollExportJobEntry | undefined> {
+    const [entry] = await db
+      .select()
+      .from(payrollExportJobEntries)
+      .where(
+        and(
+          eq(payrollExportJobEntries.idempotencyKey, idempotencyKey),
+          eq(payrollExportJobEntries.status, "SUCCESS")
+        )
+      )
+      .limit(1);
+    return entry;
+  }
+
+  async findSuccessfulExportsByIdempotencyKeys(idempotencyKeys: string[]): Promise<PayrollExportJobEntry[]> {
+    if (idempotencyKeys.length === 0) return [];
+    return await db
+      .select()
+      .from(payrollExportJobEntries)
+      .where(
+        and(
+          inArray(payrollExportJobEntries.idempotencyKey, idempotencyKeys),
+          eq(payrollExportJobEntries.status, "SUCCESS")
+        )
+      );
   }
 }
 

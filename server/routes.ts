@@ -2177,6 +2177,748 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // ============ Admin Pay Periods Routes (Timesheet System) ============
+
+  // Get all pay periods
+  app.get(
+    "/api/admin/pay-periods",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+        const payPeriods = await storage.getPayPeriods(limit);
+        res.json(payPeriods);
+      } catch (error) {
+        console.error("Error fetching pay periods:", error);
+        res.status(500).json({ message: "Failed to fetch pay periods" });
+      }
+    }
+  );
+
+  // Create a new pay period
+  app.post(
+    "/api/admin/pay-periods",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { insertPayPeriodSchema } = await import("@shared/schema");
+        const result = insertPayPeriodSchema.safeParse(req.body);
+        
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid pay period data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const payPeriod = await storage.createPayPeriod(result.data);
+        res.status(201).json(payPeriod);
+      } catch (error) {
+        console.error("Error creating pay period:", error);
+        res.status(500).json({ message: "Failed to create pay period" });
+      }
+    }
+  );
+
+  // Get a specific pay period
+  app.get(
+    "/api/admin/pay-periods/:id",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const payPeriod = await storage.getPayPeriod(id);
+        
+        if (!payPeriod) {
+          return res.status(404).json({ message: "Pay period not found" });
+        }
+        
+        res.json(payPeriod);
+      } catch (error) {
+        console.error("Error fetching pay period:", error);
+        res.status(500).json({ message: "Failed to fetch pay period" });
+      }
+    }
+  );
+
+  // Update a pay period
+  app.patch(
+    "/api/admin/pay-periods/:id",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const payPeriod = await storage.updatePayPeriod(id, req.body);
+        res.json(payPeriod);
+      } catch (error: any) {
+        console.error("Error updating pay period:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to update pay period" });
+      }
+    }
+  );
+
+  // Lock a pay period
+  app.post(
+    "/api/admin/pay-periods/:id/lock",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const userId = req.user.id;
+        
+        const payPeriod = await storage.getPayPeriod(id);
+        if (!payPeriod) {
+          return res.status(404).json({ message: "Pay period not found" });
+        }
+        
+        if (payPeriod.status !== "OPEN") {
+          return res.status(400).json({ message: "Pay period is not open and cannot be locked" });
+        }
+        
+        const updated = await storage.updatePayPeriod(id, {
+          status: "LOCKED",
+          lockedAt: new Date(),
+          lockedBy: userId,
+        });
+        
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error locking pay period:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to lock pay period" });
+      }
+    }
+  );
+
+  // Approve a pay period
+  app.post(
+    "/api/admin/pay-periods/:id/approve",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const userId = req.user.id;
+        
+        const payPeriod = await storage.getPayPeriod(id);
+        if (!payPeriod) {
+          return res.status(404).json({ message: "Pay period not found" });
+        }
+        
+        if (payPeriod.status !== "LOCKED") {
+          return res.status(400).json({ message: "Pay period must be locked before approval" });
+        }
+        
+        const updated = await storage.updatePayPeriod(id, {
+          status: "APPROVED",
+          approvedAt: new Date(),
+          approvedBy: userId,
+        });
+        
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error approving pay period:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to approve pay period" });
+      }
+    }
+  );
+
+  // Unlock a pay period
+  app.post(
+    "/api/admin/pay-periods/:id/unlock",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        
+        const payPeriod = await storage.getPayPeriod(id);
+        if (!payPeriod) {
+          return res.status(404).json({ message: "Pay period not found" });
+        }
+        
+        if (payPeriod.status === "EXPORTED") {
+          return res.status(400).json({ message: "Cannot unlock an exported pay period" });
+        }
+        
+        const updated = await storage.updatePayPeriod(id, {
+          status: "OPEN",
+          lockedAt: null,
+          lockedBy: null,
+          approvedAt: null,
+          approvedBy: null,
+        });
+        
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error unlocking pay period:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to unlock pay period" });
+      }
+    }
+  );
+
+  // Get export preview for a pay period
+  app.get(
+    "/api/admin/pay-periods/:id/export-preview",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { bambooHRExportService } = await import("./services/bamboohr-export");
+        const preview = await bambooHRExportService.getExportPreview(id);
+        res.json(preview);
+      } catch (error: any) {
+        console.error("Error getting export preview:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to get export preview" });
+      }
+    }
+  );
+
+  // ============ Admin Export Jobs Routes (BambooHR Job-Based Export) ============
+
+  // Create new export job
+  app.post(
+    "/api/admin/export-jobs",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { payPeriodId, mode = "MANUAL" } = req.body;
+        const userId = req.user.id;
+
+        if (!payPeriodId) {
+          return res.status(400).json({ message: "payPeriodId is required" });
+        }
+
+        if (mode !== "MANUAL" && mode !== "SCHEDULED") {
+          return res.status(400).json({ message: "mode must be MANUAL or SCHEDULED" });
+        }
+
+        const { bambooHRExportService } = await import("./services/bamboohr-export");
+        const jobId = await bambooHRExportService.createExportJob(payPeriodId, userId, mode);
+        
+        const job = await bambooHRExportService.getJob(jobId);
+        res.status(201).json(job);
+      } catch (error: any) {
+        console.error("Error creating export job:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to create export job" });
+      }
+    }
+  );
+
+  // List export jobs (optionally filter by pay period)
+  app.get(
+    "/api/admin/export-jobs",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const payPeriodId = req.query.payPeriodId as string | undefined;
+        const { bambooHRExportService } = await import("./services/bamboohr-export");
+        const jobs = await bambooHRExportService.listJobs(payPeriodId);
+        res.json(jobs);
+      } catch (error) {
+        console.error("Error listing export jobs:", error);
+        res.status(500).json({ message: "Failed to list export jobs" });
+      }
+    }
+  );
+
+  // Get job details with entries
+  app.get(
+    "/api/admin/export-jobs/:id",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { bambooHRExportService } = await import("./services/bamboohr-export");
+        const result = await bambooHRExportService.getJobWithEntries(id);
+        
+        if (!result) {
+          return res.status(404).json({ message: "Export job not found" });
+        }
+        
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching export job:", error);
+        res.status(500).json({ message: "Failed to fetch export job" });
+      }
+    }
+  );
+
+  // Execute a queued job
+  app.post(
+    "/api/admin/export-jobs/:id/execute",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { bambooHRExportService } = await import("./services/bamboohr-export");
+        const result = await bambooHRExportService.executeExportJob(id);
+        res.json(result);
+      } catch (error: any) {
+        console.error("Error executing export job:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to execute export job" });
+      }
+    }
+  );
+
+  // Retry failed entries
+  app.post(
+    "/api/admin/export-jobs/:id/retry",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const { bambooHRExportService } = await import("./services/bamboohr-export");
+        const result = await bambooHRExportService.retryFailedEntries(id);
+        res.json(result);
+      } catch (error: any) {
+        console.error("Error retrying export job:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        if (error instanceof ValidationError) {
+          return res.status(400).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to retry export job" });
+      }
+    }
+  );
+
+  // ============ Admin Timesheet Entries Routes ============
+
+  // Get timesheet entries with optional filters
+  app.get(
+    "/api/admin/timesheet-entries",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const filters = {
+          payPeriodId: req.query.payPeriodId as string | undefined,
+          driverId: req.query.driverId as string | undefined,
+          status: req.query.status as string | undefined,
+        };
+        
+        const entries = await storage.getTimesheetEntries(filters);
+        res.json(entries);
+      } catch (error) {
+        console.error("Error fetching timesheet entries:", error);
+        res.status(500).json({ message: "Failed to fetch timesheet entries" });
+      }
+    }
+  );
+
+  // Get a specific timesheet entry
+  app.get(
+    "/api/admin/timesheet-entries/:id",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const entry = await storage.getTimesheetEntry(id);
+        
+        if (!entry) {
+          return res.status(404).json({ message: "Timesheet entry not found" });
+        }
+        
+        res.json(entry);
+      } catch (error) {
+        console.error("Error fetching timesheet entry:", error);
+        res.status(500).json({ message: "Failed to fetch timesheet entry" });
+      }
+    }
+  );
+
+  // Update a timesheet entry (with audit trail)
+  app.patch(
+    "/api/admin/timesheet-entries/:id",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const userId = req.user.id;
+        const { reason, ...updates } = req.body;
+        
+        if (!reason) {
+          return res.status(400).json({ message: "Reason for edit is required" });
+        }
+        
+        // Get current values for audit log
+        const currentEntry = await storage.getTimesheetEntry(id);
+        if (!currentEntry) {
+          return res.status(404).json({ message: "Timesheet entry not found" });
+        }
+        
+        // Create audit trail
+        await storage.createTimesheetEntryEdit({
+          timesheetEntryId: id,
+          editorUserId: userId,
+          previousValues: currentEntry,
+          newValues: { ...currentEntry, ...updates },
+          reason,
+          editType: "UPDATE",
+        });
+        
+        // Update the entry
+        const updated = await storage.updateTimesheetEntry(id, updates);
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error updating timesheet entry:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to update timesheet entry" });
+      }
+    }
+  );
+
+  // Get edit history for a timesheet entry
+  app.get(
+    "/api/admin/timesheet-entries/:id/edits",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const edits = await storage.getTimesheetEntryEdits(id);
+        res.json(edits);
+      } catch (error) {
+        console.error("Error fetching timesheet entry edits:", error);
+        res.status(500).json({ message: "Failed to fetch timesheet entry edits" });
+      }
+    }
+  );
+
+  // Sync timesheet entries from clock events for a pay period
+  app.post(
+    "/api/admin/timesheet-entries/sync",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { payPeriodId, startDate, endDate, mode } = req.body;
+
+        if (mode === "shifts") {
+          // Sync from completed shifts
+          if (!startDate || !endDate) {
+            return res.status(400).json({
+              message: "startDate and endDate are required for shift-based sync",
+            });
+          }
+
+          const { syncTimesheetEntriesFromShifts } = await import(
+            "./services/timesheet-derivation"
+          );
+          const result = await syncTimesheetEntriesFromShifts(startDate, endDate);
+
+          return res.json({
+            message: "Timesheet sync from shifts completed",
+            created: result.created,
+            skipped: result.skipped,
+            errors: result.errors,
+          });
+        }
+
+        // Default: Sync from clock events for a pay period
+        if (!payPeriodId) {
+          return res.status(400).json({
+            message: "payPeriodId is required for clock event sync",
+          });
+        }
+
+        const { deriveTimesheetEntriesForPeriod } = await import(
+          "./services/timesheet-derivation"
+        );
+        const result = await deriveTimesheetEntriesForPeriod(payPeriodId);
+
+        res.json({
+          message: "Timesheet sync from clock events completed",
+          created: result.created,
+          skipped: result.skipped,
+          errors: result.errors,
+        });
+      } catch (error) {
+        console.error("Error syncing timesheet entries:", error);
+        res.status(500).json({ message: "Failed to sync timesheet entries" });
+      }
+    }
+  );
+
+  // ============ Admin Bamboo Employee Mappings Routes ============
+
+  // Get all active Bamboo mappings
+  app.get(
+    "/api/admin/bamboo-mappings",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const mappings = await storage.getActiveBambooMappings();
+        res.json(mappings);
+      } catch (error) {
+        console.error("Error fetching bamboo mappings:", error);
+        res.status(500).json({ message: "Failed to fetch bamboo mappings" });
+      }
+    }
+  );
+
+  // Create a new Bamboo mapping
+  app.post(
+    "/api/admin/bamboo-mappings",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { insertBambooEmployeeMapSchema } = await import("@shared/schema");
+        const result = insertBambooEmployeeMapSchema.safeParse(req.body);
+        
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: "Invalid bamboo mapping data", 
+            errors: result.error.errors 
+          });
+        }
+        
+        const mapping = await storage.createBambooMapping(result.data);
+        res.status(201).json(mapping);
+      } catch (error) {
+        console.error("Error creating bamboo mapping:", error);
+        res.status(500).json({ message: "Failed to create bamboo mapping" });
+      }
+    }
+  );
+
+  // Update Bamboo mapping for a user
+  app.put(
+    "/api/admin/bamboo-mappings/:userId",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { userId } = req.params;
+        const { bambooEmployeeId, isActive } = req.body;
+        
+        if (!bambooEmployeeId) {
+          return res.status(400).json({ message: "bambooEmployeeId is required" });
+        }
+        
+        // Check if mapping exists
+        const existingMapping = await storage.getBambooMapping(userId);
+        
+        if (existingMapping) {
+          // Update existing mapping
+          const updated = await storage.updateBambooMapping(existingMapping.id, {
+            bambooEmployeeId,
+            isActive: isActive !== undefined ? isActive : true,
+          });
+          res.json(updated);
+        } else {
+          // Create new mapping
+          const created = await storage.createBambooMapping({
+            userId,
+            bambooEmployeeId,
+            isActive: true,
+          });
+          res.status(201).json(created);
+        }
+      } catch (error: any) {
+        console.error("Error updating bamboo mapping:", error);
+        if (error instanceof NotFoundError) {
+          return res.status(404).json({ message: error.message });
+        }
+        res.status(500).json({ message: "Failed to update bamboo mapping" });
+      }
+    }
+  );
+
+  // ============ BambooHR Status and Test Connection ============
+  
+  // Get BambooHR integration status
+  app.get(
+    "/api/admin/bamboohr/status",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const apiKey = process.env.BAMBOOHR_API_KEY;
+        const subdomain = process.env.BAMBOOHR_SUBDOMAIN;
+        const isConfigured = !!(apiKey && subdomain);
+        
+        res.json({
+          isConfigured,
+          lastTestedAt: null, // Could store in database if needed
+          lastTestSuccess: null,
+        });
+      } catch (error) {
+        console.error("Error getting BambooHR status:", error);
+        res.status(500).json({ message: "Failed to get BambooHR status" });
+      }
+    }
+  );
+
+  // Test BambooHR connection
+  app.post(
+    "/api/admin/bamboohr/test-connection",
+    requireAuth,
+    requireRole("admin"),
+    async (req, res) => {
+      try {
+        const { createBambooHRService } = await import("./bamboohr-service");
+        const bambooHRService = createBambooHRService();
+        
+        const result = await bambooHRService.testConnection();
+        
+        res.json({
+          success: result.success,
+          error: result.error || null,
+          message: result.success ? "Connection successful" : (result.error || "Connection failed"),
+        });
+      } catch (error: any) {
+        console.error("Error testing BambooHR connection:", error);
+        res.json({
+          success: false,
+          error: error.message || "Failed to test connection",
+        });
+      }
+    }
+  );
+
+  // Bulk resolve missing clock-outs
+  app.post(
+    "/api/admin/timesheet-entries/bulk-resolve-clockouts",
+    requireAuth,
+    requireRole("admin"),
+    async (req: any, res) => {
+      try {
+        const { entryIds, method, manualEndTime, reason } = req.body;
+        const adminId = req.user.id;
+        
+        if (!entryIds || !Array.isArray(entryIds) || entryIds.length === 0) {
+          return res.status(400).json({ message: "Entry IDs are required" });
+        }
+        if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+          return res.status(400).json({ message: "Reason is required" });
+        }
+        if (method !== "scheduled" && method !== "manual") {
+          return res.status(400).json({ message: "Method must be 'scheduled' or 'manual'" });
+        }
+        if (method === "manual" && !manualEndTime) {
+          return res.status(400).json({ message: "Manual end time is required for manual method" });
+        }
+        
+        let resolved = 0;
+        let failed = 0;
+        const errors: string[] = [];
+        
+        for (const entryId of entryIds) {
+          try {
+            const entry = await storage.getTimesheetEntry(entryId);
+            if (!entry) {
+              failed++;
+              errors.push(`Entry ${entryId} not found`);
+              continue;
+            }
+            
+            let endTime: Date;
+            if (method === "manual") {
+              endTime = new Date(manualEndTime);
+            } else {
+              // "scheduled" method - use 8 hours after start as default
+              const startTime = new Date(entry.startAtUtc);
+              endTime = new Date(startTime.getTime() + 8 * 60 * 60 * 1000);
+            }
+            
+            // Validate end time is after start time
+            if (endTime <= new Date(entry.startAtUtc)) {
+              failed++;
+              errors.push(`Entry ${entryId}: end time must be after start time`);
+              continue;
+            }
+            
+            // Calculate hours
+            const startMs = new Date(entry.startAtUtc).getTime();
+            const endMs = endTime.getTime();
+            const totalMinutes = (endMs - startMs) / 1000 / 60;
+            const totalHours = totalMinutes / 60;
+            
+            // Update the entry
+            await storage.updateTimesheetEntry(entryId, {
+              endAtUtc: endTime.toISOString(),
+              totalHours: totalHours.toFixed(2),
+              regularHours: Math.min(totalHours, 8).toFixed(2),
+              overtimeHours: totalHours > 8 ? Math.min(totalHours - 8, 4).toFixed(2) : "0.00",
+              doubleTimeHours: totalHours > 12 ? (totalHours - 12).toFixed(2) : "0.00",
+              status: "READY",
+            });
+            
+            // Create edit record
+            await storage.createTimesheetEntryEdit({
+              timesheetEntryId: entryId,
+              editedByAdminId: adminId.toString(),
+              fieldChanged: "endAtUtc",
+              previousValue: entry.endAtUtc || "null",
+              newValue: endTime.toISOString(),
+              reason: `Bulk resolution: ${reason}`,
+            });
+            
+            resolved++;
+          } catch (err: any) {
+            failed++;
+            errors.push(`Entry ${entryId}: ${err.message || "Unknown error"}`);
+          }
+        }
+        
+        res.json({
+          resolved,
+          failed,
+          errors: errors.length > 0 ? errors : undefined,
+        });
+      } catch (error: any) {
+        console.error("Error bulk resolving clock-outs:", error);
+        res.status(500).json({ message: error.message || "Failed to bulk resolve clock-outs" });
+      }
+    }
+  );
+
   // ============ Admin Import Routes ============
   // Register bulk import routes for stops and students
   registerAdminImportRoutes(app, storage, requireAuth, requireRole);

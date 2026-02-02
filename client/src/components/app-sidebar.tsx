@@ -104,6 +104,11 @@ const adminMenuSections = [
         icon: DollarSign,
       },
       {
+        title: "Timesheets",
+        url: "/admin/timesheets",
+        icon: Clock,
+      },
+      {
         title: "Incidents",
         url: "/admin/incidents",
         icon: AlertTriangle,
@@ -121,12 +126,17 @@ const adminMenuSections = [
     ],
   },
   {
-    label: "Administration",
+    label: "Settings",
     items: [
       {
-        title: "Settings",
+        title: "General Settings",
         url: "/admin/settings",
         icon: Settings2,
+      },
+      {
+        title: "BambooHR",
+        url: "/admin/bamboohr-settings",
+        icon: DollarSign,
       },
     ],
   },

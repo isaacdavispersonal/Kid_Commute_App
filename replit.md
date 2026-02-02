@@ -52,7 +52,14 @@ Preferred communication style: Simple, everyday language.
     - **Session Management**: PostgreSQL-backed sessions with 7-day TTL.
     - **Push Notifications**: Mobile app support for iOS/Android via Firebase Cloud Messaging with device token management, deep link support, and various notification types.
     - **Automated Data Retention**: Scheduled cleanup service for old data with configurable retention periods.
-    - **BambooHR Payroll Integration**: Automated driver clock-in/out data export with overtime rules and audit trail.
+    - **BambooHR Payroll Integration**: Comprehensive timesheet-based payroll system with:
+        - **Pay Periods**: Biweekly periods with OPEN/LOCKED/APPROVED/EXPORTED status workflow
+        - **Timesheet Entries**: Durable time records derived from clock events with DRAFT/READY/APPROVED/EXPORTED status
+        - **Audit Trail**: All timesheet edits logged with reason, editor, previous/new values
+        - **Export Job Pipeline**: Idempotent BambooHR exports with QUEUED/RUNNING/SUCCESS/PARTIAL/FAILED status
+        - **Export Preview**: Pre-export validation showing warnings (missing clock-outs, unmapped drivers, etc.)
+        - **Bulk Actions**: Auto-resolve missing clock-outs with required reason
+        - **BambooHR Settings**: Connection test, employee ID mapping, configuration page
     - **Pull-to-Refresh**: Mobile-optimized gesture for manual data refresh on driver and parent pages.
     - **iOS Post-Auth Layout Fix**: Addresses WKWebView layout issues after login/signup.
     - **iOS Debug Overlay**: Toggleable overlay for debugging layout and platform information.
@@ -82,7 +89,7 @@ Preferred communication style: Simple, everyday language.
 - `jsonwebtoken`: JWT token generation/verification.
 - `cookie-parser`: Cookie handling for JWT auth.
 - `@tanstack/react-query`: Client-side data fetching.
-- `date-fns`: Date utility library.
+- `date-fns`, `date-fns-tz`: Date utility library with timezone support.
 - `zod`: Runtime schema validation.
 - `resend`: Email delivery service.
 - Radix UI component primitives.
