@@ -211,10 +211,8 @@ function Router() {
         <div className="flex h-dvh w-full bg-background">
         <AppSidebar userRole={userRole} isLeadDriver={isLeadDriver} />
         <div className="flex flex-col flex-1 min-h-0">
-          <header className="border-b bg-card shrink-0 z-20">
-            {/* Safe area spacer - just visual padding for the notch */}
-            <div className="h-[env(safe-area-inset-top,0px)]" />
-            {/* Actual header content with touch targets */}
+          <header className="border-b bg-background shrink-0 z-20 pt-[env(safe-area-inset-top,0px)]">
+            {/* Header content with touch targets - safe area applied as padding above */}
             <div className="flex items-center justify-between gap-4 px-4 py-3">
               <div className="flex items-center gap-2">
                 <SidebarTrigger data-testid="button-sidebar-toggle" />
@@ -267,7 +265,7 @@ function Router() {
             </DropdownMenu>
             </div>
           </header>
-          <main ref={mainRef} className="relative flex-1 overflow-y-auto p-6 pt-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <main ref={mainRef} className="relative flex-1 overflow-y-auto bg-background p-6 pt-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             <PullToRefresh 
               onRefresh={triggerRefresh} 
               isRefreshing={isRefreshing} 
