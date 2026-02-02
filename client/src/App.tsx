@@ -210,7 +210,7 @@ function Router() {
       <SidebarProvider style={sidebarStyle}>
         <div className="flex h-dvh w-full bg-background">
         <AppSidebar userRole={userRole} isLeadDriver={isLeadDriver} />
-        <div className="flex flex-col flex-1 min-h-0">
+        <div className="flex flex-col flex-1 min-h-0 bg-background">
           <header className="border-b bg-background shrink-0 z-20 pt-[env(safe-area-inset-top,0px)]">
             {/* Header content with touch targets - safe area applied as padding above */}
             <div className="flex items-center justify-between gap-4 px-4 py-3">
