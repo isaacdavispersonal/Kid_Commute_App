@@ -375,12 +375,9 @@
 
 /* iOS Safe Area and Viewport - SINGLE SOURCE OF TRUTH */
 html, body, #root {
-  /* Use the app's background color everywhere - no white */
   background-color: hsl(var(--background));
-  /* Progressive enhancement: fallback for older iOS, then svh, then dvh */
-  min-height: 100vh;
-  min-height: 100svh;
-  min-height: 100dvh;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* Override Ionic default backgrounds to prevent white bar after auth */
