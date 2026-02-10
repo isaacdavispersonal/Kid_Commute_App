@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/select";
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
-import { Plus, MapPin, Pencil, Trash2, List, Clock, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Tag, Users, Palette, LayoutGrid, X } from "lucide-react";
+import { Plus, MapPin, Pencil, Trash2, List, Clock, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Tag, Users, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -172,7 +172,6 @@ export default function AdminRoutes() {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<RouteGroup | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [groupingMode, setGroupingMode] = useState<"groups" | "colors">("groups");
 
   const { data: routes, isLoading: routesLoading } = useQuery<RouteWithCounts[]>({
     queryKey: ["/api/admin/routes"],
@@ -809,23 +808,6 @@ export default function AdminRoutes() {
     return acc;
   }, {} as Record<string, RouteWithCounts[]>) || {};
 
-  // Group routes by color (same color = route pair)
-  const colorGroupedRoutes = routes?.reduce((acc, route) => {
-    const colorKey = route.color || "no-color";
-    if (!acc[colorKey]) {
-      acc[colorKey] = [];
-    }
-    acc[colorKey].push(route);
-    return acc;
-  }, {} as Record<string, RouteWithCounts[]>) || {};
-
-  // Get sorted color keys (put "no-color" at the end)
-  const colorKeys = Object.keys(colorGroupedRoutes).sort((a, b) => {
-    if (a === "no-color") return 1;
-    if (b === "no-color") return -1;
-    return a.localeCompare(b);
-  });
-
   // Show all groups (even those without routes)
   const groupsWithRoutes = routeGroups || [];
 
@@ -847,30 +829,7 @@ export default function AdminRoutes() {
         </TabsList>
 
         <TabsContent value="routes" className="space-y-4">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            {/* Grouping Mode Toggle */}
-            <div className="flex items-center gap-1 border rounded-md p-1">
-              <Button
-                variant={groupingMode === "groups" ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setGroupingMode("groups")}
-                className="h-8 px-3"
-                data-testid="button-group-by-groups"
-              >
-                <LayoutGrid className="h-4 w-4 mr-1.5" />
-                Groups
-              </Button>
-              <Button
-                variant={groupingMode === "colors" ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setGroupingMode("colors")}
-                className="h-8 px-3"
-                data-testid="button-group-by-colors"
-              >
-                <Palette className="h-4 w-4 mr-1.5" />
-                AM/PM Pairs
-              </Button>
-            </div>
+          <div className="flex items-center justify-end gap-2">
             <Dialog open={isCreateRouteDialogOpen} onOpenChange={setIsCreateRouteDialogOpen}>
               <DialogTrigger asChild>
                 <Button data-testid="button-add-route">
@@ -978,115 +937,6 @@ export default function AdminRoutes() {
           ) : !routes || routes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No routes found. Create your first route to get started.
-            </div>
-          ) : groupingMode === "colors" ? (
-            /* Color-based grouping view (AM/PM pairs) */
-            <div className="space-y-4">
-              {colorKeys.map((colorKey) => {
-                const colorRoutes = colorGroupedRoutes[colorKey] || [];
-                const isExpanded = expandedGroups.has(`color-${colorKey}`);
-                const colorName = colorKey === "no-color" ? "No Color Assigned" : colorKey.charAt(0).toUpperCase() + colorKey.slice(1);
-                
-                // Sort routes: MORNING first, then AFTERNOON, then others
-                const sortedRoutes = [...colorRoutes].sort((a, b) => {
-                  const typeOrder = { MORNING: 0, AFTERNOON: 1, EXTRA: 2 };
-                  const aOrder = typeOrder[a.routeType as keyof typeof typeOrder] ?? 3;
-                  const bOrder = typeOrder[b.routeType as keyof typeof typeOrder] ?? 3;
-                  return aOrder - bOrder;
-                });
-                
-                return (
-                  <Card key={colorKey}>
-                    <Collapsible
-                      open={isExpanded}
-                      onOpenChange={() => toggleGroupExpansion(`color-${colorKey}`)}
-                    >
-                      <CollapsibleTrigger asChild>
-                        <div className="flex items-center justify-between gap-2 p-3 sm:p-4 cursor-pointer hover-elevate" data-testid={`color-group-${colorKey}`}>
-                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-                            {colorKey !== "no-color" && (
-                              <div 
-                                className="w-4 h-4 rounded-full shrink-0 border border-border" 
-                                style={{ backgroundColor: colorKey }}
-                              />
-                            )}
-                            <span className="font-medium truncate">{colorName}</span>
-                            <Badge variant="secondary" className="shrink-0">{colorRoutes.length}</Badge>
-                          </div>
-                        </div>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <div className="px-2 sm:px-4 pb-3 sm:pb-4 space-y-2">
-                          {sortedRoutes.map((route) => (
-                            <Card key={route.id}>
-                              <CardContent className="p-3 sm:p-4 space-y-2">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-medium text-sm sm:text-base truncate">{route.name}</p>
-                                    {route.description && (
-                                      <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{route.description}</p>
-                                    )}
-                                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                                      {route.routeType && (
-                                        <Badge 
-                                          variant="outline" 
-                                          className={`text-xs ${
-                                            route.routeType === 'MORNING' ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400' :
-                                            route.routeType === 'AFTERNOON' ? 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-400' :
-                                            ''
-                                          }`}
-                                        >
-                                          {route.routeType === 'MORNING' ? 'AM' : route.routeType === 'AFTERNOON' ? 'PM' : route.routeType}
-                                        </Badge>
-                                      )}
-                                      <span className="text-xs text-muted-foreground">{route.stopCount} stops</span>
-                                      <RouteStudentList routeId={route.id} studentCount={route.studentCount} />
-                                      {!route.isActive && <Badge variant="secondary" className="text-xs">Inactive</Badge>}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-0.5 shrink-0">
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-8 w-8"
-                                      onClick={() => {
-                                        setSelectedRoute(route);
-                                        setIsManageStopsDialogOpen(true);
-                                      }}
-                                      data-testid={`button-manage-stops-${route.id}`}
-                                    >
-                                      <List className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-8 w-8"
-                                      onClick={() => handleEditRouteClick(route)}
-                                      data-testid={`button-edit-route-${route.id}`}
-                                    >
-                                      <Pencil className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-8 w-8"
-                                      onClick={() => handleDeleteRouteClick(route)}
-                                      data-testid={`button-delete-route-${route.id}`}
-                                    >
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </Card>
-                );
-              })}
             </div>
           ) : (
             <div className="space-y-4">

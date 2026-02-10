@@ -32,7 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { User, Shield, Car, Users, Star, ChevronUp, ChevronDown, MoreVertical } from "lucide-react";
 import type { User as UserType } from "@shared/schema";
 
-type SortField = "name" | "email" | "role" | "joined";
+type SortField = "name" | "email" | "role";
 type SortDirection = "asc" | "desc";
 
 export default function AdminUsers() {
@@ -206,11 +206,6 @@ export default function AdminUsers() {
           break;
         case "role":
           comparison = getRoleSortValue(a) - getRoleSortValue(b);
-          break;
-        case "joined":
-          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          comparison = dateA - dateB;
           break;
       }
       
@@ -416,7 +411,6 @@ export default function AdminUsers() {
           <SortButton field="name">Name</SortButton>
           <SortButton field="email">Email</SortButton>
           <SortButton field="role">Role</SortButton>
-          <SortButton field="joined">Joined</SortButton>
         </div>
 
         <TabsContent value="all" className="mt-2">

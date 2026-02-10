@@ -30,7 +30,7 @@ export function DataTable({
 }: DataTableProps) {
   if (isLoading) {
     return (
-      <div className="rounded-md border border-card-border">
+      <div className="rounded-md border border-card-border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -56,7 +56,7 @@ export function DataTable({
   }
 
   return (
-    <div className="rounded-md border border-card-border">
+    <div className="rounded-md border border-card-border overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
