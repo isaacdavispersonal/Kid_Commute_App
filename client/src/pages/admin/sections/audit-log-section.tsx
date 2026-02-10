@@ -157,16 +157,7 @@ export default function AuditLogSection() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1" data-testid="heading-audit-log">Audit Log</h1>
-          <p className="text-sm text-muted-foreground">
-            Track all changes made by drivers and parents across the system
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
       <Card>
         <CardHeader>
           <div className="space-y-4">
@@ -216,7 +207,7 @@ export default function AuditLogSection() {
             </div>
             
             <div className="flex gap-2 flex-wrap">
-              <div className="relative flex-1 min-w-[200px]">
+              <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Search logs..."
@@ -227,7 +218,7 @@ export default function AuditLogSection() {
                 />
               </div>
               <Select value={roleFilter} onValueChange={(v: any) => setRoleFilter(v)}>
-                <SelectTrigger className="w-[140px]" data-testid="select-role-filter">
+                <SelectTrigger className="w-full sm:w-[140px]" data-testid="select-role-filter">
                   <SelectValue placeholder="Filter by role" />
                 </SelectTrigger>
                 <SelectContent>
@@ -237,7 +228,7 @@ export default function AuditLogSection() {
                 </SelectContent>
               </Select>
               <Select value={actionFilter} onValueChange={setActionFilter}>
-                <SelectTrigger className="w-[160px]" data-testid="select-action-filter">
+                <SelectTrigger className="w-full sm:w-[160px]" data-testid="select-action-filter">
                   <SelectValue placeholder="Filter by action" />
                 </SelectTrigger>
                 <SelectContent>
@@ -254,7 +245,7 @@ export default function AuditLogSection() {
                 placeholder="From"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-[150px]"
+                className="w-full sm:w-[150px]"
                 data-testid="input-start-date"
               />
               <Input
@@ -262,7 +253,7 @@ export default function AuditLogSection() {
                 placeholder="To"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-[150px]"
+                className="w-full sm:w-[150px]"
                 data-testid="input-end-date"
               />
             </div>
