@@ -410,7 +410,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
   // Send a test push notification (admin only)
   app.post("/api/admin/push-notifications/test", requireRole("admin"), async (req: any, res) => {
     try {
-      const { targetUserId, title, body } = req.body;
+      const { targetUserId, title, body, delaySeconds } = req.body;
 
       if (!targetUserId) {
         return res.status(400).json({ message: "Target user ID is required" });
@@ -426,8 +426,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         });
       }
 
-      // Send test notification
-      await pushNotificationService.sendToUsers([targetUserId], {
+      const notification = {
         title: title || "Test Notification",
         body: body || "This is a test push notification from Kid Commute",
         data: { 
@@ -435,10 +434,32 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           timestamp: new Date().toISOString(),
           deeplink: "/"
         }
-      });
+      };
+
+      if (delaySeconds && delaySeconds > 0) {
+        const delayMs = Math.min(delaySeconds, 60) * 1000;
+        setTimeout(async () => {
+          try {
+            await pushNotificationService.sendToUsers([targetUserId], notification);
+            console.log(`[push] Delayed test notification sent after ${delaySeconds}s to user ${targetUserId}`);
+          } catch (err) {
+            console.error(`[push] Failed to send delayed test notification:`, err);
+          }
+        }, delayMs);
+
+        return res.json({ 
+          success: true, 
+          delayed: true,
+          message: `Notification scheduled to send in ${delaySeconds} seconds to ${tokens.length} device(s)`,
+          tokenCount: tokens.length 
+        });
+      }
+
+      await pushNotificationService.sendToUsers([targetUserId], notification);
 
       res.json({ 
         success: true, 
+        delayed: false,
         message: `Test notification sent to ${tokens.length} device(s)`,
         tokenCount: tokens.length 
       });

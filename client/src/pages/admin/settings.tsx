@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, Phone, Plus, Trash2, Save, ExternalLink, Activity, GripVertical, Navigation, Bell, Send, Smartphone } from "lucide-react";
+import { Settings, Phone, Plus, Trash2, Save, ExternalLink, Activity, GripVertical, Navigation, Bell, Send, Smartphone, Timer } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -51,12 +51,13 @@ export default function AdminSettings() {
   });
 
   const sendTestNotificationMutation = useMutation({
-    mutationFn: async ({ targetUserId, title, body }: { targetUserId: string; title: string; body: string }) => {
-      return await apiRequest("POST", "/api/admin/push-notifications/test", { targetUserId, title, body });
+    mutationFn: async ({ targetUserId, title, body, delaySeconds }: { targetUserId: string; title: string; body: string; delaySeconds?: number }) => {
+      const res = await apiRequest("POST", "/api/admin/push-notifications/test", { targetUserId, title, body, delaySeconds });
+      return await res.json();
     },
     onSuccess: (data: any) => {
       toast({
-        title: "Test notification sent",
+        title: data.delayed ? "Delayed notification scheduled" : "Test notification sent",
         description: data.message || `Notification sent to ${data.tokenCount} device(s)`,
       });
     },
@@ -400,25 +401,48 @@ export default function AdminSettings() {
                   />
                 </div>
 
-                <Button
-                  onClick={() => sendTestNotificationMutation.mutate({
-                    targetUserId: selectedUserId,
-                    title: testTitle,
-                    body: testBody
-                  })}
-                  disabled={!selectedUserId || sendTestNotificationMutation.isPending}
-                  className="w-full"
-                  data-testid="button-send-test-push"
-                >
-                  {sendTestNotificationMutation.isPending ? (
-                    <>Sending...</>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      Send Test Notification
-                    </>
-                  )}
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    onClick={() => sendTestNotificationMutation.mutate({
+                      targetUserId: selectedUserId,
+                      title: testTitle,
+                      body: testBody
+                    })}
+                    disabled={!selectedUserId || sendTestNotificationMutation.isPending}
+                    className="flex-1"
+                    data-testid="button-send-test-push"
+                  >
+                    {sendTestNotificationMutation.isPending ? (
+                      <>Sending...</>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        Send Now
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => sendTestNotificationMutation.mutate({
+                      targetUserId: selectedUserId,
+                      title: testTitle,
+                      body: testBody,
+                      delaySeconds: 10
+                    })}
+                    disabled={!selectedUserId || sendTestNotificationMutation.isPending}
+                    className="flex-1"
+                    data-testid="button-send-delayed-push"
+                  >
+                    {sendTestNotificationMutation.isPending ? (
+                      <>Scheduling...</>
+                    ) : (
+                      <>
+                        <Timer className="h-4 w-4 mr-2" />
+                        Send in 10 seconds
+                      </>
+                    )}
+                  </Button>
+                </div>
 
                 {usersWithTokens.length > 0 && (
                   <div className="text-xs text-muted-foreground pt-2 border-t">
