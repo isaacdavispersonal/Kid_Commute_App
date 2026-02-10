@@ -244,7 +244,7 @@ export default function AdminSettings() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="text-destructive hover:bg-destructive/10 mt-5"
+                      className="text-destructive mt-5"
                       onClick={() => removeContact(contact.id)}
                       data-testid={`button-remove-contact-${contact.id}`}
                     >
@@ -366,15 +366,7 @@ export default function AdminSettings() {
                           value={user.userId}
                           data-testid={`option-user-${user.userId}`}
                         >
-                          <div className="flex items-center gap-2">
-                            <span>{user.userName}</span>
-                            <Badge variant="secondary" className="text-xs">
-                              {user.userRole}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              ({user.tokenCount} device{user.tokenCount > 1 ? "s" : ""})
-                            </span>
-                          </div>
+                          {user.userName} ({user.userRole}) - {user.tokenCount} device{user.tokenCount > 1 ? "s" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
