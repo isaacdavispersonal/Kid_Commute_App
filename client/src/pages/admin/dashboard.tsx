@@ -57,20 +57,25 @@ interface Incident {
 }
 
 export default function AdminDashboard() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
   const { data: stats, isLoading: statsLoading } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
+    refetchOnWindowFocus: true,
   });
 
   const { data: recentIncidents, isLoading: incidentsLoading } = useQuery<Incident[]>({
     queryKey: ["/api/admin/recent-incidents"],
+    refetchInterval: 60000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: activeDrivers, isLoading: driversLoading } = useQuery<ActiveDriver[]>({
     queryKey: ["/api/admin/active-drivers"],
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: anomalies, isLoading: anomaliesLoading } = useQuery<any[]>({
@@ -80,13 +85,12 @@ export default function AdminDashboard() {
 
   const resolveAnomalyMutation = useMutation({
     mutationFn: async (clockEventId: string) => {
-      return await apiRequest(`/api/admin/clock-events/${clockEventId}/resolve`, {
-        method: "PATCH",
-        body: { notes: "Resolved from dashboard" }
-      });
+      return await apiRequest("PATCH", `/api/admin/clock-events/${clockEventId}/resolve`, { notes: "Resolved from dashboard" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/timecard-anomalies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/active-drivers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({
         title: "Anomaly Resolved",
         description: "The timecard anomaly has been marked as resolved.",

@@ -144,6 +144,8 @@ export default function TimeManagementSection() {
   // Fetch all clock events for overview
   const { data: clockEvents, isLoading: isLoadingAll } = useQuery<ClockEvent[]>({
     queryKey: ["/api/admin/all-clock-events", range.startDate, range.endDate],
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (range.startDate) params.append("startDate", range.startDate);
@@ -164,7 +166,7 @@ export default function TimeManagementSection() {
   });
 
   // Fetch shifts for enrichment
-  const { data: shifts } = useQuery({
+  const { data: shifts } = useQuery<any[]>({
     queryKey: ["/api/admin/shifts"],
   });
 
@@ -206,6 +208,8 @@ export default function TimeManagementSection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/clock-events/unresolved"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/all-clock-events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/timecard-anomalies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/active-drivers"] });
       setSelectedEvent(null);
       setResolveNotes("");
       toast({
@@ -231,6 +235,8 @@ export default function TimeManagementSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/clock-events/unresolved"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/all-clock-events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/timecard-anomalies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/active-drivers"] });
       toast({
         title: "Auto-Clockout Complete",
         description: data.message || `Processed ${data.processed} orphaned shift(s)`,
