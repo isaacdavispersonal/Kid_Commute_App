@@ -45,10 +45,10 @@ export default function AdminGPSSettings() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="overflow-x-hidden space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold mb-2">GPS Integration Settings</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl sm:text-2xl font-bold mb-2">GPS Integration Settings</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
           Configure your navigation software to send real-time vehicle locations to Kid Commute
         </p>
       </div>
@@ -119,12 +119,12 @@ export default function AdminGPSSettings() {
         <CardContent className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="webhook-url">Webhook URL</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 id="webhook-url"
                 value={webhookUrl}
                 readOnly
-                className="font-mono text-sm"
+                className="w-full font-mono text-sm"
                 data-testid="input-webhook-url"
               />
               <Button
@@ -132,6 +132,7 @@ export default function AdminGPSSettings() {
                 size="icon"
                 onClick={() => copyToClipboard(webhookUrl, "Webhook URL")}
                 data-testid="button-copy-webhook-url"
+                className="w-full sm:w-auto"
               >
                 {copiedField === "Webhook URL" ? (
                   <Check className="h-4 w-4 text-green-600" />
@@ -140,18 +141,18 @@ export default function AdminGPSSettings() {
                 )}
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               This is the endpoint where your navigation software will send GPS updates
             </p>
           </div>
 
           <div className="space-y-2">
             <Label>Authentication Method</Label>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="font-mono">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <Badge variant="outline" className="font-mono w-full sm:w-auto">
                 Bearer Token
               </Badge>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-xs sm:text-sm text-muted-foreground">
                 Include your secret token in the Authorization header
               </span>
             </div>
@@ -159,7 +160,7 @@ export default function AdminGPSSettings() {
 
           <div className="space-y-2">
             <Label>Secret Token Location</Label>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               Your GPS_WEBHOOK_SECRET is stored securely in Replit Secrets. Configure your navigation software to send this token in the Authorization header.
             </p>
             <Alert>
@@ -188,21 +189,21 @@ export default function AdminGPSSettings() {
               <AccordionTrigger>Request Format</AccordionTrigger>
               <AccordionContent className="space-y-4">
                 <div className="space-y-2">
-                  <h4 className="font-semibold text-sm">HTTP Method</h4>
-                  <Badge variant="outline" className="font-mono">POST</Badge>
+                  <h4 className="font-semibold text-xs sm:text-sm">HTTP Method</h4>
+                  <Badge variant="outline" className="font-mono text-xs sm:text-sm">POST</Badge>
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="font-semibold text-sm">Required Headers</h4>
-                  <div className="bg-muted p-3 rounded-md font-mono text-sm space-y-1">
+                  <h4 className="font-semibold text-xs sm:text-sm">Required Headers</h4>
+                  <div className="bg-muted p-3 rounded-md font-mono text-xs sm:text-sm space-y-1 overflow-x-auto">
                     <div>Content-Type: application/json</div>
                     <div>Authorization: Bearer YOUR_SECRET_TOKEN</div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="font-semibold text-sm">Request Body (JSON)</h4>
-                  <div className="bg-muted p-3 rounded-md font-mono text-sm overflow-x-auto">
+                  <h4 className="font-semibold text-xs sm:text-sm">Request Body (JSON)</h4>
+                  <div className="bg-muted p-3 rounded-md font-mono text-xs sm:text-sm overflow-x-auto">
                     <pre>{JSON.stringify({
                       vehicle_id: "uuid-of-vehicle",
                       latitude: 40.7128,
@@ -220,10 +221,10 @@ export default function AdminGPSSettings() {
             <AccordionItem value="curl-example">
               <AccordionTrigger>cURL Example</AccordionTrigger>
               <AccordionContent className="space-y-2">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   Test your webhook with this example command:
                 </p>
-                <div className="bg-muted p-3 rounded-md font-mono text-sm overflow-x-auto">
+                <div className="bg-muted p-3 rounded-md font-mono text-xs sm:text-sm overflow-x-auto">
                   <pre>{`curl -X POST ${webhookUrl} \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_SECRET_TOKEN" \\
@@ -241,7 +242,7 @@ export default function AdminGPSSettings() {
                     `curl -X POST ${webhookUrl} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer YOUR_SECRET_TOKEN" \\\n  -d '{\n    "vehicle_id": "your-vehicle-uuid",\n    "latitude": 40.7128,\n    "longitude": -74.0060,\n    "timestamp": "2025-11-07T20:05:00Z"\n  }'`,
                     "cURL command"
                   )}
-                  className="mt-2"
+                  className="mt-2 w-full sm:w-auto"
                   data-testid="button-copy-curl"
                 >
                   {copiedField === "cURL command" ? (
@@ -262,10 +263,10 @@ export default function AdminGPSSettings() {
             <AccordionItem value="supported-software">
               <AccordionTrigger>Supported Navigation Software</AccordionTrigger>
               <AccordionContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   Kid Commute's webhook works with any GPS tracking software that can send HTTP POST requests. Popular options include:
                 </p>
-                <ul className="space-y-2 text-sm">
+                <ul className="space-y-2 text-xs sm:text-sm">
                   <li className="flex items-start gap-2">
                     <Check className="h-4 w-4 mt-0.5 text-green-600 flex-shrink-0" />
                     <div>
@@ -305,37 +306,37 @@ export default function AdminGPSSettings() {
               <AccordionContent>
                 <div className="space-y-3">
                   <div className="border-l-2 border-primary/30 pl-3 space-y-1">
-                    <div className="font-mono text-sm font-semibold">vehicle_id</div>
-                    <p className="text-sm text-muted-foreground">
-                      <Badge variant="outline" className="mr-2">Optional</Badge>
+                    <div className="font-mono text-xs sm:text-sm font-semibold">vehicle_id</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      <Badge variant="outline" className="mr-2 text-xs">Optional</Badge>
                       The UUID of the vehicle from Kid Commute. Use this OR plate_number.
                     </p>
                   </div>
                   <div className="border-l-2 border-primary/30 pl-3 space-y-1">
-                    <div className="font-mono text-sm font-semibold">plate_number</div>
-                    <p className="text-sm text-muted-foreground">
-                      <Badge variant="outline" className="mr-2">Optional</Badge>
+                    <div className="font-mono text-xs sm:text-sm font-semibold">plate_number</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      <Badge variant="outline" className="mr-2 text-xs">Optional</Badge>
                       The license plate number of the vehicle. Use this OR vehicle_id.
                     </p>
                   </div>
                   <div className="border-l-2 border-primary/30 pl-3 space-y-1">
-                    <div className="font-mono text-sm font-semibold">latitude</div>
-                    <p className="text-sm text-muted-foreground">
-                      <Badge variant="outline" className="mr-2">Required</Badge>
+                    <div className="font-mono text-xs sm:text-sm font-semibold">latitude</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      <Badge variant="outline" className="mr-2 text-xs">Required</Badge>
                       Latitude coordinate in decimal degrees (e.g., 40.7128)
                     </p>
                   </div>
                   <div className="border-l-2 border-primary/30 pl-3 space-y-1">
-                    <div className="font-mono text-sm font-semibold">longitude</div>
-                    <p className="text-sm text-muted-foreground">
-                      <Badge variant="outline" className="mr-2">Required</Badge>
+                    <div className="font-mono text-xs sm:text-sm font-semibold">longitude</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      <Badge variant="outline" className="mr-2 text-xs">Required</Badge>
                       Longitude coordinate in decimal degrees (e.g., -74.0060)
                     </p>
                   </div>
                   <div className="border-l-2 border-primary/30 pl-3 space-y-1">
-                    <div className="font-mono text-sm font-semibold">timestamp</div>
-                    <p className="text-sm text-muted-foreground">
-                      <Badge variant="outline" className="mr-2">Required</Badge>
+                    <div className="font-mono text-xs sm:text-sm font-semibold">timestamp</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      <Badge variant="outline" className="mr-2 text-xs">Required</Badge>
                       ISO 8601 timestamp (e.g., 2025-11-07T20:05:00Z)
                     </p>
                   </div>
@@ -348,41 +349,41 @@ export default function AdminGPSSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>How It Works</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-lg sm:text-xl">How It Works</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             Understanding the real-time tracking workflow
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-start gap-3">
-            <div className="bg-primary/10 text-primary rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0 font-semibold">
+            <div className="bg-primary/10 text-primary rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0 font-semibold text-sm">
               1
             </div>
             <div>
-              <h4 className="font-semibold text-sm">Navigation Software Sends Location</h4>
-              <p className="text-sm text-muted-foreground">
+              <h4 className="font-semibold text-xs sm:text-sm">Navigation Software Sends Location</h4>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Your GPS tracking system sends POST requests with vehicle coordinates to the webhook URL
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <div className="bg-primary/10 text-primary rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0 font-semibold">
+            <div className="bg-primary/10 text-primary rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0 font-semibold text-sm">
               2
             </div>
             <div>
-              <h4 className="font-semibold text-sm">Kid Commute Updates Vehicle Position</h4>
-              <p className="text-sm text-muted-foreground">
+              <h4 className="font-semibold text-xs sm:text-sm">Kid Commute Updates Vehicle Position</h4>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 The webhook receives the GPS data, verifies authentication, and updates the vehicle's current location in the database
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <div className="bg-primary/10 text-primary rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0 font-semibold">
+            <div className="bg-primary/10 text-primary rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0 font-semibold text-sm">
               3
             </div>
             <div>
-              <h4 className="font-semibold text-sm">Parents See Real-Time ETAs</h4>
-              <p className="text-sm text-muted-foreground">
+              <h4 className="font-semibold text-xs sm:text-sm">Parents See Real-Time ETAs</h4>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Parents automatically see estimated arrival times on their dashboard based on the vehicle's current location and their selected pickup stop
               </p>
             </div>

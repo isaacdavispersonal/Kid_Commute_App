@@ -2805,6 +2805,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const { createBambooHRService } = await import("./bamboohr-service");
         const bambooHRService = createBambooHRService();
         
+        if (!bambooHRService) {
+          return res.json({
+            success: false,
+            error: "BambooHR service not configured. Please set BAMBOOHR_API_KEY and BAMBOOHR_SUBDOMAIN.",
+          });
+        }
+        
         const result = await bambooHRService.testConnection();
         
         res.json({
@@ -2882,7 +2889,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             
             // Update the entry
             await storage.updateTimesheetEntry(entryId, {
-              endAtUtc: endTime.toISOString(),
+              endAtUtc: endTime,
               totalHours: totalHours.toFixed(2),
               regularHours: Math.min(totalHours, 8).toFixed(2),
               overtimeHours: totalHours > 8 ? Math.min(totalHours - 8, 4).toFixed(2) : "0.00",
@@ -2893,11 +2900,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             // Create edit record
             await storage.createTimesheetEntryEdit({
               timesheetEntryId: entryId,
-              editedByAdminId: adminId.toString(),
-              fieldChanged: "endAtUtc",
-              previousValue: entry.endAtUtc || "null",
-              newValue: endTime.toISOString(),
+              editorUserId: adminId.toString(),
+              previousValues: { endAtUtc: entry.endAtUtc || null },
+              newValues: { endAtUtc: endTime.toISOString() },
               reason: `Bulk resolution: ${reason}`,
+              editType: "UPDATE",
             });
             
             resolved++;

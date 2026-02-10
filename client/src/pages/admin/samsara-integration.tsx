@@ -104,10 +104,10 @@ export default function AdminSamsaraIntegration() {
   const isFullyConfigured = status?.webhookConfigured && status?.apiTokenConfigured;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="overflow-x-hidden space-y-4 sm:space-y-6 p-4 sm:p-6">
       <div>
-        <h1 className="text-3xl font-bold">Samsara Fleet Integration</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="text-xl sm:text-2xl font-bold">Samsara Fleet Integration</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-2">
           Two-part integration: Real-time GPS tracking for parent ETAs, and automatic vehicle fleet sync
         </p>
       </div>
@@ -162,9 +162,9 @@ export default function AdminSamsaraIntegration() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <label className="text-sm font-medium mb-2 block">Webhook URL</label>
-            <div className="flex gap-2">
-              <code className="flex-1 p-3 bg-muted rounded-md text-sm break-all font-mono">
+            <label className="text-xs sm:text-sm font-medium mb-2 block">Webhook URL</label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <code className="w-full p-3 bg-muted rounded-md text-xs sm:text-sm break-all font-mono">
                 {webhookUrl}
               </code>
               <Button
@@ -172,6 +172,7 @@ export default function AdminSamsaraIntegration() {
                 size="icon"
                 onClick={() => copyToClipboard(webhookUrl, "Webhook URL")}
                 data-testid="button-copy-webhook-url"
+                className="w-full sm:w-auto"
               >
                 {copiedField === "Webhook URL" ? (
                   <Check className="h-4 w-4" />
@@ -183,36 +184,36 @@ export default function AdminSamsaraIntegration() {
           </div>
 
           <div className="space-y-4">
-            <h3 className="font-semibold">Setup Instructions</h3>
-            <ol className="list-decimal list-inside space-y-3 text-sm">
+            <h3 className="font-semibold text-sm sm:text-base">Setup Instructions</h3>
+            <ol className="list-decimal list-inside space-y-3 text-xs sm:text-sm">
               <li>
                 <strong>Add Webhook Secret to Replit:</strong>
-                <p className="ml-6 mt-1 text-muted-foreground">
+                <p className="ml-4 sm:ml-6 mt-1 text-muted-foreground text-xs sm:text-sm">
                   In Samsara Dashboard, create a webhook and copy the Base64-encoded secret. 
-                  Add it to Replit Secrets as <code className="bg-muted px-1 py-0.5 rounded">SAMSARA_WEBHOOK_SECRET</code>
+                  Add it to Replit Secrets as <code className="bg-muted px-1 py-0.5 rounded text-xs">SAMSARA_WEBHOOK_SECRET</code>
                 </p>
               </li>
               <li>
                 <strong>Configure Webhook in Samsara:</strong>
-                <p className="ml-6 mt-1 text-muted-foreground">
+                <p className="ml-4 sm:ml-6 mt-1 text-muted-foreground text-xs sm:text-sm">
                   Go to Samsara Dashboard → Settings → Webhooks → Add Webhook
                 </p>
               </li>
               <li>
                 <strong>Set Webhook URL:</strong>
-                <p className="ml-6 mt-1 text-muted-foreground">
+                <p className="ml-4 sm:ml-6 mt-1 text-muted-foreground text-xs sm:text-sm">
                   Paste the webhook URL above into Samsara's webhook configuration
                 </p>
               </li>
               <li>
                 <strong>Subscribe to Events:</strong>
-                <p className="ml-6 mt-1 text-muted-foreground">
-                  Select <code className="bg-muted px-1 py-0.5 rounded">VehicleUpdated</code> event type
+                <p className="ml-4 sm:ml-6 mt-1 text-muted-foreground text-xs sm:text-sm">
+                  Select <code className="bg-muted px-1 py-0.5 rounded text-xs">VehicleUpdated</code> event type
                 </p>
               </li>
               <li>
                 <strong>Map Vehicles:</strong>
-                <p className="ml-6 mt-1 text-muted-foreground">
+                <p className="ml-4 sm:ml-6 mt-1 text-muted-foreground text-xs sm:text-sm">
                   Kid Commute will automatically match vehicles by license plate, or you can manually set Samsara Vehicle IDs below
                 </p>
               </li>
@@ -221,8 +222,8 @@ export default function AdminSamsaraIntegration() {
 
           <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Why Webhooks?</AlertTitle>
-            <AlertDescription>
+            <AlertTitle className="text-xs sm:text-sm">Why Webhooks?</AlertTitle>
+            <AlertDescription className="text-xs sm:text-sm">
               Webhooks push location updates instantly (66-100× faster than polling). Parents see live ETAs like "8 minutes away" 
               with no delays. Without webhooks, there's no real-time tracking.
             </AlertDescription>
@@ -232,13 +233,13 @@ export default function AdminSamsaraIntegration() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <RefreshCw className="h-5 w-5" />
                 Vehicle Fleet Sync
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs sm:text-sm">
                 Add vehicles to Kid Commute when you install GPS in new vans
               </CardDescription>
             </div>
@@ -246,6 +247,7 @@ export default function AdminSamsaraIntegration() {
               onClick={() => syncVehiclesMutation.mutate()}
               disabled={!status?.apiTokenConfigured || syncVehiclesMutation.isPending}
               data-testid="button-sync-vehicles"
+              className="w-full sm:w-auto"
             >
               {syncVehiclesMutation.isPending ? (
                 <>
@@ -264,8 +266,8 @@ export default function AdminSamsaraIntegration() {
         <CardContent className="space-y-6">
           <Alert>
             <CheckCircle2 className="h-4 w-4" />
-            <AlertTitle>How It Works</AlertTitle>
-            <AlertDescription>
+            <AlertTitle className="text-xs sm:text-sm">How It Works</AlertTitle>
+            <AlertDescription className="text-xs sm:text-sm">
               Click "Sync Vehicles" to pull your complete Samsara fleet into Kid Commute. New vehicles are created automatically 
               with their name, license plate, and GPS tracking enabled. Use this whenever you add new vans to your Samsara account.
             </AlertDescription>
@@ -276,9 +278,9 @@ export default function AdminSamsaraIntegration() {
               {syncResults.created.length > 0 && (
                 <Alert className="border-green-500/50 bg-green-500/5">
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  <AlertTitle className="text-green-600">Created {syncResults.created.length} vehicle(s)</AlertTitle>
+                  <AlertTitle className="text-green-600 text-xs sm:text-sm">Created {syncResults.created.length} vehicle(s)</AlertTitle>
                   <AlertDescription>
-                    <ul className="list-disc list-inside mt-2 text-sm">
+                    <ul className="list-disc list-inside mt-2 text-xs sm:text-sm">
                       {syncResults.created.map((vehicle, i) => (
                         <li key={i}>{vehicle}</li>
                       ))}
@@ -290,9 +292,9 @@ export default function AdminSamsaraIntegration() {
               {syncResults.updated.length > 0 && (
                 <Alert className="border-primary/50 bg-primary/5">
                   <CheckCircle2 className="h-4 w-4 text-primary" />
-                  <AlertTitle className="text-primary">Updated {syncResults.updated.length} vehicle(s)</AlertTitle>
+                  <AlertTitle className="text-primary text-xs sm:text-sm">Updated {syncResults.updated.length} vehicle(s)</AlertTitle>
                   <AlertDescription>
-                    <ul className="list-disc list-inside mt-2 text-sm">
+                    <ul className="list-disc list-inside mt-2 text-xs sm:text-sm">
                       {syncResults.updated.map((vehicle, i) => (
                         <li key={i}>{vehicle}</li>
                       ))}
@@ -304,9 +306,9 @@ export default function AdminSamsaraIntegration() {
               {syncResults.errors.length > 0 && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Errors ({syncResults.errors.length})</AlertTitle>
+                  <AlertTitle className="text-xs sm:text-sm">Errors ({syncResults.errors.length})</AlertTitle>
                   <AlertDescription>
-                    <ul className="list-disc list-inside mt-2 text-sm">
+                    <ul className="list-disc list-inside mt-2 text-xs sm:text-sm">
                       {syncResults.errors.map((error, i) => (
                         <li key={i}>{error.vehicle}: {error.error}</li>
                       ))}
@@ -318,8 +320,8 @@ export default function AdminSamsaraIntegration() {
               {syncResults.created.length === 0 && syncResults.updated.length === 0 && syncResults.errors.length === 0 && (
                 <Alert>
                   <CheckCircle2 className="h-4 w-4" />
-                  <AlertTitle>All vehicles up to date</AlertTitle>
-                  <AlertDescription>
+                  <AlertTitle className="text-xs sm:text-sm">All vehicles up to date</AlertTitle>
+                  <AlertDescription className="text-xs sm:text-sm">
                     No changes needed. All vehicles are already synced with Samsara.
                   </AlertDescription>
                 </Alert>
@@ -328,48 +330,50 @@ export default function AdminSamsaraIntegration() {
           )}
           
           <div>
-            <h3 className="font-semibold mb-3">Current Fleet Status</h3>
+            <h3 className="font-semibold mb-3 text-sm sm:text-base">Current Fleet Status</h3>
             {vehiclesLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
             ) : vehicles && vehicles.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Vehicle</TableHead>
-                    <TableHead>Plate</TableHead>
-                    <TableHead>GPS Tracking</TableHead>
-                    <TableHead>Last Synced</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {vehicles.map((vehicle) => (
-                    <TableRow key={vehicle.id} data-testid={`row-vehicle-${vehicle.id}`}>
-                      <TableCell className="font-medium">{vehicle.name}</TableCell>
-                      <TableCell>{vehicle.plateNumber}</TableCell>
-                      <TableCell>
-                        {vehicle.samsaraVehicleId ? (
-                          <Badge variant="default" data-testid={`badge-linked-${vehicle.id}`}>
-                            ✓ Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" data-testid={`badge-not-linked-${vehicle.id}`}>
-                            Not Synced
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {vehicle.samsaraLastSync
-                          ? new Date(vehicle.samsaraLastSync).toLocaleString()
-                          : "—"}
-                      </TableCell>
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs sm:text-sm">Vehicle</TableHead>
+                      <TableHead className="text-xs sm:text-sm">Plate</TableHead>
+                      <TableHead className="text-xs sm:text-sm">GPS Tracking</TableHead>
+                      <TableHead className="text-xs sm:text-sm">Last Synced</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {vehicles.map((vehicle) => (
+                      <TableRow key={vehicle.id} data-testid={`row-vehicle-${vehicle.id}`}>
+                        <TableCell className="font-medium text-xs sm:text-sm">{vehicle.name}</TableCell>
+                        <TableCell className="text-xs sm:text-sm">{vehicle.plateNumber}</TableCell>
+                        <TableCell>
+                          {vehicle.samsaraVehicleId ? (
+                            <Badge variant="default" className="text-xs" data-testid={`badge-linked-${vehicle.id}`}>
+                              ✓ Active
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs" data-testid={`badge-not-linked-${vehicle.id}`}>
+                              Not Synced
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-xs sm:text-sm">
+                          {vehicle.samsaraLastSync
+                            ? new Date(vehicle.samsaraLastSync).toLocaleString()
+                            : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
                 No vehicles found. Click "Sync Vehicles" to import your Samsara fleet.
               </div>
             )}

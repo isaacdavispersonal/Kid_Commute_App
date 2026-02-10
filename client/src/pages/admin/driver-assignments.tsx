@@ -392,15 +392,15 @@ export default function AdminDriverAssignments() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+    <div className="overflow-x-hidden space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold">Driver Assignments</h1>
-          <p className="text-muted-foreground text-sm">
+          <h1 className="text-xl sm:text-2xl font-bold">Driver Assignments</h1>
+          <p className="text-muted-foreground text-xs sm:text-sm">
             Assign drivers to routes
           </p>
         </div>
-        <Button size="sm" onClick={() => handleOpenDialog()} data-testid="button-create-assignment">
+        <Button size="sm" onClick={() => handleOpenDialog()} data-testid="button-create-assignment" className="shrink-0">
           <Plus className="h-4 w-4 mr-1" />
           <span className="hidden sm:inline">New</span>
         </Button>
@@ -428,7 +428,7 @@ export default function AdminDriverAssignments() {
                 <Collapsible key={group.driverId} defaultOpen={driverGroups.length <= 3} data-testid={`driver-group-${group.driverId}`}>
                   <CollapsibleTrigger asChild>
                     <div className="flex items-center justify-between gap-2 flex-wrap px-3 py-3 cursor-pointer hover:bg-muted/50 transition-colors" data-testid={`button-toggle-driver-${group.driverId}`}>
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
                         <User className="h-4 w-4 text-muted-foreground shrink-0" />
                         <div className="min-w-0">
                           <div className="font-medium text-sm truncate">{group.driverName}</div>
@@ -439,7 +439,7 @@ export default function AdminDriverAssignments() {
                         <Badge variant="secondary" className="text-xs" data-testid={`badge-count-${group.driverId}`}>
                           {group.assignments.length}
                         </Badge>
-                        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180" />
+                        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180 shrink-0" />
                       </div>
                     </div>
                   </CollapsibleTrigger>
@@ -448,18 +448,18 @@ export default function AdminDriverAssignments() {
                       {group.assignments.map((assignment) => (
                         <div
                           key={assignment.id}
-                          className="flex items-center justify-between gap-2 flex-wrap px-3 py-2.5 border-b last:border-b-0"
+                          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-2 px-3 py-2.5 border-b last:border-b-0"
                           data-testid={`row-assignment-${assignment.id}`}
                         >
                           <div className="flex-1 min-w-0 space-y-0.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                               <Route className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               <span className="text-sm font-medium truncate">
                                 {assignment.route?.name || "Unknown"}
                               </span>
                               {getRouteTypeBadge(assignment.route?.routeType || null)}
                             </div>
-                            <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground min-w-0">
                               <Car className="h-3 w-3 shrink-0" />
                               <span className="truncate">
                                 {assignment.vehicle?.name || "No vehicle"}
@@ -474,7 +474,7 @@ export default function AdminDriverAssignments() {
                           </div>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" data-testid={`button-actions-${assignment.id}`}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 self-start sm:self-auto" data-testid={`button-actions-${assignment.id}`}>
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -501,12 +501,12 @@ export default function AdminDriverAssignments() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-lg sm:w-full">
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-lg">
               {editingAssignment ? "Edit Assignment" : "New Assignment"}
             </DialogTitle>
-            <DialogDescription className="text-sm">
+            <DialogDescription className="text-xs sm:text-sm">
               {editingAssignment
                 ? "Update the assignment details"
                 : "Assign a driver to routes"}
@@ -648,12 +648,13 @@ export default function AdminDriverAssignments() {
                 )}
               />
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleCloseDialog}
                   data-testid="button-cancel"
+                  className="w-full sm:w-auto"
                 >
                   Cancel
                 </Button>
@@ -661,6 +662,7 @@ export default function AdminDriverAssignments() {
                   type="submit"
                   disabled={createMutation.isPending || updateMutation.isPending || bulkCreateMutation.isPending}
                   data-testid="button-submit"
+                  className="w-full sm:w-auto"
                 >
                   {editingAssignment ? "Update" : "Create"}
                 </Button>

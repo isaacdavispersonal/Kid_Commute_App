@@ -57,13 +57,13 @@ interface Geofence extends InsertGeofence {
 
 function GeofencesSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Skeleton className="h-8 w-64 mb-2" />
-          <Skeleton className="h-4 w-96" />
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="w-full">
+          <Skeleton className="h-8 w-full sm:w-64 mb-2" />
+          <Skeleton className="h-4 w-full sm:w-96" />
         </div>
-        <Skeleton className="h-10 w-40" />
+        <Skeleton className="h-10 w-full sm:w-40" />
       </div>
       <Skeleton className="h-96 w-full" />
     </div>
@@ -305,22 +305,22 @@ export default function GeofencesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1">Geofence Management</h1>
-          <p className="text-sm text-muted-foreground">
+    <div className="overflow-x-hidden space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="w-full">
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Geofence Management</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Define geographic boundaries for automatic vehicle tracking and parent notifications
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add-geofence">
+            <Button data-testid="button-add-geofence" className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Add Geofence
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-[95vw] sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Create New Geofence</DialogTitle>
               <DialogDescription>
@@ -339,6 +339,7 @@ export default function GeofencesPage() {
                         <Input
                           placeholder="E.g., Main School Campus"
                           data-testid="input-geofence-name"
+                          className="w-full"
                           {...field}
                         />
                       </FormControl>
@@ -347,7 +348,7 @@ export default function GeofencesPage() {
                   )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={createForm.control}
                     name="type"
@@ -356,7 +357,7 @@ export default function GeofencesPage() {
                         <FormLabel>Type</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger data-testid="select-geofence-type">
+                            <SelectTrigger data-testid="select-geofence-type" className="w-full">
                               <SelectValue />
                             </SelectTrigger>
                           </FormControl>
@@ -384,6 +385,7 @@ export default function GeofencesPage() {
                             type="number"
                             placeholder="100"
                             data-testid="input-geofence-radius"
+                            className="w-full"
                             {...field}
                             onChange={(e) => field.onChange(parseInt(e.target.value))}
                           />
@@ -397,7 +399,7 @@ export default function GeofencesPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={createForm.control}
                     name="centerLat"
@@ -408,6 +410,7 @@ export default function GeofencesPage() {
                           <Input
                             placeholder="37.7749"
                             data-testid="input-geofence-lat"
+                            className="w-full"
                             {...field}
                           />
                         </FormControl>
@@ -426,6 +429,7 @@ export default function GeofencesPage() {
                           <Input
                             placeholder="-122.4194"
                             data-testid="input-geofence-lng"
+                            className="w-full"
                             {...field}
                           />
                         </FormControl>
@@ -435,7 +439,7 @@ export default function GeofencesPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={createForm.control}
                     name="scheduleStartTime"
@@ -446,6 +450,7 @@ export default function GeofencesPage() {
                           <Input
                             type="time"
                             data-testid="input-geofence-start-time"
+                            className="w-full"
                             {...field}
                             value={field.value || ""}
                           />
@@ -468,6 +473,7 @@ export default function GeofencesPage() {
                           <Input
                             type="time"
                             data-testid="input-geofence-end-time"
+                            className="w-full"
                             {...field}
                             value={field.value || ""}
                           />
@@ -534,7 +540,7 @@ export default function GeofencesPage() {
       />
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Geofence</DialogTitle>
             <DialogDescription>
@@ -553,6 +559,7 @@ export default function GeofencesPage() {
                       <Input
                         placeholder="E.g., Main School Campus"
                         data-testid="input-edit-geofence-name"
+                        className="w-full"
                         {...field}
                       />
                     </FormControl>
@@ -561,7 +568,7 @@ export default function GeofencesPage() {
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={editForm.control}
                   name="type"
@@ -570,7 +577,7 @@ export default function GeofencesPage() {
                       <FormLabel>Type</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <SelectTrigger data-testid="select-edit-geofence-type">
+                          <SelectTrigger data-testid="select-edit-geofence-type" className="w-full">
                             <SelectValue />
                           </SelectTrigger>
                         </FormControl>
@@ -594,6 +601,7 @@ export default function GeofencesPage() {
                         <Input
                           type="number"
                           data-testid="input-edit-geofence-radius"
+                          className="w-full"
                           {...field}
                           onChange={(e) => field.onChange(parseInt(e.target.value))}
                         />
@@ -604,7 +612,7 @@ export default function GeofencesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={editForm.control}
                   name="centerLat"
@@ -614,6 +622,7 @@ export default function GeofencesPage() {
                       <FormControl>
                         <Input
                           data-testid="input-edit-geofence-lat"
+                          className="w-full"
                           {...field}
                         />
                       </FormControl>
@@ -631,6 +640,7 @@ export default function GeofencesPage() {
                       <FormControl>
                         <Input
                           data-testid="input-edit-geofence-lng"
+                          className="w-full"
                           {...field}
                         />
                       </FormControl>
@@ -640,7 +650,7 @@ export default function GeofencesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={editForm.control}
                   name="scheduleStartTime"
@@ -651,6 +661,7 @@ export default function GeofencesPage() {
                         <Input
                           type="time"
                           data-testid="input-edit-geofence-start-time"
+                          className="w-full"
                           {...field}
                           value={field.value || ""}
                         />
@@ -670,6 +681,7 @@ export default function GeofencesPage() {
                         <Input
                           type="time"
                           data-testid="input-edit-geofence-end-time"
+                          className="w-full"
                           {...field}
                           value={field.value || ""}
                         />

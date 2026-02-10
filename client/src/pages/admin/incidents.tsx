@@ -134,11 +134,11 @@ export default function AdminIncidentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Incident Management</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Incident Management</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Review and manage incident reports from drivers
           </p>
         </div>
@@ -157,11 +157,12 @@ export default function AdminIncidentsPage() {
         </Card>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant={filter === "all" ? "default" : "outline"}
           onClick={() => setFilter("all")}
           data-testid="filter-all"
+          className="w-full sm:w-auto"
         >
           All Incidents ({incidents?.length || 0})
         </Button>
@@ -169,6 +170,7 @@ export default function AdminIncidentsPage() {
           variant={filter === "pending" ? "default" : "outline"}
           onClick={() => setFilter("pending")}
           data-testid="filter-pending"
+          className="w-full sm:w-auto"
         >
           Pending ({pendingCount})
         </Button>
@@ -176,6 +178,7 @@ export default function AdminIncidentsPage() {
           variant={filter === "resolved" ? "default" : "outline"}
           onClick={() => setFilter("resolved")}
           data-testid="filter-resolved"
+          className="w-full sm:w-auto"
         >
           Resolved ({incidents?.filter(i => i.status === "resolved").length || 0})
         </Button>
@@ -205,10 +208,10 @@ export default function AdminIncidentsPage() {
                     {getStatusBadge(incident.status)}
                   </div>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                <div className="flex items-center gap-2 sm:gap-4 text-xs text-muted-foreground flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <User className="h-3.5 w-3.5" />
-                    <span>{incident.reporterFirstName} {incident.reporterLastName}</span>
+                    <span className="truncate">{incident.reporterFirstName} {incident.reporterLastName}</span>
                   </div>
                   {incident.studentFirstName && incident.studentLastName && (
                     <Badge variant="secondary" className="text-xs">
@@ -217,12 +220,12 @@ export default function AdminIncidentsPage() {
                   )}
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5" />
-                    <span>{format(new Date(incident.createdAt), "MMM d, yyyy 'at' h:mm a")}</span>
+                    <span className="truncate">{format(new Date(incident.createdAt), "MMM d, yyyy 'at' h:mm a")}</span>
                   </div>
                   {incident.location && (
                     <div className="flex items-center gap-1.5">
                       <MapPin className="h-3.5 w-3.5" />
-                      <span>{incident.location}</span>
+                      <span className="truncate">{incident.location}</span>
                     </div>
                   )}
                 </div>
@@ -242,20 +245,20 @@ export default function AdminIncidentsPage() {
 
       {selectedIncident && (
         <Dialog open={!!selectedIncident} onOpenChange={() => setSelectedIncident(null)}>
-          <DialogContent className="max-w-2xl" data-testid="dialog-incident-details">
+          <DialogContent className="max-w-[95vw] sm:max-w-2xl" data-testid="dialog-incident-details">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-xl">
+              <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <AlertTriangle className="h-5 w-5" />
                 Incident Details
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-xs sm:text-sm">
                 Review the complete incident report and take action
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-5 mt-4">
               <div>
-                <h3 className="font-semibold text-lg mb-1">{selectedIncident.title}</h3>
+                <h3 className="font-semibold text-base sm:text-lg mb-1">{selectedIncident.title}</h3>
                 <div className="flex gap-2 items-center">
                   <Badge variant={getSeverityVariant(selectedIncident.severity)}>
                     {selectedIncident.severity.toUpperCase()}

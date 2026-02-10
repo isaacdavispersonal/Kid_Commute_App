@@ -66,21 +66,21 @@ export default function AdminAnnouncements() {
   const [activeTab, setActiveTab] = useState<"create" | "history">("create");
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Announcements</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Announcements</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
           Create and manage broadcast announcements
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "create" | "history")}>
         <TabsList>
-          <TabsTrigger value="create" data-testid="tab-create">
+          <TabsTrigger value="create" data-testid="tab-create" className="text-xs sm:text-sm">
             <Send className="h-4 w-4 mr-2" />
             Create Announcement
           </TabsTrigger>
-          <TabsTrigger value="history" data-testid="tab-history">
+          <TabsTrigger value="history" data-testid="tab-history" className="text-xs sm:text-sm">
             <History className="h-4 w-4 mr-2" />
             History
           </TabsTrigger>
@@ -275,11 +275,12 @@ function CreateAnnouncementSection({ onSuccess }: { onSuccess?: () => void }) {
           />
         </div>
 
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <Button
             variant="outline"
             onClick={() => navigate("/admin/messages")}
             data-testid="button-cancel"
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -287,6 +288,7 @@ function CreateAnnouncementSection({ onSuccess }: { onSuccess?: () => void }) {
             onClick={handleSendAnnouncement}
             disabled={!message.trim() || !title.trim() || createAnnouncementMutation.isPending || (broadcastType === "specific_route" && !selectedRoute)}
             data-testid="button-send-announcement"
+            className="w-full sm:w-auto"
           >
             <Send className="h-4 w-4 mr-2" />
             {createAnnouncementMutation.isPending ? "Sending..." : "Send Announcement"}
@@ -395,8 +397,8 @@ function AnnouncementHistorySection() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 min-w-0">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -411,7 +413,7 @@ function AnnouncementHistorySection() {
                 />
               </div>
             </div>
-            <div className="min-w-[180px]">
+            <div className="w-full sm:w-[180px]">
               <Select 
                 value={audienceFilter} 
                 onValueChange={(v) => {
@@ -432,7 +434,7 @@ function AnnouncementHistorySection() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="min-w-[180px]">
+            <div className="w-full sm:w-[180px]">
               <Select 
                 value={routeFilter} 
                 onValueChange={(v) => {
@@ -454,8 +456,8 @@ function AnnouncementHistorySection() {
               </Select>
             </div>
           </div>
-          <div className="flex flex-wrap gap-4 mt-4">
-            <div className="min-w-[150px]">
+          <div className="flex flex-col sm:flex-row gap-4 mt-4">
+            <div className="w-full sm:w-[150px]">
               <label className="text-xs text-muted-foreground block mb-1">Start Date</label>
               <Input
                 type="date"
@@ -467,7 +469,7 @@ function AnnouncementHistorySection() {
                 data-testid="input-start-date"
               />
             </div>
-            <div className="min-w-[150px]">
+            <div className="w-full sm:w-[150px]">
               <label className="text-xs text-muted-foreground block mb-1">End Date</label>
               <Input
                 type="date"
@@ -480,7 +482,7 @@ function AnnouncementHistorySection() {
               />
             </div>
             {(searchQuery || audienceFilter !== "all" || routeFilter !== "all" || startDate || endDate) && (
-              <div className="flex items-end">
+              <div className="flex items-end w-full sm:w-auto">
                 <Button
                   variant="outline"
                   size="sm"
@@ -493,6 +495,7 @@ function AnnouncementHistorySection() {
                     setPage(0);
                   }}
                   data-testid="button-clear-filters"
+                  className="w-full sm:w-auto"
                 >
                   Clear Filters
                 </Button>
@@ -532,21 +535,23 @@ function AnnouncementHistorySection() {
                   onClick={() => setSelectedAnnouncement(item)}
                   data-testid={`announcement-item-${item.id}`}
                 >
-                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium truncate">{item.title}</h3>
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                      <h3 className="font-medium truncate text-sm sm:text-base">{item.title}</h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 mt-1">
                         {item.content}
                       </p>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 mt-2 text-xs text-muted-foreground">
                         <span>By {item.adminName || "Admin"}</span>
+                        <span className="hidden sm:inline">•</span>
                         <span>{format(new Date(item.createdAt), "MMM d, yyyy h:mm a")}</span>
-                        <Badge variant="outline" className="text-xs">
+                        <span className="hidden sm:inline">•</span>
+                        <Badge variant="outline" className="text-xs w-fit">
                           {getAudienceLabel(item)}
                         </Badge>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
                       {getDeliveryBadge(item)}
                       <Button
                         size="icon"
@@ -556,6 +561,7 @@ function AnnouncementHistorySection() {
                           setSelectedAnnouncement(item);
                         }}
                         data-testid={`button-view-${item.id}`}
+                        className="ml-auto sm:ml-0"
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -567,18 +573,19 @@ function AnnouncementHistorySection() {
           )}
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-6">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 mt-6">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
                 data-testid="button-prev-page"
+                className="w-full sm:w-auto"
               >
                 <ChevronLeft className="h-4 w-4" />
                 Previous
               </Button>
-              <span className="text-sm text-muted-foreground px-4">
+              <span className="text-xs sm:text-sm text-muted-foreground px-4">
                 Page {page + 1} of {totalPages}
               </span>
               <Button
@@ -587,6 +594,7 @@ function AnnouncementHistorySection() {
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
                 data-testid="button-next-page"
+                className="w-full sm:w-auto"
               >
                 Next
                 <ChevronRight className="h-4 w-4" />
@@ -629,36 +637,36 @@ function AnnouncementDetailDialog({
 
   return (
     <Dialog open={!!announcement} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{announcement.title}</DialogTitle>
+          <DialogTitle className="text-lg sm:text-2xl truncate">{announcement.title}</DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4">
           <div>
-            <h4 className="text-sm font-medium text-muted-foreground mb-1">Content</h4>
-            <p className="text-sm whitespace-pre-wrap">{announcement.content}</p>
+            <h4 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1">Content</h4>
+            <p className="text-xs sm:text-sm whitespace-pre-wrap break-words">{announcement.content}</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-1">Sent By</h4>
-              <p className="text-sm">{announcement.adminName || "Admin"}</p>
+              <h4 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1">Sent By</h4>
+              <p className="text-xs sm:text-sm">{announcement.adminName || "Admin"}</p>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-1">Date Sent</h4>
-              <p className="text-sm">
+              <h4 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1">Date Sent</h4>
+              <p className="text-xs sm:text-sm">
                 {format(new Date(announcement.createdAt), "MMMM d, yyyy 'at' h:mm a")}
               </p>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-1">Audience</h4>
-              <p className="text-sm">{getAudienceLabel(announcement)}</p>
+              <h4 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1">Audience</h4>
+              <p className="text-xs sm:text-sm">{getAudienceLabel(announcement)}</p>
             </div>
             {announcement.expiresAt && (
               <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Expires</h4>
-                <p className="text-sm">
+                <h4 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1">Expires</h4>
+                <p className="text-xs sm:text-sm">
                   {format(new Date(announcement.expiresAt), "MMMM d, yyyy")}
                 </p>
               </div>
@@ -666,28 +674,28 @@ function AnnouncementDetailDialog({
           </div>
 
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium mb-3">Delivery Diagnostics</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-muted/50 rounded-md p-3 text-center">
-                <div className="text-2xl font-bold">
+            <h4 className="text-xs sm:text-sm font-medium mb-3">Delivery Diagnostics</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
+              <div className="bg-muted/50 rounded-md p-2 sm:p-3 text-center">
+                <div className="text-lg sm:text-2xl font-bold">
                   {announcement.targetCount || 0}
                 </div>
                 <div className="text-xs text-muted-foreground">Target Recipients</div>
               </div>
-              <div className="bg-green-500/10 rounded-md p-3 text-center">
-                <div className="text-2xl font-bold text-green-600">
+              <div className="bg-green-500/10 rounded-md p-2 sm:p-3 text-center">
+                <div className="text-lg sm:text-2xl font-bold text-green-600">
                   {announcement.pushSuccessCount || 0}
                 </div>
                 <div className="text-xs text-muted-foreground">Successful</div>
               </div>
-              <div className="bg-red-500/10 rounded-md p-3 text-center">
-                <div className="text-2xl font-bold text-red-600">
+              <div className="bg-red-500/10 rounded-md p-2 sm:p-3 text-center">
+                <div className="text-lg sm:text-2xl font-bold text-red-600">
                   {announcement.pushFailureCount || 0}
                 </div>
                 <div className="text-xs text-muted-foreground">Failed</div>
               </div>
-              <div className="bg-muted/50 rounded-md p-3 text-center">
-                <div className="text-sm font-medium">
+              <div className="bg-muted/50 rounded-md p-2 sm:p-3 text-center">
+                <div className="text-xs sm:text-sm font-medium">
                   {announcement.pushAttemptedAt 
                     ? format(new Date(announcement.pushAttemptedAt), "h:mm a")
                     : "—"
@@ -699,8 +707,8 @@ function AnnouncementDetailDialog({
 
             {announcement.lastPushError && (
               <div className="mt-4 bg-destructive/10 border border-destructive/30 rounded-md p-3">
-                <h5 className="text-sm font-medium text-destructive mb-1">Last Error</h5>
-                <p className="text-xs font-mono text-destructive/80 whitespace-pre-wrap">
+                <h5 className="text-xs sm:text-sm font-medium text-destructive mb-1">Last Error</h5>
+                <p className="text-xs font-mono text-destructive/80 whitespace-pre-wrap break-words">
                   {announcement.lastPushError}
                 </p>
               </div>
