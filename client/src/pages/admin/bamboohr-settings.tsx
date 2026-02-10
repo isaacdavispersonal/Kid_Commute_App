@@ -120,9 +120,9 @@ export default function BambooHRSettings({ embedded = false }: { embedded?: bool
             <Skeleton className="h-24 w-full" />
           ) : (
             <>
-              <div className="flex items-center gap-4 p-4 rounded-lg border">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 rounded-lg border">
                 <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium">Connection Status:</span>
                     {status?.isConfigured ? (
                       status.lastTestSuccess ? (
@@ -170,24 +170,24 @@ export default function BambooHRSettings({ embedded = false }: { embedded?: bool
               </div>
 
               <div className="space-y-3 text-sm">
-                <div className="flex items-center gap-3 p-3 rounded-md bg-muted/50">
-                  <Label className="font-medium min-w-32">API Key:</Label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-md bg-muted/50">
+                  <Label className="font-medium sm:min-w-32">API Key:</Label>
                   <Input 
                     type="password" 
                     value={status?.isConfigured ? "••••••••••••••••" : ""} 
                     disabled 
-                    className="max-w-xs"
+                    className="sm:max-w-xs"
                     data-testid="input-api-key"
                   />
                   <span className="text-xs text-muted-foreground">Set via BAMBOOHR_API_KEY env var</span>
                 </div>
-                <div className="flex items-center gap-3 p-3 rounded-md bg-muted/50">
-                  <Label className="font-medium min-w-32">Subdomain:</Label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-md bg-muted/50">
+                  <Label className="font-medium sm:min-w-32">Subdomain:</Label>
                   <Input 
                     type="text" 
                     value={status?.isConfigured ? "••••••••" : ""} 
                     disabled 
-                    className="max-w-xs"
+                    className="sm:max-w-xs"
                     data-testid="input-subdomain"
                   />
                   <span className="text-xs text-muted-foreground">Set via BAMBOOHR_SUBDOMAIN env var</span>
@@ -315,7 +315,7 @@ export default function BambooHRSettings({ embedded = false }: { embedded?: bool
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 rounded-lg border">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border">
             <div className="space-y-1">
               <Label className="font-medium">Enable Scheduled Exports</Label>
               <p className="text-sm text-muted-foreground">

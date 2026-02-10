@@ -251,17 +251,8 @@ export default function DriverUtilitiesSection() {
   const newFeedback = feedback?.filter(f => f.status === "NEW").length || 0;
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2" data-testid="heading-driver-utilities">
-          Driver Utilities Management
-        </h1>
-        <p className="text-muted-foreground">
-          Review and manage driver supplies requests, vehicle checklists, and feedback
-        </p>
-      </div>
-
-      <Tabs defaultValue="supplies" className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
+      <Tabs defaultValue="supplies" className="space-y-4 sm:space-y-6">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="supplies" className="flex items-center gap-2" data-testid="tab-supplies">
             <Package className="h-4 w-4" />
