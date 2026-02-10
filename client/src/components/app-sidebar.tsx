@@ -99,14 +99,9 @@ const adminMenuSections = [
         icon: Activity,
       },
       {
-        title: "Payroll Exports",
-        url: "/admin/payroll-exports",
+        title: "Payroll",
+        url: "/admin/payroll",
         icon: DollarSign,
-      },
-      {
-        title: "Timesheets",
-        url: "/admin/timesheets",
-        icon: Clock,
       },
       {
         title: "Incidents",
@@ -132,11 +127,6 @@ const adminMenuSections = [
         title: "General Settings",
         url: "/admin/settings",
         icon: Settings2,
-      },
-      {
-        title: "BambooHR",
-        url: "/admin/bamboohr-settings",
-        icon: DollarSign,
       },
     ],
   },

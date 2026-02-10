@@ -306,7 +306,7 @@ export default function AdminSettings() {
                 </Button>
               </Link>
 
-              <Link href="/admin/payroll-exports">
+              <Link href="/admin/payroll">
                 <Button 
                   variant="outline" 
                   className="w-full justify-between h-auto py-3"

@@ -38,7 +38,7 @@ interface Driver {
   bambooEmployeeId: string | null;
 }
 
-export default function BambooHRSettings() {
+export default function BambooHRSettings({ embedded = false }: { embedded?: boolean }) {
   const { toast } = useToast();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
@@ -103,17 +103,8 @@ export default function BambooHRSettings() {
   const unmappedCount = drivers?.filter(d => !d.bambooEmployeeId).length || 0;
   const mappedCount = drivers?.filter(d => d.bambooEmployeeId).length || 0;
 
-  return (
-    <div className="space-y-4 sm:space-y-6 overflow-x-hidden px-4 sm:px-0">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-semibold mb-1" data-testid="heading-bamboohr-settings">
-          BambooHR Integration
-        </h1>
-        <p className="text-xs sm:text-sm text-muted-foreground">
-          Configure BambooHR integration for timesheet exports
-        </p>
-      </div>
-
+  const mainContent = (
+    <div className="space-y-4 sm:space-y-6">
       <Card data-testid="card-connection-settings">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -416,6 +407,24 @@ export default function BambooHRSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+
+  if (embedded) {
+    return mainContent;
+  }
+
+  return (
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden px-4 sm:px-0">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1" data-testid="heading-bamboohr-settings">
+          BambooHR Integration
+        </h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Configure BambooHR integration for timesheet exports
+        </p>
+      </div>
+      {mainContent}
     </div>
   );
 }

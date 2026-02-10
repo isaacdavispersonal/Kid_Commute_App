@@ -12,7 +12,7 @@ Preferred communication style: Simple, everyday language.
 - **Frontend**: React with TypeScript, Vite, Wouter, utilizing `shadcn/ui` (New York variant) based on Radix UI and Tailwind CSS.
 - **Role-Based Interfaces**: Desktop-optimized Admin Dashboard, mobile-first Driver Interface, and a Parent Portal with real-time tracking.
 - **Real-time Features**: WebSockets for messaging, Leaflet.js for map visualization, and polling for statistics.
-- **Admin Page Consolidation**: Activity & Operations page combines Route Health, Driver Utilities, Audit Log, and Time Management into a single tabbed interface.
+- **Admin Page Consolidation**: Activity & Operations page combines Route Health, Driver Utilities, Audit Log, and Time Management into a single tabbed interface. Payroll page unifies Timesheets, Exports, and BambooHR settings into a single tabbed interface at `/admin/payroll`.
 - **Operations Live Panel**: Time Management section features an Operations Live tab showing real-time driver clock-in/out status with force clock-out capability for admins and lead drivers.
 
 ### Technical Implementations

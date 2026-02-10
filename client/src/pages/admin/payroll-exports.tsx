@@ -146,7 +146,7 @@ interface PayrollExportDetail extends PayrollExport {
   }>;
 }
 
-export default function AdminPayrollExports() {
+export default function AdminPayrollExports({ embedded = false }: { embedded?: boolean }) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("mapping");
   
@@ -421,29 +421,7 @@ export default function AdminPayrollExports() {
     return `${formatDate(startDate, "MMM dd")} - ${formatDate(endDate, "MMM dd, yyyy")}`;
   }, [startDate, endDate]);
 
-  return (
-    <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
-      <div>
-        <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2">Payroll Exports</h1>
-        <p className="text-xs sm:text-base text-muted-foreground">Export driver hours to BambooHR</p>
-      </div>
-
-      <Alert className="border-primary/50 bg-primary/5" data-testid="alert-new-export-workflow">
-        <Info className="h-4 w-4" />
-        <AlertTitle>New Export Workflow Available</AlertTitle>
-        <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-          <span>
-            Use the new timesheet-based export for improved tracking, previews, and retry capabilities.
-          </span>
-          <Link href="/admin/timesheets">
-            <Button variant="outline" size="sm" className="w-fit" data-testid="button-go-to-timesheets">
-              Go to Timesheets
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </Button>
-          </Link>
-        </AlertDescription>
-      </Alert>
-
+  const tabsContent = (
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* Scrollable tabs for mobile */}
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -920,7 +898,10 @@ export default function AdminPayrollExports() {
           </Card>
         </TabsContent>
       </Tabs>
+  );
 
+  const dialogs = (
+    <>
       <AlertDialog open={showExportConfirm} onOpenChange={setShowExportConfirm}>
         <AlertDialogContent data-testid="dialog-confirm-export">
           <AlertDialogHeader>
@@ -1126,6 +1107,38 @@ export default function AdminPayrollExports() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+
+  if (embedded) {
+    return <>{tabsContent}{dialogs}</>;
+  }
+
+  return (
+    <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
+      <div>
+        <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2">Payroll Exports</h1>
+        <p className="text-xs sm:text-base text-muted-foreground">Export driver hours to BambooHR</p>
+      </div>
+
+      <Alert className="border-primary/50 bg-primary/5" data-testid="alert-new-export-workflow">
+        <Info className="h-4 w-4" />
+        <AlertTitle>New Export Workflow Available</AlertTitle>
+        <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <span>
+            Use the new timesheet-based export for improved tracking, previews, and retry capabilities.
+          </span>
+          <Link href="/admin/payroll">
+            <Button variant="outline" size="sm" className="w-fit" data-testid="button-go-to-timesheets">
+              Go to Timesheets
+              <ArrowRight className="w-4 h-4 ml-1" />
+            </Button>
+          </Link>
+        </AlertDescription>
+      </Alert>
+
+      {tabsContent}
+      {dialogs}
     </div>
   );
 }

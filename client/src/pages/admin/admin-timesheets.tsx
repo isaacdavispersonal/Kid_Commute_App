@@ -247,7 +247,7 @@ function formatDateTime(utcDate: string | null): string {
 
 type EntryFilter = "all" | "draft" | "ready" | "approved" | "exported" | "suspicious" | "unmapped";
 
-export default function AdminTimesheets() {
+export default function AdminTimesheets({ embedded = false }: { embedded?: boolean }) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("timesheets");
   const [selectedPayPeriodId, setSelectedPayPeriodId] = useState<string | null>(null);
@@ -683,17 +683,7 @@ export default function AdminTimesheets() {
     return exportJobs.filter(job => job.payPeriodId === selectedPayPeriod.id);
   }, [exportJobs, selectedPayPeriod]);
 
-  return (
-    <div className="space-y-4 sm:space-y-6 overflow-x-hidden px-4 sm:px-0">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-semibold mb-1" data-testid="heading-admin-timesheets">
-          Timesheets
-        </h1>
-        <p className="text-xs sm:text-sm text-muted-foreground">
-          Manage employee time entries and pay periods
-        </p>
-      </div>
-
+  const tabsContent = (
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3 h-auto">
           <TabsTrigger value="timesheets" className="flex items-center gap-2 py-2" data-testid="tab-timesheets">
@@ -1282,7 +1272,10 @@ export default function AdminTimesheets() {
           </Card>
         </TabsContent>
       </Tabs>
+  );
 
+  const dialogs = (
+    <>
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent data-testid="dialog-create-pay-period">
           <DialogHeader>
@@ -1802,6 +1795,25 @@ export default function AdminTimesheets() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+
+  if (embedded) {
+    return <>{tabsContent}{dialogs}</>;
+  }
+
+  return (
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden px-4 sm:px-0">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1" data-testid="heading-admin-timesheets">
+          Timesheets
+        </h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Manage employee time entries and pay periods
+        </p>
+      </div>
+      {tabsContent}
+      {dialogs}
     </div>
   );
 }
