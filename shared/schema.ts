@@ -2068,6 +2068,7 @@ export const auditActionEnum = pgEnum("audit_action", [
   "STOP_CHANGE_APPROVED",
   "STOP_CHANGE_DENIED",
   "STUDENT_REMOVED_FROM_ROUTE",
+  "FORCE_CLOCK_OUT",
 ]);
 
 // Audit log entity enum - tracks what type of entity was affected
@@ -2080,6 +2081,7 @@ export const auditEntityEnum = pgEnum("audit_entity", [
   "route_request",
   "stop_change_request",
   "student_route_assignment",
+  "clock_event",
 ]);
 
 // Audit logs table - tracks all user changes for admin review

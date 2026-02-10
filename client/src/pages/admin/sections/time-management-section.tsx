@@ -18,11 +18,14 @@ import {
   X,
   Check,
   User,
+  Users,
   TrendingUp,
   AlertCircle,
   CheckCircle,
   ChevronDown,
-  Wrench
+  Radio,
+  LogOut,
+  UserCheck
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -95,7 +98,7 @@ function getDriverDisplayName(driver: Driver | undefined): string {
 
 export default function TimeManagementSection() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("operations");
   
   // Overview tab state
   const [selectedDriver, setSelectedDriver] = useState<string>("all");
@@ -108,6 +111,10 @@ export default function TimeManagementSection() {
   // Exceptions tab state
   const [selectedEvent, setSelectedEvent] = useState<EnrichedClockEvent | null>(null);
   const [resolveNotes, setResolveNotes] = useState("");
+
+  // Operations tab state
+  const [forceClockOutDriver, setForceClockOutDriver] = useState<any>(null);
+  const [forceClockOutReason, setForceClockOutReason] = useState("");
 
   // Calculate date range
   const getDateRange = () => {
@@ -251,23 +258,36 @@ export default function TimeManagementSection() {
     },
   });
 
-  // Fix stuck shifts mutation
-  const fixStuckShiftsMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("POST", "/api/admin/maintenance/fix-stuck-shifts", {});
+  // Fetch driver operations for Operations Live tab
+  const { data: driverOperations, isLoading: isLoadingOperations } = useQuery<any[]>({
+    queryKey: ["/api/admin/driver-operations"],
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+
+  // Force clock-out mutation
+  const forceClockOutMutation = useMutation({
+    mutationFn: async ({ driverId, reason }: { driverId: string; reason: string }) => {
+      return await apiRequest("POST", "/api/admin/force-clock-out", { driverId, reason });
     },
-    onSuccess: (data: any) => {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/driver-operations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/all-clock-events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/clock-events/unresolved"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/active-drivers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/timecard-anomalies"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shifts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/driver"] });
+      setForceClockOutDriver(null);
+      setForceClockOutReason("");
       toast({
-        title: "Stuck Shifts Fixed",
-        description: data.message || `Fixed ${data.fixedCount} stuck shift(s)`,
+        title: "Driver Clocked Out",
+        description: "The driver has been successfully force clocked out.",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to fix stuck shifts",
+        description: error.message || "Failed to force clock out driver",
         variant: "destructive",
       });
     },
@@ -365,7 +385,11 @@ export default function TimeManagementSection() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} data-testid="tabs-time-management">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-lg grid-cols-3">
+          <TabsTrigger value="operations" data-testid="tab-operations">
+            <Radio className="h-4 w-4 mr-2" />
+            Operations
+          </TabsTrigger>
           <TabsTrigger value="overview" data-testid="tab-overview">
             <TrendingUp className="h-4 w-4 mr-2" />
             Overview
@@ -380,6 +404,144 @@ export default function TimeManagementSection() {
             )}
           </TabsTrigger>
         </TabsList>
+
+        {/* Operations Live Tab */}
+        <TabsContent value="operations" className="space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold" data-testid="heading-operations-live">Operations Live</h2>
+            <p className="text-sm text-muted-foreground">
+              Real-time driver clock status and operations management
+            </p>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-muted-foreground">Clocked In</span>
+                </div>
+                <p className="text-2xl font-bold mt-1" data-testid="text-clocked-in-count">
+                  {driverOperations?.filter(d => d.isClockedIn).length || 0}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Clocked Out</span>
+                </div>
+                <p className="text-2xl font-bold mt-1" data-testid="text-clocked-out-count">
+                  {driverOperations?.filter(d => !d.isClockedIn).length || 0}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Total Drivers</span>
+                </div>
+                <p className="text-2xl font-bold mt-1" data-testid="text-total-drivers-count">
+                  {driverOperations?.length || 0}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Driver List */}
+          <Card data-testid="card-driver-operations">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Radio className="h-5 w-5" />
+                Driver Status
+                <Badge variant="outline" className="ml-auto text-xs">Live</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingOperations ? (
+                <div className="space-y-3">
+                  {[...Array(4)].map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : !driverOperations || driverOperations.length === 0 ? (
+                <div className="text-center py-8">
+                  <User className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No drivers found</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {/* Clocked-in drivers first, then clocked-out */}
+                  {[...driverOperations]
+                    .sort((a, b) => (b.isClockedIn ? 1 : 0) - (a.isClockedIn ? 1 : 0))
+                    .map((driver) => {
+                      const driverName = [driver.firstName, driver.lastName].filter(Boolean).join(" ") || driver.email;
+                      return (
+                        <div
+                          key={driver.id}
+                          className="flex items-center justify-between gap-3 p-3 rounded-md bg-accent/30"
+                          data-testid={`driver-ops-${driver.id}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${driver.isClockedIn ? "bg-green-500" : "bg-muted-foreground/30"}`} />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-sm truncate" data-testid={`text-driver-name-${driver.id}`}>
+                                  {driverName}
+                                </span>
+                                <Badge variant={driver.isClockedIn ? "default" : "secondary"} className="text-xs">
+                                  {driver.isClockedIn ? "Clocked In" : "Off Duty"}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
+                                {driver.isClockedIn && driver.clockInTime && (
+                                  <>
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      {new Date(driver.clockInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                    {driver.durationMinutes != null && (
+                                      <span>
+                                        {Math.floor(driver.durationMinutes / 60)}h {driver.durationMinutes % 60}m
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                                {driver.currentRouteName && (
+                                  <span className="flex items-center gap-1">
+                                    Route: {driver.currentRouteName}
+                                  </span>
+                                )}
+                                {driver.shiftType && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {driver.shiftType}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {driver.isClockedIn && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setForceClockOutDriver(driver)}
+                              data-testid={`button-force-clockout-${driver.id}`}
+                            >
+                              <LogOut className="h-4 w-4 mr-1" />
+                              Force Out
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
@@ -678,24 +840,6 @@ export default function TimeManagementSection() {
             </div>
             <div className="flex gap-2">
               <Button
-                variant="outline"
-                onClick={() => fixStuckShiftsMutation.mutate()}
-                disabled={fixStuckShiftsMutation.isPending}
-                data-testid="button-fix-stuck-shifts"
-              >
-                {fixStuckShiftsMutation.isPending ? (
-                  <>
-                    <Clock className="h-4 w-4 mr-2 animate-spin" />
-                    Fixing...
-                  </>
-                ) : (
-                  <>
-                    <Wrench className="h-4 w-4 mr-2" />
-                    Fix Stuck Shifts
-                  </>
-                )}
-              </Button>
-              <Button
                 onClick={() => autoClockoutMutation.mutate(2)}
                 disabled={autoClockoutMutation.isPending}
                 data-testid="button-auto-clockout"
@@ -935,6 +1079,71 @@ export default function TimeManagementSection() {
               data-testid="button-confirm-resolve"
             >
               {resolveMutation.isPending ? "Resolving..." : "Mark as Resolved"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Force Clock-Out Confirmation Dialog */}
+      <Dialog open={!!forceClockOutDriver} onOpenChange={() => { setForceClockOutDriver(null); setForceClockOutReason(""); }}>
+        <DialogContent data-testid="dialog-force-clockout">
+          <DialogHeader>
+            <DialogTitle>Force Clock Out</DialogTitle>
+            <DialogDescription>
+              This will immediately clock out the selected driver and complete their active shift.
+            </DialogDescription>
+          </DialogHeader>
+          {forceClockOutDriver && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-md bg-accent/30">
+                <p className="text-sm">
+                  <span className="font-medium">Driver:</span>{" "}
+                  {[forceClockOutDriver.firstName, forceClockOutDriver.lastName].filter(Boolean).join(" ") || forceClockOutDriver.email}
+                </p>
+                {forceClockOutDriver.clockInTime && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Clocked in since {new Date(forceClockOutDriver.clockInTime).toLocaleString()}
+                    {forceClockOutDriver.durationMinutes != null && (
+                      <span> ({Math.floor(forceClockOutDriver.durationMinutes / 60)}h {forceClockOutDriver.durationMinutes % 60}m)</span>
+                    )}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="force-clockout-reason">Reason (Optional)</Label>
+                <Textarea
+                  id="force-clockout-reason"
+                  value={forceClockOutReason}
+                  onChange={(e) => setForceClockOutReason(e.target.value)}
+                  placeholder="Enter reason for force clock-out..."
+                  rows={3}
+                  data-testid="input-force-clockout-reason"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setForceClockOutDriver(null); setForceClockOutReason(""); }}
+              data-testid="button-cancel-force-clockout"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (forceClockOutDriver) {
+                  forceClockOutMutation.mutate({
+                    driverId: forceClockOutDriver.id,
+                    reason: forceClockOutReason || "Force clock-out by admin",
+                  });
+                }
+              }}
+              disabled={forceClockOutMutation.isPending}
+              data-testid="button-confirm-force-clockout"
+            >
+              {forceClockOutMutation.isPending ? "Clocking Out..." : "Force Clock Out"}
             </Button>
           </DialogFooter>
         </DialogContent>

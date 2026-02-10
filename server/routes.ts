@@ -5445,6 +5445,158 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // ============ Driver Operations Live Panel ============
+
+  // Get all drivers with their clock status for Operations Live panel
+  app.get(
+    "/api/admin/driver-operations",
+    requireAuth,
+    requireAdminOrLeadDriver,
+    async (req: any, res) => {
+      try {
+        const allDrivers = await storage.getAllUsers();
+        const drivers = allDrivers.filter(u => u.role === "driver");
+        
+        const today = new Date().toLocaleDateString('en-CA');
+        const todayShifts = await storage.getShiftsByDate(today);
+        
+        const driverStatuses = await Promise.all(
+          drivers.map(async (driver) => {
+            const activeClockIn = await storage.getActiveClockIn(driver.id);
+            const isClockedIn = !!activeClockIn;
+            
+            let clockInTime: string | null = null;
+            let currentShiftId: string | null = null;
+            let currentRouteName: string | null = null;
+            let durationMinutes: number | null = null;
+            
+            if (activeClockIn) {
+              clockInTime = activeClockIn.clockEvent.timestamp instanceof Date
+                ? activeClockIn.clockEvent.timestamp.toISOString()
+                : String(activeClockIn.clockEvent.timestamp);
+              currentShiftId = activeClockIn.clockEvent.shiftId || null;
+              
+              const clockInDate = new Date(clockInTime);
+              durationMinutes = Math.floor((Date.now() - clockInDate.getTime()) / 60000);
+              
+              if (activeClockIn.shift) {
+                const routeId = activeClockIn.shift.routeId;
+                if (routeId) {
+                  const route = await storage.getRoute(routeId);
+                  currentRouteName = route?.name || null;
+                }
+              }
+            }
+            
+            // Find today's shift for this driver if not clocked in
+            const driverShift = todayShifts.find(s => s.driverId === driver.id);
+            
+            return {
+              id: driver.id,
+              firstName: driver.firstName,
+              lastName: driver.lastName,
+              email: driver.email,
+              isClockedIn,
+              clockInTime,
+              currentShiftId,
+              currentRouteName: currentRouteName || (driverShift ? "Assigned" : null),
+              durationMinutes,
+              shiftType: driverShift?.shiftType || activeClockIn?.shift?.shiftType || null,
+            };
+          })
+        );
+        
+        res.json(driverStatuses);
+      } catch (error) {
+        console.error("Error fetching driver operations:", error);
+        res.status(500).json({ message: "Failed to fetch driver operations" });
+      }
+    }
+  );
+
+  // Force clock-out a driver (admin or lead driver)
+  app.post(
+    "/api/admin/force-clock-out",
+    requireAuth,
+    requireAdminOrLeadDriver,
+    async (req: any, res) => {
+      try {
+        const adminId = req.user.id;
+        const { driverId, reason } = req.body;
+        
+        if (!driverId) {
+          return res.status(400).json({ message: "driverId is required" });
+        }
+        
+        // Verify driver exists
+        const driver = await storage.getUser(driverId);
+        if (!driver || driver.role !== "driver") {
+          return res.status(404).json({ message: "Driver not found" });
+        }
+        
+        // Check if driver is clocked in
+        const activeClockIn = await storage.getActiveClockIn(driverId);
+        if (!activeClockIn) {
+          return res.status(400).json({ message: "Driver is not currently clocked in" });
+        }
+        
+        const linkedShiftId = activeClockIn.clockEvent.shiftId;
+        const forceReason = reason || "Force clock-out by admin";
+        
+        // Create clock OUT event
+        const clockEvent = await storage.createClockEvent({
+          driverId,
+          shiftId: linkedShiftId,
+          type: "OUT",
+          source: "ADMIN_EDIT",
+          notes: forceReason,
+          isResolved: true,
+        });
+        
+        // If linked to a shift, mark it as COMPLETED
+        if (linkedShiftId) {
+          await storage.updateShift(linkedShiftId, {
+            status: "COMPLETED",
+            notes: forceReason,
+          });
+        }
+        
+        // Close time entry if exists
+        const currentTimeEntry = await storage.getCurrentTimeEntry(driverId);
+        if (currentTimeEntry) {
+          await storage.updateTimeEntry(currentTimeEntry.id, new Date());
+        }
+        
+        // Create audit log entry
+        await storage.createAuditLog({
+          userId: adminId,
+          userRole: req.user.role || "admin",
+          action: "FORCE_CLOCK_OUT",
+          entityType: "clock_event",
+          description: `Force clocked out driver ${driver.firstName} ${driver.lastName} (${driver.email}). Reason: ${forceReason}`,
+        });
+        
+        console.log("[force-clock-out] Admin force clocked out driver", {
+          adminId,
+          driverId,
+          clockEventId: clockEvent.id,
+          linkedShiftId,
+          reason: forceReason,
+        });
+        
+        res.json({
+          success: true,
+          clockEvent,
+          linkedShiftId,
+          message: `Successfully clocked out ${driver.firstName} ${driver.lastName}`,
+        });
+      } catch (error) {
+        console.error("Error force clocking out driver:", error);
+        res.status(500).json({ message: "Failed to force clock out driver" });
+      }
+    }
+  );
+
   // ============ Admin Reporting Endpoints ============
 
   // Get driver payroll summary
