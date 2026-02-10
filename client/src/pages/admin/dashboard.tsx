@@ -234,13 +234,13 @@ export default function AdminDashboard() {
             </div>
           ) : attendanceOverview ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-              <div className="p-3 sm:p-4 rounded-lg bg-accent/30 hover-elevate" data-testid="attendance-total">
+              <div className="p-3 sm:p-4 rounded-lg bg-accent/30" data-testid="attendance-total">
                 <div className="flex flex-col gap-1">
                   <p className="text-xs sm:text-sm text-muted-foreground">Total</p>
                   <p className="text-2xl sm:text-3xl font-bold">{attendanceOverview.total}</p>
                 </div>
               </div>
-              <div className="p-3 sm:p-4 rounded-lg bg-yellow-500/10 hover-elevate" data-testid="attendance-pending">
+              <div className="p-3 sm:p-4 rounded-lg bg-yellow-500/10" data-testid="attendance-pending">
                 <div className="flex flex-col gap-1">
                   <p className="text-xs sm:text-sm text-muted-foreground">Pending</p>
                   <p className="text-2xl sm:text-3xl font-bold text-yellow-700 dark:text-yellow-400">
@@ -253,7 +253,7 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
-              <div className="p-3 sm:p-4 rounded-lg bg-green-500/10 hover-elevate" data-testid="attendance-riding">
+              <div className="p-3 sm:p-4 rounded-lg bg-green-500/10" data-testid="attendance-riding">
                 <div className="flex flex-col gap-1">
                   <p className="text-xs sm:text-sm text-muted-foreground">Riding</p>
                   <p className="text-2xl sm:text-3xl font-bold text-green-700 dark:text-green-400">
@@ -266,7 +266,7 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
-              <div className="p-3 sm:p-4 rounded-lg bg-red-500/10 hover-elevate" data-testid="attendance-absent">
+              <div className="p-3 sm:p-4 rounded-lg bg-red-500/10" data-testid="attendance-absent">
                 <div className="flex flex-col gap-1">
                   <p className="text-xs sm:text-sm text-muted-foreground">Absent</p>
                   <p className="text-2xl sm:text-3xl font-bold text-red-700 dark:text-red-400">
@@ -308,7 +308,7 @@ export default function AdminDashboard() {
                 {activeDrivers.slice(0, 5).map((driver: any) => (
                   <div
                     key={driver.id}
-                    className="flex items-center justify-between p-3 rounded-md bg-accent/50 hover-elevate"
+                    className="flex items-center justify-between p-3 rounded-md bg-accent/50"
                     data-testid={`driver-item-${driver.id}`}
                   >
                     <div className="flex items-center gap-3">
@@ -375,7 +375,7 @@ export default function AdminDashboard() {
                         {pendingIncidents.map((incident: Incident) => (
                           <div
                             key={incident.id}
-                            className="p-3 rounded-md bg-accent/50 hover-elevate cursor-pointer"
+                            className="p-3 rounded-md bg-accent/50 cursor-pointer"
                             onClick={() => navigate(`/admin/incidents?id=${incident.id}`)}
                             data-testid={`incident-item-${incident.id}`}
                           >
@@ -416,7 +416,7 @@ export default function AdminDashboard() {
                         {resolvedIncidents.map((incident: Incident) => (
                           <div
                             key={incident.id}
-                            className="p-2 rounded bg-muted/30 hover-elevate text-xs cursor-pointer"
+                            className="p-2 rounded bg-muted/30 text-xs cursor-pointer"
                             onClick={() => navigate(`/admin/incidents?id=${incident.id}`)}
                             data-testid={`incident-item-${incident.id}`}
                           >
