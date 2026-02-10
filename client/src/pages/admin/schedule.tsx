@@ -1455,7 +1455,7 @@ export default function AdminSchedule() {
 
       {/* Bulk Edit Floating Action Panel - Mobile responsive & collapsible */}
       {bulkEditMode && selectedDates.length > 0 && (
-        <div className="fixed bottom-4 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-50 pb-[env(safe-area-inset-bottom)]">
+        <div className="fixed bottom-4 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-50 pb-6">
           <Card className="w-full sm:w-[500px] shadow-lg border-2">
             <CardContent className="p-3 sm:p-4 space-y-0">
               {/* Collapsed Header - Always visible, tap to expand on mobile only */}

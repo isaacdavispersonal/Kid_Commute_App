@@ -27,7 +27,6 @@ import { isConfigured, getConfigError } from "@/lib/config";
 import { ConfigErrorScreen } from "@/components/config-error-screen";
 import { useSocket, useAnnouncementSocket } from "@/hooks/use-socket";
 import { disconnectSocket } from "@/lib/socket";
-import { IOSDebugOverlay } from "@/components/ios-debug-overlay";
 import { ErrorBoundary, RouteErrorBoundary } from "@/components/error-boundary";
 
 import Landing from "@/pages/landing";
@@ -101,55 +100,19 @@ function Router() {
     }
   }, [isAuthenticated, user]);
 
-  // iOS StatusBar + viewport recalculation fix for post-auth white bar issue
-  // This runs when the authenticated shell mounts to ensure proper layout
+  // Configure native StatusBar on iOS via Capacitor plugin
   useEffect(() => {
-    // Only apply on iOS native app
     if (Capacitor.getPlatform() !== "ios") return;
     if (!isAuthenticated || !user) return;
 
-    console.log("[iOS-Layout-Fix] Auth detected, applying StatusBar + viewport fix");
-    
-    // Get current safe area values for debugging
-    const safeAreaTop = getComputedStyle(document.documentElement).getPropertyValue('--sat') || 
-                        getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-top)');
-    console.log("[iOS-Layout-Fix] Safe area top value:", safeAreaTop);
-    console.log("[iOS-Layout-Fix] Window dimensions:", { 
-      innerHeight: window.innerHeight, 
-      innerWidth: window.innerWidth,
-      visualViewport: window.visualViewport ? {
-        height: window.visualViewport.height,
-        offsetTop: window.visualViewport.offsetTop
-      } : 'not available'
-    });
-
-    // Set StatusBar overlay settings consistently after auth
     (async () => {
       try {
-        console.log("[iOS-Layout-Fix] Setting StatusBar overlay: true, style: Dark");
-        await StatusBar.setOverlaysWebView({ overlay: true });
+        await StatusBar.setOverlaysWebView({ overlay: false });
         await StatusBar.setStyle({ style: Style.Dark });
-        console.log("[iOS-Layout-Fix] StatusBar settings applied successfully");
       } catch (e) {
-        console.log("[iOS-Layout-Fix] StatusBar error:", e);
+        // StatusBar plugin not available in web
       }
     })();
-
-    // Force viewport/layout recalculation to fix iOS WKWebView stuck gap
-    // Two RAFs help iOS settle after DOM swap from auth transition
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        console.log("[iOS-Layout-Fix] Triggering viewport recalculation");
-        window.dispatchEvent(new Event("resize"));
-        window.scrollTo(0, 0);
-        
-        // Log post-fix dimensions
-        console.log("[iOS-Layout-Fix] Post-fix dimensions:", {
-          innerHeight: window.innerHeight,
-          bodyScrollHeight: document.body.scrollHeight
-        });
-      });
-    });
   }, [isAuthenticated, user]);
 
   // Unified logout handler for both web and mobile
@@ -167,32 +130,26 @@ function Router() {
 
   if (isLoading) {
     return (
-      <>
-        <IOSDebugOverlay currentLayout="Loading" isAuthenticated={false} />
-        <div className="flex min-h-dvh w-full items-center justify-center bg-background">
-          <div className="text-muted-foreground">Loading...</div>
-        </div>
-      </>
+      <div className="flex h-full w-full items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
     );
   }
 
   if (!isAuthenticated || !user) {
     // Show unified landing page for both web and mobile
     return (
-      <>
-        <IOSDebugOverlay currentLayout="Auth" isAuthenticated={false} />
-        <ErrorBoundary>
-          <Switch>
-            <Route path="/" component={Landing} />
-            <Route path="/privacy-policy" component={PrivacyPolicy} />
-            <Route path="/terms-of-service" component={TermsOfService} />
-            <Route path="/forgot-password" component={ForgotPassword} />
-            <Route path="/reset-password" component={ResetPassword} />
-            <Route path="/verify-email" component={VerifyEmail} />
-            <Route component={NotFound} />
-          </Switch>
-        </ErrorBoundary>
-      </>
+      <ErrorBoundary>
+        <Switch>
+          <Route path="/" component={Landing} />
+          <Route path="/privacy-policy" component={PrivacyPolicy} />
+          <Route path="/terms-of-service" component={TermsOfService} />
+          <Route path="/forgot-password" component={ForgotPassword} />
+          <Route path="/reset-password" component={ResetPassword} />
+          <Route path="/verify-email" component={VerifyEmail} />
+          <Route component={NotFound} />
+        </Switch>
+      </ErrorBoundary>
     );
   }
 
@@ -206,13 +163,12 @@ function Router() {
 
   return (
     <>
-      <IOSDebugOverlay currentLayout="App" isAuthenticated={true} />
       <SidebarProvider style={sidebarStyle}>
         <div className="flex h-dvh w-full bg-background">
         <AppSidebar userRole={userRole} isLeadDriver={isLeadDriver} />
         <div className="flex flex-col flex-1 min-h-0 bg-background">
-          <header className="border-b bg-background shrink-0 z-20 pt-[env(safe-area-inset-top,0px)]">
-            {/* Header content with touch targets - safe area applied as padding above */}
+          <header className="border-b bg-background shrink-0 z-20">
+            {/* Header content with touch targets */}
             <div className="flex items-center justify-between gap-4 px-4 py-3">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               <DropdownMenu>
@@ -258,7 +214,7 @@ function Router() {
             </DropdownMenu>
             </div>
           </header>
-          <main ref={mainRef} className="relative flex-1 overflow-y-auto bg-background p-6 pt-8 pb-6">
+          <main ref={mainRef} className="relative flex-1 overflow-y-auto bg-background p-6 pt-8 pb-0">
             <PullToRefresh 
               onRefresh={triggerRefresh} 
               isRefreshing={isRefreshing} 
