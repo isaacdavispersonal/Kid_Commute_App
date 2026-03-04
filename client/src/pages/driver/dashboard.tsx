@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, MapPin, Users, LogIn, LogOut, Timer, Calendar, AlertCircle, Coffee, Play, MessageSquare, CheckCircle, Truck, ClipboardCheck } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { StatusBadge } from "@/components/status-badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -267,6 +267,7 @@ function VehicleInspectionDialog({
 
 function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: ClockStatus | undefined }) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [showInspectionDialog, setShowInspectionDialog] = useState(false);
   const isRouteStarted = !!shift.routeStartedAt;
   const isInspectionComplete = !!shift.inspectionCompletedAt;
@@ -283,8 +284,9 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
       await queryClient.invalidateQueries({ queryKey: ["/api/driver/today-shifts"] });
       toast({
         title: "Route Started",
-        description: "You can now begin route operations",
+        description: "Opening route manager",
       });
+      setLocation(`/driver/route/${shift.id}`);
     },
     onError: (error: Error) => {
       toast({
@@ -387,7 +389,7 @@ function ShiftCard({ shift, clockStatus }: { shift: EnrichedShift; clockStatus: 
               )}
               {isCompleted && (
                 <StatusBadge 
-                  status="offline" 
+                  status="completed" 
                   className="text-xs" 
                   data-testid={`status-shift-${shift.id}`}
                 />
@@ -646,10 +648,13 @@ export default function DriverDashboard() {
       });
     },
     onSuccess: async () => {
-      // Invalidate all related queries - clock-out updates shift status to COMPLETED
-      await queryClient.invalidateQueries({ queryKey: ["/api/driver/clock-status"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/driver/break/status"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/driver/today-shifts"] });
+      // Invalidate all related queries so one tap reflects immediately
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/driver/clock-status"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/driver/break/status"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/driver/today-shifts"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/driver/my-assignments"] }),
+      ]);
       setShowClockOutDialog(false);
       setClockOutNotes("");
       toast({
@@ -839,7 +844,7 @@ export default function DriverDashboard() {
                 <Button
                   className="w-full"
                   variant="destructive"
-                  onClick={() => setShowClockOutDialog(true)}
+                  onClick={() => clockOutMutation.mutate()}
                   disabled={clockOutMutation.isPending}
                   data-testid="button-clock-out"
                 >
@@ -855,6 +860,14 @@ export default function DriverDashboard() {
                     </>
                   )}
                 </Button>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                  onClick={() => setShowClockOutDialog(true)}
+                  data-testid="button-clock-out-with-notes"
+                >
+                  Clock out with note (optional)
+                </button>
               </div>
             </>
           ) : (

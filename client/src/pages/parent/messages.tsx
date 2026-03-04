@@ -106,6 +106,13 @@ export default function ParentMessagesPage() {
     }
   }, [allContacts, selectedDriver]);
 
+  // When a driver is no longer assigned to parent's route, remove them from selection (thread no longer accessible)
+  useEffect(() => {
+    if (selectedDriver && allContacts.length > 0 && !allContacts.some((c: any) => c.id === selectedDriver)) {
+      setSelectedDriver(allContacts[0].id);
+    }
+  }, [allContacts, selectedDriver]);
+
   // Listen for real-time messages via WebSocket
   useEffect(() => {
     if (!socket || !selectedDriver) return;

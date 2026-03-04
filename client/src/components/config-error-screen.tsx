@@ -71,7 +71,7 @@ export function ConfigErrorScreen({ errorMessage }: ConfigErrorScreenProps) {
   const configuredUrl = getApiBaseUrl();
 
   return (
-    <div className="min-h-dvh flex items-center justify-center p-4 bg-background">
+    <div className="min-h-full flex items-center justify-center p-4 bg-background">
       <Card className="max-w-md w-full">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">

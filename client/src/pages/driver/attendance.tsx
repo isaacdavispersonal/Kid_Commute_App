@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useRegisterRefresh } from "@/contexts/RefreshContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,11 +17,13 @@ type Student = {
   firstName: string;
   lastName: string;
   grade?: string;
-  attendance?: {
-    status: "PENDING" | "riding" | "absent";
-    markedByUserId: string;
-    createdAt: string;
-  } | null;
+  /** API may return string (status) or object; we normalize via getStatus() */
+  attendance?:
+    | { status: "PENDING" | "riding" | "absent"; markedByUserId?: string; createdAt?: string }
+    | "PENDING"
+    | "riding"
+    | "absent"
+    | null;
 };
 
 interface TodayShift {
@@ -39,9 +42,8 @@ export default function DriverAttendance() {
   const { socket } = useWebSocket();
   const { user } = useAuth();
   
-  // Only lead drivers can mark attendance (absent/riding)
-  // Regular drivers can only record board/deboard events on the route page
-  const canMarkAttendance = user?.isLeadDriver === true;
+  // All drivers can mark attendance for their route (absent/riding)
+  const canMarkAttendance = true;
 
   // Get today's shifts for better state feedback
   const { data: todayShifts } = useQuery<TodayShift[]>({
@@ -83,16 +85,23 @@ export default function DriverAttendance() {
     enabled: !!currentRoute?.routeId,
   });
 
-  // Get shiftId from current route assignment for per-shift attendance tracking
-  const currentShiftId = currentRoute?.shiftId || currentRoute?.id;
+  // Use the actual shift id for attendance (from today's shift), not assignment id
+  const currentShiftId = currentShift?.id ?? currentRoute?.shiftId ?? currentRoute?.id;
   
+  const handleRefresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["/api/driver/today-shifts"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/driver/my-assignments"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/driver/route-students"] });
+  }, []);
+  useRegisterRefresh("driver-attendance", handleRefresh);
+
   const setAttendanceMutation = useMutation({
     mutationFn: async (data: { studentId: string; status: "riding" | "absent" }) => {
       return await apiRequest("POST", "/api/attendance", {
         studentId: data.studentId,
         date: shiftDate,
         status: data.status,
-        shiftId: currentShiftId, // Track AM/PM attendance separately
+        shiftId: currentShiftId ?? undefined, // Track AM/PM attendance separately
       });
     },
     onSuccess: () => {
@@ -118,7 +127,7 @@ export default function DriverAttendance() {
 
   if (!currentRoute) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6 max-w-full overflow-x-hidden">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -164,17 +173,21 @@ export default function DriverAttendance() {
     };
   }, [socket, currentRoute, toast, shiftDate]);
 
-  const ridingCount = students.filter(s => s.attendance?.status === "riding").length;
-  const absentCount = students.filter(s => s.attendance?.status === "absent").length;
-  const pendingCount = students.filter(s => !s.attendance || s.attendance.status === "PENDING").length;
+  // API may return attendance as string or { status }; normalize to status string
+  const getStatus = (s: Student) => typeof s.attendance === "string" ? s.attendance : s.attendance?.status;
+  const ridingCount = students.filter(s => getStatus(s) === "riding").length;
+  const absentCount = students.filter(s => getStatus(s) === "absent").length;
+  const pendingCount = students.filter(s => !getStatus(s) || getStatus(s) === "PENDING").length;
 
   return (
-    
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
       <div>
-        <h1 className="text-3xl font-bold">Student Attendance</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">Student Attendance</h1>
         <p className="text-muted-foreground mt-1">
           Route: {currentRoute.routeName}
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Your attendance changes are recorded for admin review.
         </p>
       </div>
 
@@ -253,16 +266,6 @@ export default function DriverAttendance() {
         </Alert>
       )}
 
-      {/* Info alert for non-lead drivers */}
-      {!canMarkAttendance && !isRouteCompleted && (
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertDescription>
-            You can view student attendance status here. To record when students board or leave the bus, 
-            use the route dashboard during your active shift.
-          </AlertDescription>
-        </Alert>
-      )}
 
       {isLoading ? (
         <Card>
@@ -298,13 +301,15 @@ export default function DriverAttendance() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {student.attendance && student.attendance.status !== "PENDING" ? (
+                    {(() => {
+                      const status = getStatus(student);
+                      return status && status !== "PENDING" ? (
                       <>
                         <Badge
-                          variant={student.attendance.status === "riding" ? "default" : "destructive"}
+                          variant={status === "riding" ? "default" : "destructive"}
                           data-testid={`badge-status-${student.id}`}
                         >
-                          {student.attendance.status === "riding" ? "Riding" : "Absent"}
+                          {status === "riding" ? "Riding" : "Absent"}
                         </Badge>
                         {canMarkAttendance && (
                           <Button
@@ -313,7 +318,7 @@ export default function DriverAttendance() {
                             onClick={() =>
                               handleAttendance(
                                 student.id,
-                                student.attendance!.status === "riding" ? "absent" : "riding"
+                                status === "riding" ? "absent" : "riding"
                               )
                             }
                             disabled={setAttendanceMutation.isPending}
@@ -352,7 +357,8 @@ export default function DriverAttendance() {
                           </>
                         )}
                       </>
-                    )}
+                    );
+                    })()}
                   </div>
                 </div>
               ))}

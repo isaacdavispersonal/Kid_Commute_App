@@ -125,12 +125,22 @@ class PushNotificationService {
         apns: {
           payload: {
             aps: {
+              alert: {
+                title: notification.title,
+                body: notification.body,
+              },
+              sound: "default",
               contentAvailable: true,
+              badge: 1,
             },
           },
         },
         android: {
           priority: "high" as const,
+          notification: {
+            channelId: "default",
+            sound: "default",
+          },
         },
       };
 

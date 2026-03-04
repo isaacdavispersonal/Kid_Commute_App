@@ -50,6 +50,10 @@ export default function AdminSettings() {
     queryKey: ["/api/admin/push-tokens/users"],
   });
 
+  const { data: pushStatus } = useQuery<{ available: boolean; message: string }>({
+    queryKey: ["/api/admin/push-notifications/status"],
+  });
+
   const sendTestNotificationMutation = useMutation({
     mutationFn: async ({ targetUserId, title, body, delaySeconds }: { targetUserId: string; title: string; body: string; delaySeconds?: number }) => {
       const res = await apiRequest("POST", "/api/admin/push-notifications/test", { targetUserId, title, body, delaySeconds });
@@ -62,9 +66,10 @@ export default function AdminSettings() {
       });
     },
     onError: (error: any) => {
+      const message = error?.message || "Check if the user has registered devices and that Firebase is configured.";
       toast({
-        title: "Failed to send notification",
-        description: error.message || "Check if the user has registered devices",
+        title: "Push test failed",
+        description: message,
         variant: "destructive",
       });
     },
@@ -336,10 +341,21 @@ export default function AdminSettings() {
               Push Notification Testing
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
-              Test push notifications through Firebase to iOS/Android devices
+              Test push notifications through Firebase (FCM) to iOS and Android devices. Requires FIREBASE_SERVICE_ACCOUNT_JSON on the server.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {pushStatus && !pushStatus.available && (
+              <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+                <p className="font-medium">Push not configured</p>
+                <p className="mt-1 text-xs opacity-90">{pushStatus.message}</p>
+              </div>
+            )}
+            {pushStatus?.available && (
+              <div className="rounded-md border border-green-500/30 bg-green-500/10 p-2 text-xs text-green-800 dark:text-green-200">
+                Firebase Cloud Messaging is configured. Send test notifications to users who have the app on a device and have granted notification permission. On iOS, the app must register the device with FCM (e.g. using a Firebase/Capacitor messaging plugin) so the server receives valid FCM tokens.
+              </div>
+            )}
             {isLoadingTokens ? (
               <div className="space-y-2">
                 <Skeleton className="h-10 w-full" />

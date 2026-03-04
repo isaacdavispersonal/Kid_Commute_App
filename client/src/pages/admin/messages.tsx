@@ -102,6 +102,12 @@ export default function AdminMessagesPage() {
     refetchInterval: 5000,
   });
 
+  // Recent announcements for Messages > Announcements tab
+  const { data: announcementHistory } = useQuery<{ announcements: any[]; total: number }>({
+    queryKey: ["/api/admin/announcement-history?limit=10"],
+  });
+  const recentAnnouncements = announcementHistory?.announcements ?? [];
+
   // Show toast notification when new messages arrive (based on message timestamps)
   useEffect(() => {
     // Don't process if still loading initial data
@@ -447,7 +453,7 @@ export default function AdminMessagesPage() {
       <Tabs defaultValue="recent" className="w-full">
         {/* Scrollable tabs for mobile */}
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="inline-flex w-auto sm:grid sm:w-full sm:grid-cols-5 min-w-max sm:min-w-0">
+          <TabsList className="inline-flex w-auto sm:grid sm:w-full sm:grid-cols-6 min-w-max sm:min-w-0">
             <TabsTrigger value="recent" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-recent">
               <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               <span className="hidden sm:inline">Recent</span>
@@ -462,6 +468,11 @@ export default function AdminMessagesPage() {
               <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               <span className="hidden sm:inline">View All</span>
               <span className="sm:hidden">All</span>
+            </TabsTrigger>
+            <TabsTrigger value="announcements" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-announcements">
+              <Megaphone className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Announcements</span>
+              <span className="sm:hidden">Announce</span>
             </TabsTrigger>
             <TabsTrigger value="message-drivers" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-message-drivers">
               <span className="hidden sm:inline">Drivers</span>
@@ -651,6 +662,52 @@ export default function AdminMessagesPage() {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Announcements Tab - app-wide and route announcements */}
+        <TabsContent value="announcements" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Megaphone className="h-5 w-5" />
+                    Announcements
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Send app-wide announcements to drivers, parents, or everyone. Manage and view history here.
+                  </p>
+                </div>
+                <Button asChild>
+                  <a href="/admin/announcements" data-testid="link-manage-announcements">
+                    Manage announcements
+                  </a>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {recentAnnouncements.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">
+                  No announcements yet. Create one from the full announcements page.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Recent</p>
+                  <ul className="space-y-2">
+                    {recentAnnouncements.slice(0, 5).map((a: any) => (
+                      <li key={a.id} className="rounded-md border p-3 text-sm">
+                        <p className="font-medium">{a.title}</p>
+                        <p className="text-muted-foreground line-clamp-2 mt-1">{a.content}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {a.adminName ?? "Admin"} · {a.audienceType ?? a.targetRole} · {a.createdAt ? new Date(a.createdAt).toLocaleDateString() : ""}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

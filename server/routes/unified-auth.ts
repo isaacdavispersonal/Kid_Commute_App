@@ -103,8 +103,8 @@ router.post("/login", authRateLimiter, async (req, res) => {
       });
     }
 
-    const { identifier, password } = parsed.data;
-    const rememberMe = req.body.rememberMe === true;
+    const { identifier, password, rememberMe: schemaRememberMe } = parsed.data;
+    const rememberMe = schemaRememberMe === true || req.body.rememberMe === true;
     
     // Look up credentials by email or phone
     let credentials;

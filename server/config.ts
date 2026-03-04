@@ -46,7 +46,7 @@ export const config = {
   auth: {
     sessionDurationMs: parseIntEnv("SESSION_DURATION_MS", DAY),
     sessionDurationRememberMs: parseIntEnv("SESSION_DURATION_REMEMBER_MS", 30 * DAY),
-    driverSessionDurationMs: parseIntEnv("DRIVER_SESSION_DURATION_MS", 7 * DAY), // Drivers get 7 days by default
+    driverSessionDurationMs: parseIntEnv("DRIVER_SESSION_DURATION_MS", 30 * DAY), // Drivers get 30 days so they stay logged in
     passwordResetExpiryMs: parseIntEnv("PASSWORD_RESET_EXPIRY_MS", HOUR),
     emailVerificationExpiryMs: parseIntEnv("EMAIL_VERIFICATION_EXPIRY_MS", DAY),
     replitSessionTtlMs: parseIntEnv("REPLIT_SESSION_TTL_MS", 7 * DAY),

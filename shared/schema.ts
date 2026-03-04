@@ -158,6 +158,7 @@ export type AuthCredentials = typeof authCredentials.$inferSelect;
 export const mobileLoginSchema = z.object({
   identifier: z.string().min(1, "Email or phone is required"), // email or phone
   password: z.string().min(6, "Password must be at least 6 characters"),
+  rememberMe: z.boolean().optional(), // when true, JWT and cookie last 30 days
 });
 
 export type MobileLoginRequest = z.infer<typeof mobileLoginSchema>;
@@ -441,6 +442,7 @@ export type ShiftRouteContext = {
     plannedEnd: string;
     status: string;
     inspectionCompletedAt: Date | null;
+    routeStartedAt: Date | null;
     routeCompletedAt: Date | null;
     inspectionComplete: boolean;
   };
@@ -2069,6 +2071,7 @@ export const auditActionEnum = pgEnum("audit_action", [
   "STOP_CHANGE_DENIED",
   "STUDENT_REMOVED_FROM_ROUTE",
   "FORCE_CLOCK_OUT",
+  "STOP_SKIPPED",
 ]);
 
 // Audit log entity enum - tracks what type of entity was affected
@@ -2082,6 +2085,7 @@ export const auditEntityEnum = pgEnum("audit_entity", [
   "stop_change_request",
   "student_route_assignment",
   "clock_event",
+  "route_stop",
 ]);
 
 // Audit logs table - tracks all user changes for admin review

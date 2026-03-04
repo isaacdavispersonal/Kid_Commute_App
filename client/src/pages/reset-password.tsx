@@ -104,7 +104,7 @@ export default function ResetPassword() {
 
   if (isValidating) {
     return (
-      <div className="min-h-dvh flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-full flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
         <Card className="w-full max-w-md">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
@@ -117,7 +117,7 @@ export default function ResetPassword() {
 
   if (!isValid) {
     return (
-      <div className="min-h-dvh flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-full flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
@@ -153,7 +153,7 @@ export default function ResetPassword() {
 
   if (isSuccess) {
     return (
-      <div className="min-h-dvh flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-full flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
@@ -177,7 +177,7 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-full flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">

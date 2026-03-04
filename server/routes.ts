@@ -407,6 +407,17 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
 
   // ============ Push Notification Test Routes (Admin Only) ============
 
+  // Get push notification service status (admin only) - so admin UI can show if Firebase is configured
+  app.get("/api/admin/push-notifications/status", requireAuth, requireRole("admin"), (_req, res) => {
+    const available = pushNotificationService.isAvailable();
+    res.json({
+      available,
+      message: available
+        ? "Firebase Cloud Messaging is configured. Push notifications can be sent."
+        : "Push notifications are not configured. Set FIREBASE_SERVICE_ACCOUNT_JSON in your environment (full JSON of the Firebase service account key) to enable push.",
+    });
+  });
+
   // Send a test push notification (admin only)
   app.post("/api/admin/push-notifications/test", requireRole("admin"), async (req: any, res) => {
     try {
@@ -416,24 +427,35 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         return res.status(400).json({ message: "Target user ID is required" });
       }
 
-      // Get device tokens for the target user
-      const tokens = await storage.getDeviceTokensByUser(targetUserId);
-      
-      if (tokens.length === 0) {
-        return res.status(404).json({ 
-          message: "No registered device tokens found for this user",
-          tokenCount: 0
+      if (!pushNotificationService.isAvailable()) {
+        return res.status(503).json({
+          message: "Push notifications are not configured. Set FIREBASE_SERVICE_ACCOUNT_JSON in your server environment with the Firebase service account JSON, then restart the server.",
+          code: "PUSH_NOT_CONFIGURED",
+        });
+      }
+
+      // Only active tokens are used by sendToUsers; report and validate against active tokens
+      const allTokens = await storage.getDeviceTokensByUser(targetUserId);
+      const activeTokens = allTokens.filter((t) => t.isActive);
+
+      if (activeTokens.length === 0) {
+        return res.status(404).json({
+          message: allTokens.length === 0
+            ? "No registered device tokens found for this user. Have them open the app on a device (iOS/Android), grant notification permission, and stay logged in so the device can register."
+            : "This user has registered devices but none are currently active (tokens may have been deactivated after repeated failures). Try re-registering from the app.",
+          tokenCount: 0,
+          code: "NO_ACTIVE_TOKENS",
         });
       }
 
       const notification = {
         title: title || "Test Notification",
         body: body || "This is a test push notification from Kid Commute",
-        data: { 
-          type: "test", 
+        data: {
+          type: "test",
           timestamp: new Date().toISOString(),
-          deeplink: "/"
-        }
+          deeplink: "/",
+        },
       };
 
       if (delaySeconds && delaySeconds > 0) {
@@ -447,25 +469,28 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           }
         }, delayMs);
 
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           delayed: true,
-          message: `Notification scheduled to send in ${delaySeconds} seconds to ${tokens.length} device(s)`,
-          tokenCount: tokens.length 
+          message: `Notification scheduled to send in ${delaySeconds} seconds to ${activeTokens.length} device(s)`,
+          tokenCount: activeTokens.length,
         });
       }
 
       await pushNotificationService.sendToUsers([targetUserId], notification);
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         delayed: false,
-        message: `Test notification sent to ${tokens.length} device(s)`,
-        tokenCount: tokens.length 
+        message: `Test notification sent to ${activeTokens.length} device(s)`,
+        tokenCount: activeTokens.length,
       });
     } catch (error: any) {
       console.error("Error sending test push notification:", error);
-      res.status(500).json({ message: "Failed to send test notification", error: error.message });
+      res.status(500).json({
+        message: error?.message || "Failed to send test notification",
+        error: error?.message,
+      });
     }
   });
 
@@ -5834,6 +5859,38 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
+  // Get driver's "my assignments" for today (used by attendance page: route + shift for today)
+  app.get(
+    "/api/driver/my-assignments",
+    requireAuth,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const driverId = req.user.id;
+        const shifts = await storage.getDriverTodayShifts(driverId);
+        const now = new Date();
+        const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const result = await Promise.all(
+          shifts.map(async (shift) => {
+            const route = shift.routeId ? await storage.getRoute(shift.routeId) : null;
+            return {
+              id: shift.id,
+              shiftId: shift.id,
+              routeId: shift.routeId,
+              routeName: route?.name ?? "Unknown",
+              date: shift.date,
+              isActive: shift.date === localToday,
+            };
+          })
+        );
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching driver my-assignments:", error);
+        res.status(500).json({ message: "Failed to fetch assignments" });
+      }
+    }
+  );
+
   // Get driver's shifts (with date range) - enriched with clock events and calculated hours
   app.get(
     "/api/driver/shifts",
@@ -7160,13 +7217,8 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(403).json({ message: "Not authorized to view this shift" });
         }
 
-        // Check if route has been started
-        if (!shift.routeStartedAt) {
-          return res.status(400).json({ 
-            message: "Route has not been started. Please start the route from the dashboard first." 
-          });
-        }
-
+        // Return route context even before route is started so drivers can see stops and students
+        // (progress will be all PENDING until start-route runs initializeRouteProgress)
         // Get comprehensive route context
         const routeContext = await storage.getShiftRouteContext(shiftId);
         console.log("[route-context] Active stop:", routeContext.progress.activeStopId);
@@ -7497,6 +7549,22 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         console.log("[update-stop] Updating stop:", { shiftId, routeStopId, status });
         const updated = await storage.updateStopStatus(shiftId, routeStopId, status, notes);
         console.log("[update-stop] Updated result:", { id: updated.id, status: updated.status, routeStopId: updated.routeStopId });
+
+        // Audit log when driver skips a stop so admins see route adjustments
+        if (status === "SKIPPED") {
+          const routeContext = await storage.getShiftRouteContext(shiftId);
+          const stopInfo = routeContext?.stops?.find((s: any) => s.routeStopId === routeStopId);
+          const stopName = stopInfo?.name || stopInfo?.address || routeStopId;
+          await storage.createAuditLog({
+            userId: driverId,
+            userRole: "driver",
+            action: "STOP_SKIPPED",
+            entityType: "route_stop",
+            entityId: routeStopId,
+            description: `Skipped stop: ${stopName}`,
+            changes: { shiftId, routeStopId, notes: notes || null },
+          });
+        }
         
         // Log what the new active stop would be after this update
         const newContext = await storage.getShiftRouteContext(shiftId);
@@ -8304,6 +8372,27 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           newValueJson: { status: newStatus },
           reason: reason || null,
         });
+
+        // Audit log so admins see driver/admin attendance corrections
+        const actor = await storage.getUser(userId);
+        if (actor) {
+          await storage.createAuditLog({
+            userId: actor.id,
+            userRole: actor.role as "admin" | "driver" | "parent",
+            action: "marked_attendance",
+            entityType: "attendance",
+            entityId: updatedAttendance.id,
+            description: `Corrected attendance for ${student.firstName} ${student.lastName} from ${oldStatus} to ${newStatus}${reason ? `: ${reason}` : ""}`,
+            changes: {
+              studentId,
+              studentName: `${student.firstName} ${student.lastName}`,
+              oldStatus,
+              newStatus,
+              reason: reason || null,
+              routeRunId: id,
+            },
+          });
+        }
         
         // Log event
         await storage.logRouteRunEvent({
@@ -9432,7 +9521,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
 
   // ============ Driver Messaging routes ============
 
-  // Get all parents whose children are on driver's routes (can message any of them)
+  // Get all parents whose children are on driver's routes (for "parents on my routes" list)
   app.get(
     "/api/driver/messageable-parents",
     requireAuth,
@@ -9445,6 +9534,34 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
       } catch (error) {
         console.error("Error fetching messageable parents:", error);
         res.status(500).json({ message: "Failed to fetch messageable parents" });
+      }
+    }
+  );
+
+  // Get all parents in the app (drivers can message any parent)
+  app.get(
+    "/api/driver/all-parents",
+    requireAuth,
+    requireRole("driver"),
+    async (req: any, res) => {
+      try {
+        const parents = await storage.getUsersByRole("parent");
+        const result = await Promise.all(
+          parents.map(async (p) => {
+            const kids = await storage.getStudentsByParent(p.id);
+            return {
+              id: p.id,
+              firstName: p.firstName,
+              lastName: p.lastName,
+              email: p.email,
+              children: kids.map((s: any) => ({ id: s.id, firstName: s.firstName, lastName: s.lastName })),
+            };
+          })
+        );
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching all parents:", error);
+        res.status(500).json({ message: "Failed to fetch parents" });
       }
     }
   );
@@ -9498,7 +9615,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Get messages between driver and specific parent/admin
+  // Get messages between driver and specific parent/admin (driver can message any parent or admin)
   app.get(
     "/api/driver/messages/:recipientId",
     requireAuth,
@@ -9508,29 +9625,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         const driverId = req.user.id;
         const recipientId = req.params.recipientId;
         
-        // Check if recipient is admin - no route restriction needed for admin conversations
         const recipient = await storage.getUser(recipientId);
-        const isAdmin = recipient?.role === "admin";
-        
-        // If messaging parent, check if driver has a started route today
-        if (!isAdmin) {
-          const today = new Date().toISOString().split('T')[0];
-          const shifts = await storage.getShiftsByDriver(driverId, today, today);
-          const hasStartedRoute = shifts.some(s => s.routeStartedAt);
-          
-          if (!hasStartedRoute) {
-            return res.status(400).json({ 
-              message: "Route has not been started. Please start the route from the dashboard first." 
-            });
-          }
-          
-          // Verify driver can message this parent (via routes)
-          const messageableParents = await storage.getMessageableParentsForDriver(driverId);
-          const canMessage = messageableParents.some((parent: any) => parent.id === recipientId);
-          
-          if (!canMessage) {
-            return res.status(403).json({ message: "You can only message parents whose children are on your assigned routes" });
-          }
+        if (!recipient) {
+          return res.status(404).json({ message: "Recipient not found" });
+        }
+        // Drivers can message any parent or any admin
+        if (recipient.role !== "parent" && recipient.role !== "admin") {
+          return res.status(403).json({ message: "You can only message parents or admins" });
         }
         
         const messages = await storage.getMessagesBetweenUsers(driverId, recipientId);
@@ -9556,7 +9657,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     }
   );
 
-  // Send message from driver to parent
+  // Send message from driver to parent or admin (driver can message any parent or admin)
   app.post(
     "/api/driver/send-message",
     requireAuth,
@@ -9570,29 +9671,12 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(400).json({ message: "Recipient ID required" });
         }
 
-        // Check if recipient is an admin - drivers can always reply to admins
         const recipient = await storage.getUser(recipientId);
-        const isAdmin = recipient?.role === "admin";
-
-        if (!isAdmin) {
-          // Check if driver has a started route today before messaging parents
-          const today = new Date().toISOString().split('T')[0];
-          const shifts = await storage.getShiftsByDriver(senderId, today, today);
-          const hasStartedRoute = shifts.some(s => s.routeStartedAt);
-          
-          if (!hasStartedRoute) {
-            return res.status(400).json({ 
-              message: "Route has not been started. Please start the route from the dashboard first." 
-            });
-          }
-          
-          // Verify driver can message this parent (parent's child is on driver's route)
-          const messageableParents = await storage.getMessageableParentsForDriver(senderId);
-          const canMessage = messageableParents.some((parent: any) => parent.id === recipientId);
-          
-          if (!canMessage) {
-            return res.status(403).json({ message: "You can only message parents whose children are on your assigned routes" });
-          }
+        if (!recipient) {
+          return res.status(404).json({ message: "Recipient not found" });
+        }
+        if (recipient.role !== "parent" && recipient.role !== "admin") {
+          return res.status(403).json({ message: "You can only message parents or admins" });
         }
 
         const message = await storage.createMessage({
@@ -10557,14 +10641,7 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(404).json({ message: "No shift found for this route today" });
         }
         
-        // Check if route has been started
-        if (!activeShift.routeStartedAt) {
-          return res.status(400).json({ 
-            message: "Route has not been started. Please start the route from the dashboard first." 
-          });
-        }
-        
-        // Use the shift date and shiftId to query students with per-shift attendance
+        // Return students for this route/shift even before route is started so driver can see the list
         const shiftDate = activeShift.date;
         const students = await storage.getStudentsByRouteForDate(routeId, shiftDate, activeShift.id);
         res.json(students);
@@ -10592,6 +10669,11 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           console.log("[attendance] Missing required fields");
           return res.status(400).json({ message: "Missing required fields" });
         }
+        // Only allow explicit statuses; never auto-default to absent (must be set by driver/parent)
+        const validStatuses = ["riding", "absent", "PENDING"];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ message: "Invalid status. Must be riding, absent, or PENDING." });
+        }
 
         const user = await storage.getUser(userId);
         if (!user) {
@@ -10601,18 +10683,8 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         // Determine the shiftId to use for attendance tracking
         let effectiveShiftId = shiftId || null;
 
-        // Authorization check for drivers - ONLY lead drivers can mark attendance
-        // Regular drivers can only record board/deboard events via ride-events endpoint
+        // Authorization check for drivers - any driver can mark attendance for their route
         if (user.role === "driver") {
-          console.log("[attendance] Driver check - isLeadDriver:", user.isLeadDriver);
-          // Check if driver is a lead driver
-          if (!user.isLeadDriver) {
-            console.log("[attendance] REJECTED: Not a lead driver");
-            return res.status(403).json({ 
-              message: "Only lead drivers can mark students as absent or riding. Regular drivers can record when students board or leave the bus during the route." 
-            });
-          }
-          
           const student = await storage.getStudent(studentId);
           if (!student) {
             return res.status(404).json({ message: "Student not found" });

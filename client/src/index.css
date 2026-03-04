@@ -373,7 +373,7 @@
   isolation: isolate;
 }
 
-/* iOS Safe Area and Viewport - SINGLE SOURCE OF TRUTH */
+/* iOS Safe Area and Viewport - use height:100% only; no min-height:100dvh/100vh to avoid white bars in safe area */
 html, body, #root {
   background-color: hsl(var(--background));
   height: 100%;

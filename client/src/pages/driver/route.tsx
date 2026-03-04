@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useRegisterRefresh } from "@/contexts/RefreshContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,14 +82,18 @@ export default function DriverRoutePage() {
   const { toast } = useToast();
   const { user } = useAuth();
   
-  // Only lead drivers can mark attendance (absent/riding)
-  // Regular drivers can only record board/deboard events
-  const canMarkAttendance = user?.isLeadDriver === true;
+  // All drivers can mark attendance (absent/riding) for their route
+  const canMarkAttendance = true;
 
   const { data: routeContext, isLoading } = useQuery<ShiftRouteContext>({
     queryKey: ["/api/driver/route", shiftId],
     enabled: !!shiftId,
   });
+
+  const handleRefresh = useCallback(async () => {
+    if (shiftId) await queryClient.invalidateQueries({ queryKey: ["/api/driver/route", shiftId] });
+  }, [shiftId]);
+  useRegisterRefresh("driver-route", handleRefresh);
 
   const [expandedStops, setExpandedStops] = useState<Set<string>>(new Set());
   const [expandedStudents, setExpandedStudents] = useState<Set<string>>(new Set());
@@ -435,14 +440,13 @@ export default function DriverRoutePage() {
   );
   const canFinishRoute = allStopsComplete && allStudentsProcessed && !routeCompleted;
 
+  const routeStarted = !!shift.routeStartedAt;
+
   // Helper to check if stop can be completed
   const canCompleteStop = (stop: ShiftRouteContext["stops"][0]) => {
-    // Must have inspection complete
+    if (!routeStarted) return false;
     if (inspectionBlocked) return false;
-    
-    // Must be the active stop or route completed
     if (progress.activeStopId !== stop.routeStopId && !routeCompleted) return false;
-    
     return true;
   };
 
@@ -501,6 +505,9 @@ export default function DriverRoutePage() {
               <div className="text-xs sm:text-sm text-muted-foreground">Stops Complete</div>
             </div>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Completing or skipping stops and attendance changes are recorded for admin review.
+          </p>
         </CardHeader>
       </Card>
 
@@ -551,6 +558,32 @@ export default function DriverRoutePage() {
               >
                 <ClipboardCheck className="h-4 w-4 mr-2" />
                 Go to Inspection
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Route not started - show plan but prompt to start from dashboard */}
+      {!inspectionBlocked && !routeCompleted && !shift.routeStartedAt && (
+        <Alert className="border-amber-500 dark:border-amber-400" data-testid="alert-route-not-started">
+          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold">Route not started</h3>
+                <p className="text-sm text-muted-foreground">
+                  Start your route from the dashboard to record stop progress and attendance.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-shrink-0"
+                onClick={() => setLocation("/driver")}
+                data-testid="button-go-to-dashboard-start-route"
+              >
+                Go to Dashboard
               </Button>
             </div>
           </AlertDescription>
@@ -702,10 +735,10 @@ export default function DriverRoutePage() {
             {students.length > 0 ? (
               <div className="space-y-3">
                 {students.map((student) => {
-                  const hasAttendance = student.attendance !== null;
-                  // Default to riding if no attendance record exists
-                  const isRiding = student.attendance === "riding" || !hasAttendance;
+                  // Only treat as absent when explicitly marked absent by driver/parent; null/PENDING = pending
+                  const isRiding = student.attendance === "riding";
                   const isAbsent = student.attendance === "absent";
+                  const isPending = student.attendance === null || student.attendance === "PENDING";
                   const hasBoarded = student.boardEvent !== null;
                   const hasDisembarked = student.deboardEvent !== null;
                   const isExpanded = expandedStudents.has(student.id);
@@ -766,13 +799,13 @@ export default function DriverRoutePage() {
                           )}
                         </div>
 
-                        {/* Attendance Status - always show, default is "Riding" */}
+                        {/* Attendance: only show Absent when explicitly marked; null/PENDING = Pending */}
                         <Badge
-                          variant={isRiding ? "default" : "secondary"}
+                          variant={isRiding ? "default" : isAbsent ? "secondary" : "outline"}
                           className="flex-shrink-0"
                           data-testid={`badge-attendance-${student.id}`}
                         >
-                          {isRiding ? "Riding" : "Absent"}
+                          {isRiding ? "Riding" : isAbsent ? "Absent" : "Pending"}
                         </Badge>
                       </div>
 
@@ -842,8 +875,8 @@ export default function DriverRoutePage() {
 
                       {/* Action Buttons with Loading States */}
                       <div className="flex gap-2 flex-wrap">
-                        {/* Mark Absent button - only for lead drivers, only for students currently riding */}
-                        {isRiding && !routeCompleted && canMarkAttendance && (
+                        {/* Mark Absent - for students not yet marked absent (riding or pending); only after route started */}
+                        {!isAbsent && !routeCompleted && routeStarted && canMarkAttendance && (
                           <Button
                             size="touch"
                             variant="secondary"
@@ -864,8 +897,8 @@ export default function DriverRoutePage() {
                             {attendanceMutation.isPending ? "Saving..." : "Mark Absent"}
                           </Button>
                         )}
-                        {/* Mark Riding button - only for lead drivers, only for students marked absent */}
-                        {isAbsent && !routeCompleted && canMarkAttendance && (
+                        {/* Mark Riding - for students marked absent; only after route started */}
+                        {isAbsent && !routeCompleted && routeStarted && canMarkAttendance && (
                           <Button
                             size="touch"
                             variant="default"

@@ -62,9 +62,9 @@ export default function DriverMessagesPage() {
   const unreadAnnouncementIds = unreadAnnouncementData?.unreadIds || [];
   const [showDismissedAnnouncements, setShowDismissedAnnouncements] = useState(false);
 
-  // Get all parents whose children are on driver's routes
-  const { data: messageableParents = [], isLoading: parentsLoading } = useQuery<any[]>({
-    queryKey: ["/api/driver/messageable-parents"],
+  // Get all parents in the app (drivers can message any parent)
+  const { data: allParents = [], isLoading: parentsLoading } = useQuery<any[]>({
+    queryKey: ["/api/driver/all-parents"],
     refetchInterval: 10000,
   });
 
@@ -92,16 +92,15 @@ export default function DriverMessagesPage() {
     refetchInterval: 3000,
   });
 
-  // Merge admin contacts with parents for unified contact list
+  // Merge admin contacts with all parents for unified contact list (driver can message any parent or admin)
   const allContacts = useMemo(() => {
-    // Add a special flag to distinguish admins from parents
     const adminsAsContacts = adminContacts.map((admin: any) => ({
       ...admin,
       isAdmin: true,
       children: [], // Admins don't have children associations
     }));
-    return [...adminsAsContacts, ...messageableParents];
-  }, [adminContacts, messageableParents]);
+    return [...adminsAsContacts, ...allParents];
+  }, [adminContacts, allParents]);
 
   // Filter contacts by search query (search in contact name or children names for parents)
   const filteredContacts = useMemo(() => {
@@ -133,7 +132,7 @@ export default function DriverMessagesPage() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "new_message") {
-          queryClient.refetchQueries({ queryKey: ["/api/driver/messageable-parents"] });
+          queryClient.refetchQueries({ queryKey: ["/api/driver/all-parents"] });
           if (selectedParent) {
             queryClient.refetchQueries({ queryKey: ["/api/driver/messages", selectedParent] });
           }

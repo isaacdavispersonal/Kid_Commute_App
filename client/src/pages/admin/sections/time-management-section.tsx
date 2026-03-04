@@ -25,7 +25,8 @@ import {
   ChevronDown,
   Radio,
   LogOut,
-  UserCheck
+  UserCheck,
+  Download
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -679,8 +680,50 @@ export default function TimeManagementSection() {
 
           {/* Events List - Grouped by Driver */}
           <Card data-testid="card-events-list">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
               <CardTitle>Clock Events by Driver</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const data = clockEvents ?? [];
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `clock-events-${range.startDate ?? "start"}-${range.endDate ?? "end"}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  data-testid="button-download-clock-events"
+                >
+                  <Download className="h-4 w-4 mr-1.5" />
+                  Clock logs (JSON)
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const events = await apiRequest("GET", "/api/admin/geofence-events");
+                      const blob = new Blob([JSON.stringify(events, null, 2)], { type: "application/json" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `geofence-events-${format(new Date(), "yyyy-MM-dd")}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } catch (e) {
+                      toast({ title: "Error", description: "Failed to download geofence events", variant: "destructive" });
+                    }
+                  }}
+                  data-testid="button-download-geofence-events"
+                >
+                  <Download className="h-4 w-4 mr-1.5" />
+                  Geofence logs (JSON)
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {isLoadingAll ? (

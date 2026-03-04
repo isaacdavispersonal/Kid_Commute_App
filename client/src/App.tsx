@@ -162,7 +162,7 @@ function Router() {
   return (
     <>
       <SidebarProvider style={sidebarStyle}>
-        <div className="flex h-dvh w-full bg-background">
+        <div className="flex h-full w-full bg-background">
         <AppSidebar userRole={userRole} isLeadDriver={isLeadDriver} />
         <div className="flex flex-col flex-1 min-h-0 bg-background">
           <header className="border-b bg-background shrink-0 z-20">

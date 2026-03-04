@@ -1,6 +1,8 @@
 // Driver students page - view students assigned to driver's routes
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useRegisterRefresh } from "@/contexts/RefreshContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,8 +18,11 @@ import {
   Sunset,
   Clock,
   Calendar,
-  Heart
+  Heart,
+  MessageSquarePlus
 } from "lucide-react";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 
 interface Student {
   id: string;
@@ -149,6 +154,16 @@ function StudentCard({ student }: { student: GroupedStudent }) {
                 </a>
               </div>
             )}
+
+            {/* Request info update - link to Messages to contact admin */}
+            <div className="mt-3 pt-3 border-t">
+              <Link href="/driver/messages">
+                <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" data-testid={`button-request-update-${student.id}`}>
+                  <MessageSquarePlus className="h-3.5 w-3.5 mr-1.5" />
+                  Request info update
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </CardContent>
@@ -188,9 +203,10 @@ export default function DriverStudents() {
     queryKey: ["/api/driver/students"],
   });
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ["/api/driver/students"] });
-  };
+  }, []);
+  useRegisterRefresh("driver-students", handleRefresh);
 
   if (isLoading) {
     return (
@@ -247,8 +263,7 @@ export default function DriverStudents() {
   const medicalCount = groupedStudents.filter(s => s.allergies?.trim() || s.medicalNotes?.trim()).length;
 
   return (
-    
-      <div className="p-4 space-y-6">
+      <div className="p-4 space-y-6 max-w-3xl mx-auto overflow-x-hidden">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-2xl font-semibold" data-testid="title-students">

@@ -832,7 +832,7 @@ export class DatabaseStorage implements IStorage {
       await this.createAuditLog({
         userId: updatedUser.id,
         userRole: updatedUser.role,
-        action: "updated",
+        action: "updated_profile",
         entityType: "profile",
         entityId: updatedUser.id,
         description: `Updated profile information`,
@@ -2237,6 +2237,7 @@ export class DatabaseStorage implements IStorage {
         plannedEnd: shift.plannedEnd,
         status: shift.status,
         inspectionCompletedAt: shift.inspectionCompletedAt,
+        routeStartedAt: shift.routeStartedAt ?? null,
         routeCompletedAt: shift.routeCompletedAt,
         inspectionComplete,
       },
@@ -3015,16 +3016,30 @@ export class DatabaseStorage implements IStorage {
       .from(driverAssignments)
       .where(eq(driverAssignments.driverId, driverId));
 
-    const routeIds = driverRoutes.map(r => r.routeId);
+    const routeIds = driverRoutes.map(r => r.routeId).filter(Boolean);
     if (routeIds.length === 0) return [];
 
-    // Get students on these routes
-    const studentsOnRoutes = await db
+    // Get students on these routes: legacy assignedRouteId + student_routes (multi-route)
+    const studentsLegacy = await db
       .select()
       .from(students)
-      .where(
-        or(...routeIds.map(routeId => eq(students.assignedRouteId, routeId)))
-      );
+      .where(or(...routeIds.map(routeId => eq(students.assignedRouteId, routeId!))));
+    const studentIdsFromJunction = await db
+      .select({ studentId: studentRoutes.studentId })
+      .from(studentRoutes)
+      .where(or(...routeIds.map(routeId => eq(studentRoutes.routeId, routeId!))));
+    const junctionIds = new Set(studentIdsFromJunction.map(r => r.studentId));
+    const studentsFromJunction = junctionIds.size > 0
+      ? await db.select().from(students).where(or(...Array.from(junctionIds).map(id => eq(students.id, id))))
+      : [];
+    const seenIds = new Set<string>();
+    const studentsOnRoutes: typeof students.$inferSelect[] = [];
+    for (const s of [...studentsLegacy, ...studentsFromJunction]) {
+      if (!seenIds.has(s.id)) {
+        seenIds.add(s.id);
+        studentsOnRoutes.push(s);
+      }
+    }
 
     // Get unique household IDs
     const householdIdsSet = new Set(studentsOnRoutes.map(s => s.householdId).filter(Boolean));
@@ -3117,8 +3132,16 @@ export class DatabaseStorage implements IStorage {
         or(...householdIds.map(hId => eq(students.householdId, hId)))
       );
 
-    // Get unique route IDs for children
+    // Get unique route IDs: from legacy assignedRouteId and from student_routes (multi-route)
     const routeIdsSet = new Set(children.map(c => c.assignedRouteId).filter(Boolean));
+    const childIds = children.map(c => c.id);
+    if (childIds.length > 0) {
+      const srRows = await db
+        .select({ routeId: studentRoutes.routeId })
+        .from(studentRoutes)
+        .where(or(...childIds.map(id => eq(studentRoutes.studentId, id))));
+      srRows.forEach(r => r.routeId && routeIdsSet.add(r.routeId));
+    }
     const routeIds = Array.from(routeIdsSet);
     if (routeIds.length === 0) return [];
 
@@ -3141,30 +3164,54 @@ export class DatabaseStorage implements IStorage {
         or(...driverIds.map(dId => eq(users.id, dId)))
       );
 
+    // Children on driver routes via student_routes (for multi-route)
+    const childIdsList = children.map(c => c.id);
+    const studentRouteRows = childIdsList.length > 0 && routeIds.length > 0
+      ? await db
+          .select({ studentId: studentRoutes.studentId, routeId: studentRoutes.routeId })
+          .from(studentRoutes)
+          .where(
+            and(
+              or(...childIdsList.map(id => eq(studentRoutes.studentId, id))),
+              or(...routeIds.map(rid => eq(studentRoutes.routeId, rid)))
+            )
+          )
+      : [];
+    const childIdToRouteIds = new Map<string, string[]>();
+    for (const row of studentRouteRows) {
+      const arr = childIdToRouteIds.get(row.studentId) || [];
+      if (row.routeId && !arr.includes(row.routeId)) arr.push(row.routeId);
+      childIdToRouteIds.set(row.studentId, arr);
+    }
+
     // Build result with route and child context
     const result = [];
     for (const driver of drivers) {
       // Get driver's route assignments
       const driverRoutes = activeAssignments
         .filter(a => a.driverId === driver.id)
-        .map(a => a.routeId);
+        .map(a => a.routeId)
+        .filter(Boolean);
 
-      // Get children on driver's routes
-      const childrenOnDriverRoutes = children.filter(c => 
-        c.assignedRouteId && driverRoutes.includes(c.assignedRouteId)
-      );
+      // Get children on driver's routes (legacy assignedRouteId or student_routes)
+      const childrenOnDriverRoutes = children.filter(c => {
+        if (c.assignedRouteId && driverRoutes.includes(c.assignedRouteId)) return true;
+        const junctionRouteIds = childIdToRouteIds.get(c.id) || [];
+        return junctionRouteIds.some(rid => driverRoutes.includes(rid));
+      });
 
       if (childrenOnDriverRoutes.length > 0) {
-        // Get route names
-        const uniqueRouteIdsSet = new Set(childrenOnDriverRoutes.map(c => c.assignedRouteId));
-        const uniqueRouteIds = Array.from(uniqueRouteIdsSet);
-        const routesData: Array<typeof routes.$inferSelect | null> = await Promise.all(
-          uniqueRouteIds.map(async (routeId) => {
+        // Get route name per child (legacy or first from junction)
+        const getRouteIdForChild = (c: typeof children[0]) => {
+          if (c.assignedRouteId && driverRoutes.includes(c.assignedRouteId)) return c.assignedRouteId;
+          const junctionIds = childIdToRouteIds.get(c.id) || [];
+          return junctionIds.find(rid => driverRoutes.includes(rid)) || null;
+        };
+        const routesData = await Promise.all(
+          childrenOnDriverRoutes.map(async (child) => {
+            const routeId = getRouteIdForChild(child);
             if (!routeId) return null;
-            const [route] = await db
-              .select()
-              .from(routes)
-              .where(eq(routes.id, routeId));
+            const [route] = await db.select().from(routes).where(eq(routes.id, routeId));
             return route;
           })
         );
@@ -3174,12 +3221,12 @@ export class DatabaseStorage implements IStorage {
           firstName: driver.firstName,
           lastName: driver.lastName,
           email: driver.email,
-          children: childrenOnDriverRoutes.map((child) => ({
+          children: childrenOnDriverRoutes.map((child, idx) => ({
             id: child.id,
             firstName: child.firstName,
             lastName: child.lastName,
-            routeId: child.assignedRouteId,
-            routeName: routesData.find((r) => r?.id === child.assignedRouteId)?.name || "Unknown Route",
+            routeId: getRouteIdForChild(child),
+            routeName: routesData[idx]?.name || "Unknown Route",
           })),
         });
       }
@@ -3233,7 +3280,7 @@ export class DatabaseStorage implements IStorage {
       await this.createAuditLog({
         userId: reporter.id,
         userRole: reporter.role,
-        action: "created",
+        action: "reported_incident",
         entityType: "incident",
         entityId: newIncident.id,
         description: `Reported incident: ${newIncident.title}`,
@@ -3855,8 +3902,9 @@ export class DatabaseStorage implements IStorage {
       result = newAttendance;
     }
     
-    // Audit log for attendance marking (driver/parent only)
-    if (attendance.markedByUserId) {
+    // Audit log for attendance marking (driver/parent only) - use marked_attendance so admin sees user input
+    // Skip when this is a route-run correction; the correct-attendance route creates a single audit entry
+    if (attendance.markedByUserId && !(attendance as any).routeRunId) {
       const markedBy = await this.getUser(attendance.markedByUserId);
       if (markedBy && (markedBy.role === "driver" || markedBy.role === "parent")) {
         const student = await this.getStudent(attendance.studentId);
@@ -3865,11 +3913,13 @@ export class DatabaseStorage implements IStorage {
         await this.createAuditLog({
           userId: markedBy.id,
           userRole: markedBy.role,
-          action: "created",
+          action: "marked_attendance",
           entityType: "attendance",
           entityId: result.id,
           description: `Marked ${student?.firstName} ${student?.lastName} as ${attendance.status} for ${attendance.date}${shiftLabel}`,
           changes: {
+            studentId: attendance.studentId,
+            studentName: student ? `${student.firstName} ${student.lastName}` : null,
             status: attendance.status,
             date: attendance.date,
             shiftId: attendance.shiftId,
@@ -4096,9 +4146,12 @@ export class DatabaseStorage implements IStorage {
         }
       }
       
+      // Return attendance as explicit status; only "absent" when explicitly set (never infer from schedule)
+      const record = attendanceMap.get(student.id);
+      const status = record ? record.status : "PENDING";
       return {
         ...student,
-        attendance: attendanceMap.get(student.id)?.status || null,
+        attendance: status,
         isScheduledToday,
         serviceDaysBitmask: serviceDaysMap.get(student.id) ?? null,
         serviceDayOverride: overridesMap.get(student.id) ?? null,

@@ -12,7 +12,7 @@ import type { User } from "@shared/schema";
 
 export default function Landing() {
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-full flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5">
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col items-center justify-center gap-8">
           <div className="flex items-center gap-3">
@@ -64,7 +64,7 @@ function LoginForm() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   // Show session expired message if redirected from expired session
   useEffect(() => {
@@ -156,7 +156,10 @@ function LoginForm() {
         <Label htmlFor="identifier">Email or Phone</Label>
         <Input
           id="identifier"
+          name="identifier"
           type="text"
+          inputMode="email"
+          autoComplete="username"
           placeholder="email@example.com or phone number"
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
@@ -178,7 +181,9 @@ function LoginForm() {
         <div className="relative">
           <Input
             id="password"
+            name="password"
             type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
             placeholder="Enter your password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

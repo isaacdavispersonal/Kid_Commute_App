@@ -23,6 +23,7 @@ import {
 import {
   FileText,
   User,
+  UserX,
   Calendar,
   CheckCircle,
   AlertCircle,
@@ -31,13 +32,14 @@ import {
   Clock,
   MessageSquare,
   UserCheck,
+  MapPin,
 } from "lucide-react";
 import { format } from "date-fns";
 
 interface AuditLog {
   id: string;
   userId: string;
-  userRole: "driver" | "parent";
+  userRole: "admin" | "driver" | "parent";
   action: string;
   entityType: string;
   entityId: string | null;
@@ -54,12 +56,12 @@ interface AuditLog {
 }
 
 export default function AdminAuditLogPage() {
-  const [roleFilter, setRoleFilter] = useState<"all" | "driver" | "parent">("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "driver" | "parent">("all");
   const [actionFilter, setActionFilter] = useState<"all" | string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [quickFilter, setQuickFilter] = useState<"all" | "time_exceptions" | "attendance" | "messages">("all");
+  const [quickFilter, setQuickFilter] = useState<"all" | "time_exceptions" | "attendance" | "messages" | "route_stops">("all");
 
   const { data: logs, isLoading } = useQuery<AuditLog[]>({
     queryKey: ["/api/admin/audit-logs"],
@@ -84,6 +86,9 @@ export default function AdminAuditLogPage() {
                              log.action === "sent_message" ||
                              log.description.toLowerCase().includes("message");
       if (!messageRelated) return false;
+    } else if (quickFilter === "route_stops") {
+      const routeStopRelated = log.entityType === "route_stop" || log.action === "STOP_SKIPPED";
+      if (!routeStopRelated) return false;
     }
     
     if (roleFilter !== "all" && log.userRole !== roleFilter) return false;
@@ -136,13 +141,27 @@ export default function AdminAuditLogPage() {
         return <Badge variant="outline" className="bg-primary/10 text-primary border-primary"><User className="w-3 h-3 mr-1" />Phone</Badge>;
       case "updated_student":
         return <Badge variant="outline" className="bg-primary/10 text-primary border-primary"><Edit className="w-3 h-3 mr-1" />Student</Badge>;
+      case "ROUTE_REQUEST_CREATED":
+      case "ROUTE_REQUEST_UPDATED":
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500"><AlertCircle className="w-3 h-3 mr-1" />Request</Badge>;
+      case "STOP_CHANGE_APPROVED":
+      case "STOP_CHANGE_DENIED":
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500"><Edit className="w-3 h-3 mr-1" />Stop Change</Badge>;
+      case "STUDENT_REMOVED_FROM_ROUTE":
+        return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive"><UserX className="w-3 h-3 mr-1" />Removed</Badge>;
+      case "FORCE_CLOCK_OUT":
+        return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive"><Clock className="w-3 h-3 mr-1" />Force Clock</Badge>;
+      case "STOP_SKIPPED":
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500"><MapPin className="w-3 h-3 mr-1" />Stop Skipped</Badge>;
       default:
-        return <Badge variant="outline">{action}</Badge>;
+        return <Badge variant="outline">{action.replace(/_/g, " ")}</Badge>;
     }
   };
 
   const getRoleBadge = (role: string) => {
     switch (role) {
+      case "admin":
+        return <Badge variant="default">Admin</Badge>;
       case "driver":
         return <Badge variant="secondary">Driver</Badge>;
       case "parent":
@@ -157,7 +176,7 @@ export default function AdminAuditLogPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 overflow-x-hidden px-4 sm:px-0">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden min-w-0 w-full max-w-full px-4 sm:px-0">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold mb-1" data-testid="heading-audit-log">Audit Log</h1>
@@ -167,7 +186,7 @@ export default function AdminAuditLogPage() {
         </div>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader>
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -213,6 +232,15 @@ export default function AdminAuditLogPage() {
                 <MessageSquare className="w-4 h-4 mr-1" />
                 Route Messages
               </Button>
+              <Button
+                variant={quickFilter === "route_stops" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setQuickFilter("route_stops")}
+                data-testid="button-filter-route-stops"
+              >
+                <MapPin className="w-4 h-4 mr-1" />
+                Route & Stops
+              </Button>
             </div>
             
             <div className="flex gap-2 flex-wrap">
@@ -232,6 +260,7 @@ export default function AdminAuditLogPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Roles</SelectItem>
+                  <SelectItem value="admin">Admins</SelectItem>
                   <SelectItem value="driver">Drivers</SelectItem>
                   <SelectItem value="parent">Parents</SelectItem>
                 </SelectContent>

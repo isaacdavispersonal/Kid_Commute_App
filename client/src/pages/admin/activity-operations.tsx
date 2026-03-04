@@ -85,9 +85,10 @@ export default function ActivityOperationsPage() {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5 h-auto">
-          <TabsTrigger value="route-health" className="flex items-center gap-1 text-xs sm:text-sm py-2" data-testid="tab-route-health">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
+        <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden rounded-md">
+          <TabsList className="inline-flex w-max min-h-10 h-auto flex-nowrap gap-0.5 p-1">
+          <TabsTrigger value="route-health" className="flex items-center gap-1 text-xs sm:text-sm py-2 flex-shrink-0" data-testid="tab-route-health">
             <Activity className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Route Health</span>
             <span className="sm:hidden">Health</span>
@@ -97,7 +98,7 @@ export default function ActivityOperationsPage() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="route-requests" className="flex items-center gap-1 text-xs sm:text-sm py-2" data-testid="tab-route-requests">
+          <TabsTrigger value="route-requests" className="flex items-center gap-1 text-xs sm:text-sm py-2 flex-shrink-0" data-testid="tab-route-requests">
             <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Requests</span>
             <span className="sm:hidden">Req</span>
@@ -107,7 +108,7 @@ export default function ActivityOperationsPage() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="driver-utilities" className="flex items-center gap-1 text-xs sm:text-sm py-2" data-testid="tab-driver-utilities">
+          <TabsTrigger value="driver-utilities" className="flex items-center gap-1 text-xs sm:text-sm py-2 flex-shrink-0" data-testid="tab-driver-utilities">
             <Package className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Utilities</span>
             <span className="sm:hidden">Utils</span>
@@ -117,7 +118,7 @@ export default function ActivityOperationsPage() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="audit-log" className="flex items-center gap-1 text-xs sm:text-sm py-2" data-testid="tab-audit-log">
+          <TabsTrigger value="audit-log" className="flex items-center gap-1 text-xs sm:text-sm py-2 flex-shrink-0" data-testid="tab-audit-log">
             <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Audit Log</span>
             <span className="sm:hidden">Audit</span>
@@ -127,7 +128,7 @@ export default function ActivityOperationsPage() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="time-management" className="flex items-center gap-1 text-xs sm:text-sm py-2" data-testid="tab-time-management">
+          <TabsTrigger value="time-management" className="flex items-center gap-1 text-xs sm:text-sm py-2 flex-shrink-0" data-testid="tab-time-management">
             <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Time</span>
             <span className="sm:hidden">Time</span>
@@ -137,7 +138,8 @@ export default function ActivityOperationsPage() {
               </Badge>
             )}
           </TabsTrigger>
-        </TabsList>
+          </TabsList>
+        </div>
 
         <TabsContent value="route-health" className="mt-4 sm:mt-6">
           <RouteHealthSection />
