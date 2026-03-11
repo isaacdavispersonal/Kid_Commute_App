@@ -4,7 +4,8 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { db } from "./db";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
+import { households } from "@shared/schema";
 import cookieParser from "cookie-parser";
 import unifiedAuthRouter, { requireAuth, requireRole, requireAdminOrLeadDriver } from "./routes/unified-auth";
 import { NotFoundError, ValidationError } from "./errors";
@@ -402,6 +403,26 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     } catch (error: any) {
       console.error("Error deleting device token:", error);
       res.status(500).json({ message: "Failed to delete device token" });
+    }
+  });
+
+  // Delete all push tokens for current user (used by mobile app on logout)
+  app.delete("/api/push-tokens/current", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const tokens = await storage.getDeviceTokensByUser(userId);
+      
+      // Delete all active tokens for this user
+      for (const token of tokens) {
+        if (token.isActive) {
+          await storage.deleteDeviceToken(userId, token.token);
+        }
+      }
+      
+      res.json({ success: true, message: "All device tokens deleted" });
+    } catch (error: any) {
+      console.error("Error deleting device tokens:", error);
+      res.status(500).json({ message: "Failed to delete device tokens" });
     }
   });
 
@@ -1752,10 +1773,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
     async (req, res) => {
       try {
         const { role } = req.params;
-        if (!role || !["driver", "parent"].includes(role)) {
-          return res.status(400).json({ message: "Invalid role. Must be: driver or parent" });
+        if (!role || !["admin", "driver", "parent"].includes(role)) {
+          return res.status(400).json({ message: "Invalid role. Must be: admin, driver, or parent" });
         }
-        const logs = await storage.getAuditLogsByRole(role as "driver" | "parent");
+        const logs = await storage.getAuditLogsByRole(role as "admin" | "driver" | "parent");
         res.json(logs);
       } catch (error) {
         console.error("Error fetching audit logs by role:", error);
@@ -3912,7 +3933,9 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
             // Get household information
             let householdInfo = "No household";
             if (student.householdId) {
-              const household = await storage.findHouseholdByPhone("");
+              // Get household by ID using direct query since no getHousehold method exists
+              const households = await db.select().from(households).where(eq(households.id, student.householdId)).limit(1);
+              const household = households[0];
               if (household && household.primaryPhone) {
                 householdInfo = household.primaryPhone;
               }
@@ -6410,9 +6433,10 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
         }
         
         // Start the route
-        // Note: routeStartedAt is server-managed, use status update only
+        // Set routeStartedAt timestamp when route starts
         await storage.updateShift(shiftId, {
           status: "ACTIVE",
+          routeStartedAt: new Date(),
         });
         
         // Automatically initialize route progress for all stops
@@ -8529,12 +8553,13 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           return res.status(404).json({ message: "Student not found" });
         }
 
-        const household = await storage.getUserHousehold(parentId);
-        const studentHousehold = student.householdId 
-          ? await storage.getStudentsByHousehold(student.householdId)
-          : [];
+        const parentHousehold = await storage.getUserHousehold(parentId);
+        if (!parentHousehold) {
+          return res.status(403).json({ message: "Access denied" });
+        }
         
-        const hasAccess = studentHousehold.some((s) => s.id === studentId);
+        // Verify that the student belongs to the parent's household
+        const hasAccess = student.householdId === parentHousehold.id;
         if (!hasAccess) {
           return res.status(403).json({ message: "Access denied" });
         }
@@ -10263,7 +10288,29 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           content,
         });
 
-        // Note: Not emitting via Socket.IO for route announcements as they use different types
+        // Send push notifications to parents on this route
+        (async () => {
+          try {
+            const parents = await storage.getParentsForRoute(routeId);
+            if (parents.length > 0) {
+              await pushNotificationService.sendToUsers(
+                parents.map(p => p.id),
+                {
+                  title: title,
+                  body: content.substring(0, 200),
+                  data: {
+                    type: "route_announcement",
+                    routeId: routeId,
+                    announcementId: announcement.id,
+                    deeplink: `/parent/messages`,
+                  },
+                }
+              );
+            }
+          } catch (pushError) {
+            console.error("[push] Error sending route announcement push notifications:", pushError);
+          }
+        })();
 
         res.json(announcement);
       } catch (error) {
@@ -10489,6 +10536,30 @@ export async function registerRoutes(app: Express): Promise<RoutesBootstrapResul
           title: title || "Route Update",
           content: message,
         });
+
+        // Send push notifications to parents on this route
+        (async () => {
+          try {
+            const parents = await storage.getParentsForRoute(routeId);
+            if (parents.length > 0) {
+              await pushNotificationService.sendToUsers(
+                parents.map(p => p.id),
+                {
+                  title: title || "Route Update",
+                  body: message.substring(0, 200),
+                  data: {
+                    type: "route_announcement",
+                    routeId: routeId,
+                    announcementId: announcement.id,
+                    deeplink: `/parent/messages`,
+                  },
+                }
+              );
+            }
+          } catch (pushError) {
+            console.error("[push] Error sending route announcement push notifications:", pushError);
+          }
+        })();
 
         res.json(announcement);
       } catch (error) {
